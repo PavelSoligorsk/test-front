@@ -220,38 +220,50 @@ const handleDeleteEmail = async (emailString) => {
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
       
       {/* HEADER */}
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="bg-slate-900 p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 border-b-4 border-blue-600">
-          <div className="flex items-center gap-4">
-            <div className="p-4 bg-blue-600 rounded-3xl text-white shadow-lg shadow-blue-500/40">
-              <LayoutDashboard size={28} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Admin.Core</h1>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">Education Engine v5.0</p>
-            </div>
-          </div>
-
-          <nav className="flex gap-2 bg-slate-800 p-1.5 rounded-[2rem]">
-            {[
-              { id: 'create', icon: PlusCircle, label: 'Создать' },
-              { id: 'bank', icon: Database, label: 'Банк' },
-              { id: 'users', icon: Users, label: 'Юзеры' },
-              { id: 'access', icon: ShieldCheck, label: 'Доступ' } // Новая вкладка
-            ].map(tab => (
-              <button 
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs transition-all ${
-                  activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg scale-105' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <tab.icon size={16} /> {tab.label.toUpperCase()}
-              </button>
-            ))}
-          </nav>
+<div className="max-w-7xl mx-auto p-4 md:p-6">
+  <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col gap-6 border-b-4 border-blue-600">
+    
+    {/* Верхняя часть: логотип + название */}
+    <div className="flex justify-between items-center gap-4 flex-wrap">
+      <div className="flex items-center gap-3 md:gap-4">
+        <div className="p-3 md:p-4 bg-blue-600 rounded-2xl md:rounded-3xl text-white shadow-lg shadow-blue-500/40">
+          <LayoutDashboard size={24} className="md:w-7 md:h-7" />
+        </div>
+        <div>
+          <h1 className="text-xl md:text-3xl font-black text-white italic tracking-tighter uppercase">Admin.Core</h1>
+          <p className="text-slate-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em]">
+            Education Engine v5.0
+          </p>
         </div>
       </div>
+    </div>
+
+    {/* Навигация - растягивается на всю ширину */}
+    <nav className="flex gap-2 bg-slate-800 p-1.5 rounded-[2rem] w-full">
+      {[
+        { id: 'create', icon: PlusCircle, label: 'Создать' },
+        { id: 'bank', icon: Database, label: 'Банк' },
+        { id: 'users', icon: Users, label: 'Юзеры' },
+        { id: 'access', icon: ShieldCheck, label: 'Доступ' }
+      ].map(tab => (
+        <button 
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-0 py-2 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs transition-all flex-1 ${
+            activeTab === tab.id 
+              ? 'bg-blue-600 text-white shadow-lg scale-[0.98] md:scale-105' 
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <tab.icon size={14} className="md:w-4 md:h-4" /> 
+          <span className="hidden sm:inline">{tab.label.toUpperCase()}</span>
+          <span className="sm:hidden">{tab.label.toUpperCase().slice(0, 1)}</span>
+        </button>
+      ))}
+    </nav>
+    
+  </div>
+</div>
 
       <main className="max-w-7xl mx-auto px-6">
         

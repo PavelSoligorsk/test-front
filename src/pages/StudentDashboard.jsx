@@ -136,49 +136,47 @@ const displayTests = selectedSubject === 'Все'
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-6 py-3">
-  <div className="max-w-7xl mx-auto flex justify-between items-center">
-    
-    {/* ЛОГОТИП С ЭФФЕКТОМ */}
-    <div className="flex items-center gap-3 group cursor-pointer">
-      <div className="relative">
-        <div className="absolute inset-0 bg-blue-600 blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-        <div className="relative w-10 h-10 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black transform group-hover:rotate-6 transition-transform duration-300">
-          E
-        </div>
-      </div>
-      <div className="flex flex-col">
-        <span className="font-black uppercase tracking-tighter text-lg leading-none">EduSpace</span>
-        <span className="text-[8px] font-bold text-blue-600 uppercase tracking-[0.2em] leading-none mt-1">Platform</span>
+  <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
+  
+  {/* ЛОГОТИП С ЭФФЕКТОМ */}
+  <div className="flex items-center gap-3 group cursor-pointer w-full md:w-auto justify-center md:justify-start">
+    <div className="relative">
+      <div className="absolute inset-0 bg-blue-600 blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
+      <div className="relative w-10 h-10 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black transform group-hover:rotate-6 transition-transform duration-300">
+        E
       </div>
     </div>
-    
-    {/* ИНТЕРАКТИВНОЕ МЕНЮ */}
-    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100">
-      {['tests', 'history', 'profile'].map((tab) => (
-        <button 
-          key={tab}
-          onClick={() => setActiveTab(tab)}
-          className={`relative px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
-            activeTab === tab 
-              ? 'text-white' 
-              : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'
-          }`}
-        >
-          {/* ФОН АКТИВНОЙ КНОПКИ */}
-          {activeTab === tab && (
-            <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300 -z-0"></div>
-          )}
-          
-          <span className="relative z-10">
-            {tab === 'tests' ? 'Обучение' : tab === 'history' ? 'История' : 'Профиль'}
-          </span>
-        </button>
-      ))}
+    <div className="flex flex-col">
+      <span className="font-black uppercase tracking-tighter text-lg leading-none">EduSpace</span>
+      <span className="text-[8px] font-bold text-blue-600 uppercase tracking-[0.2em] leading-none mt-1">Platform</span>
     </div>
-
-   
-    
   </div>
+  
+  {/* ИНТЕРАКТИВНОЕ МЕНЮ - РАСТЯГИВАЕТСЯ НА ТЕЛЕФОНЕ */}
+  <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100 w-full md:w-auto">
+    {['tests', 'history', 'profile'].map((tab) => (
+      <button 
+        key={tab}
+        onClick={() => setActiveTab(tab)}
+        className={`relative px-3 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
+          activeTab === tab 
+            ? 'text-white' 
+            : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'
+        }`}
+      >
+        {/* ФОН АКТИВНОЙ КНОПКИ */}
+        {activeTab === tab && (
+          <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300 -z-0"></div>
+        )}
+        
+        <span className="relative z-10 whitespace-nowrap md:whitespace-normal">
+          {tab === 'tests' ? 'Обучение' : tab === 'history' ? 'История' : 'Профиль'}
+        </span>
+      </button>
+    ))}
+  </div>
+
+</div>
 </nav>
 
       <main className="max-w-7xl mx-auto p-6 md:p-12 space-y-12">
