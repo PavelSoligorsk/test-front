@@ -22,7 +22,7 @@ export default function Navbar() {
           </>
         ) : (
           <div className="flex gap-4">
-            <Link to="/login" className="font-bold text-slate-600">Вход</Link>
+            <Link to="/login" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Вход</Link>
             <Link to="/register" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Регистрация</Link>
           </div>
         )}
