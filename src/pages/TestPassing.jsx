@@ -5,6 +5,8 @@ import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm'; // 👈 новый импорт
+
 import 'katex/dist/katex.min.css';
 
 // Компактный компонент для рендеринга контента с поддержкой формул и изображений
@@ -14,7 +16,35 @@ const MarkdownPreview = ({ text, title }) => (
     <div className="prose prose-slate max-w-none text-sm md:text-base text-slate-800
                     [&_img]:rounded-2xl [&_img]:my-6 [&_img]:mx-auto [&_img]:block [&_img]:max-h-64
                     [&_.katex-display]:my-4 [&_.katex-display]:text-sm [&_p]:leading-relaxed">
-      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} 
+      components={{
+          table: ({ node, ...props }) => (
+            <div className="overflow-x-auto my-4">
+              <table className="min-w-full border-collapse border border-slate-200 rounded-lg" {...props} />
+            </div>
+          ),
+          th: ({ node, ...props }) => (
+            <th className="border border-slate-200 bg-slate-50 px-4 py-2 text-left font-bold" {...props} />
+          ),
+          td: ({ node, ...props }) => (
+            <td className="border border-slate-200 px-4 py-2" {...props} />
+          ),
+          code: ({ node, inline, className, children, ...props }) => {
+            const match = /language-(\w+)/.exec(className || '');
+            return !inline ? (
+              <code className={`${className} block bg-slate-800 text-white p-4 rounded-xl overflow-x-auto text-sm`} {...props}>
+                {children}
+              </code>
+            ) : (
+              <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded-md text-sm" {...props}>
+                {children}
+              </code>
+            );
+          },
+          a: ({ node, ...props }) => (
+            <a className="text-blue-600 hover:text-blue-800 underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+          ),
+        }}>
         {text || "*Загрузка условия...*"}
       </ReactMarkdown>
     </div>
@@ -51,20 +81,24 @@ export default function TestPassing() {
 
         // --- ОБНОВЛЕННАЯ ЛОГИКА СОРТИРОВКИ ---
         if (res.data && res.data.tasks) {
-          res.data.tasks.sort((a, b) => {
-            // 1. Сначала закрытые (есть options), потом открытые
-            // Закрытым даем вес 0, открытым вес 1
-            const aTypeWeight = a.options ? 0 : 1;
-            const bTypeWeight = b.options ? 0 : 1;
-
-            if (aTypeWeight !== bTypeWeight) {
-              return aTypeWeight - bTypeWeight;
-            }
-
-            // 2. Внутри групп — по возрастанию сложности (1 -> 5)
-            return (a.difficulty || 0) - (b.difficulty || 0);
-          });
-        }
+  res.data.tasks.sort((a, b) => {
+    // 1. Сначала по возрастанию id
+    if (a.id !== b.id) {
+      return a.id - b.id;
+    }
+    
+    // 2. При равных id — закрытые (есть options) сначала, потом открытые
+    const aTypeWeight = a.options ? 0 : 1;
+    const bTypeWeight = b.options ? 0 : 1;
+    
+    if (aTypeWeight !== bTypeWeight) {
+      return aTypeWeight - bTypeWeight;
+    }
+    
+    // 3. Внутри групп — по возрастанию сложности (1 -> 5)
+    return (a.difficulty || 0) - (b.difficulty || 0);
+  });
+}
         // -------------------------------------
 
         setTest(res.data);

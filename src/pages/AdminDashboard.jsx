@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm'; // 👈 новый импорт
 import rehypeKatex from 'rehype-katex';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -15,7 +16,6 @@ import {
 import 'katex/dist/katex.min.css';
 
 // --- 1. ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-
 const MarkdownPreview = ({ text, title, type }) => (
   <div className={`p-6 rounded-[2rem] border shadow-sm ${
     type === 'hint' ? 'bg-amber-50/40 border-amber-100' : 
@@ -27,8 +27,15 @@ const MarkdownPreview = ({ text, title, type }) => (
     
     <div className="prose prose-slate max-w-none text-sm text-slate-800 text-left
                     [&_img]:rounded-2xl [&_img]:shadow-xl [&_img]:my-6 [&_img]:block [&_img]:max-h-64
-                    [&_.katex-display]:my-6 [&_.katex-display]:text-center [&_.katex-display]:w-full">
-      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    [&_.katex-display]:my-6 [&_.katex-display]:text-center [&_.katex-display]:w-full
+                    [&_table]:w-full [&_table]:border-collapse [&_table]:my-4
+                    [&_th]:border [&_th]:border-slate-300 [&_th]:px-4 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:font-semibold
+                    [&_td]:border [&_td]:border-slate-300 [&_td]:px-4 [&_td]:py-2
+                    [&_tr]:border-b [&_tr]:border-slate-200">
+      <ReactMarkdown 
+        remarkPlugins={[remarkMath, remarkGfm]} // 👈 добавили GFM
+        rehypePlugins={[rehypeKatex]}
+      >
         {text || "*Пусто...*"}
       </ReactMarkdown>
     </div>
@@ -150,7 +157,7 @@ const handleDeleteEmail = async (emailString) => {
         alert("Задание создано!");
       }
       fetchTasks();
-      setTaskData(initialTaskState);
+      setTaskData(finalTask);
     } catch (e) { alert("Ошибка при сохранении"); }
   };
 
@@ -409,6 +416,11 @@ const handleDeleteEmail = async (emailString) => {
 
                   {groupedTasks[bankClass][bankTopic]
   .slice() // Копируем массив для сортировки
+    .sort((a, b) => {
+    if (a.id !== b.id) return a.id - b.id; // Сначала по id
+    // Если id равны — сортируем по сложности
+    return (a.difficulty || 0) - (b.difficulty || 0);
+  })
   .sort((a, b) => {
     // Сначала тесты (false), потом открытые (true)
     if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;

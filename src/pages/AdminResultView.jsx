@@ -5,6 +5,61 @@ import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
+import 'katex/dist/katex.min.css';
+
+// ✅ Исправленный компонент — className перенесён на обёртку
+const MarkdownRenderer = ({ children, className = "" }) => {
+  return (
+    <div className={`prose prose-slate max-w-none ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          table: ({ node, ...props }) => (
+            <div className="overflow-x-auto my-4">
+              <table className="min-w-full border-collapse border border-slate-200 rounded-lg" {...props} />
+            </div>
+          ),
+          th: ({ node, ...props }) => (
+            <th className="border border-slate-200 bg-slate-50 px-4 py-2 text-left font-bold" {...props} />
+          ),
+          td: ({ node, ...props }) => (
+            <td className="border border-slate-200 px-4 py-2" {...props} />
+          ),
+          code: ({ node, inline, className, children, ...props }) => {
+            const match = /language-(\w+)/.exec(className || '');
+            return !inline ? (
+              <code className={`${className} block bg-slate-800 text-white p-4 rounded-xl overflow-x-auto text-sm`} {...props}>
+                {children}
+              </code>
+            ) : (
+              <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded-md text-sm" {...props}>
+                {children}
+              </code>
+            );
+          },
+          a: ({ node, ...props }) => (
+            <a className="text-blue-600 hover:text-blue-800 underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+          ),
+          img: ({ node, src, alt, ...props }) => (
+            <div className="my-6 overflow-hidden rounded-2xl bg-slate-100">
+              <img 
+                src={src} 
+                alt={alt || 'Изображение'} 
+                className="w-full h-auto object-contain max-h-[400px] hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+                {...props}
+              />
+            </div>
+          )
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
+  );
+};
 
 // Компонент для карточки статистики по уровню сложности
 const DifficultyBadge = ({ level, correct, total }) => {
@@ -55,16 +110,21 @@ export default function AdminResultView() {
     fetchResult();
   }, [resultId]);
 
-  // Сортировка: сначала тесты (max_task_points === 1), потом открытые, внутри — по сложности
   const sortedDetails = useMemo(() => {
-    if (!data?.details) return [];
-    return [...data.details].sort((a, b) => {
-      const aType = a.max_task_points > 1 ? 1 : 0;
-      const bType = b.max_task_points > 1 ? 1 : 0;
-      if (aType !== bType) return aType - bType;
-      return (parseInt(a.difficulty) || 0) - (parseInt(b.difficulty) || 0);
-    });
-  }, [data]);
+  if (!data?.details) return [];
+  return [...data.details].sort((a, b) => {
+    const aType = a.max_task_points > 1 ? 1 : 0;
+    const bType = b.max_task_points > 1 ? 1 : 0;
+    if (aType !== bType) return aType - bType;
+    
+    const aDiff = parseInt(a.difficulty) || 0;
+    const bDiff = parseInt(b.difficulty) || 0;
+    if (aDiff !== bDiff) return aDiff - bDiff;
+    
+    // Сортировка по id (или task_id)
+    return (a.id || a.task_id || 0) - (b.id || b.task_id || 0);
+  });
+}, [data]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
@@ -170,12 +230,14 @@ export default function AdminResultView() {
                     </div>
                   </div>
 
-                  <div className="prose prose-slate max-w-none mb-10 text-slate-800 font-medium leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                  {/* ✅ Условие задачи */}
+                  <div className="mb-10 text-slate-800 font-medium leading-relaxed">
+                    <MarkdownRenderer>
                       {item.content}
-                    </ReactMarkdown>
+                    </MarkdownRenderer>
                   </div>
 
+                  {/* ✅ Варианты ответа (если есть) */}
                   {item.options && (
                     <div className="mb-10 space-y-3">
                       <span className="text-[9px] font-black uppercase text-slate-400 block mb-4 ml-1 tracking-[0.2em]">Варианты в тесте:</span>
@@ -194,10 +256,10 @@ export default function AdminResultView() {
                             return (
                               <div key={i} className={`p-5 rounded-2xl border-2 text-sm font-bold flex gap-4 transition-all duration-300 ${cardStyle}`}>
                                 <span className="opacity-30 tabular-nums">{i + 1}.</span>
-                                <div className="prose-sm prose-slate leading-snug">
-                                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                <div className="prose-sm prose-slate leading-snug flex-1">
+                                  <MarkdownRenderer>
                                     {opt}
-                                  </ReactMarkdown>
+                                  </MarkdownRenderer>
                                 </div>
                               </div>
                             );
@@ -207,6 +269,7 @@ export default function AdminResultView() {
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                    {/* ✅ Ответ студента */}
                     <div className={`p-6 rounded-[2rem] border transition-colors ${
                       hasNoAnswer ? 'bg-slate-50 border-slate-100' : 
                       item.is_correct ? 'bg-emerald-50/30 border-emerald-100' : 'bg-red-50/30 border-red-100'
@@ -216,22 +279,24 @@ export default function AdminResultView() {
                         hasNoAnswer ? 'text-slate-400 italic' : 
                         item.is_correct ? 'text-emerald-700' : 'text-red-700'
                       }`}>
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        <MarkdownRenderer>
                           {item.user_answer || "—"}
-                        </ReactMarkdown>
+                        </MarkdownRenderer>
                       </div>
                     </div>
 
+                    {/* ✅ Эталонный ответ */}
                     <div className="p-6 rounded-[2rem] bg-blue-50/30 border border-blue-100">
                       <span className="text-[9px] font-black uppercase text-blue-400 block mb-3 tracking-widest">Эталонный ответ</span>
                       <div className="text-base font-bold text-blue-700">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        <MarkdownRenderer>
                           {item.correct_answer}
-                        </ReactMarkdown>
+                        </MarkdownRenderer>
                       </div>
                     </div>
                   </div>
 
+                  {/* ✅ Решение с кнопкой показать/скрыть */}
                   {item.solution && (
                     <div className="space-y-4">
                       <button 
@@ -249,10 +314,10 @@ export default function AdminResultView() {
                           <div className="text-[9px] font-black text-blue-600 uppercase mb-6 tracking-[0.3em] flex items-center gap-3">
                             <div className="w-8 h-px bg-blue-600"></div> Полный текст решения
                           </div>
-                          <div className="prose prose-blue max-w-none text-sm leading-relaxed text-slate-600">
-                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          <div className="text-sm leading-relaxed text-slate-600">
+                            <MarkdownRenderer>
                               {item.solution}
-                            </ReactMarkdown>
+                            </MarkdownRenderer>
                           </div>
                         </div>
                       )}
