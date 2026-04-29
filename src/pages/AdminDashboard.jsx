@@ -82,6 +82,18 @@ const [newEmail, setNewEmail] = useState('');
     fetchTasks();
   }, []);
 
+  // Добавьте этот useEffect где-нибудь рядом с другими
+useEffect(() => {
+  // Устанавливаем метатег для верификации домена Postimages
+  let meta = document.querySelector('meta[name="postimage-verification"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'postimage-verification';
+    document.head.appendChild(meta);
+  }
+  meta.content = '85751d20436185eb56c6cc94cea4061b';
+}, []);
+
   // --- API ФУНКЦИИ ---
   const fetchAllowedEmails = async () => {
   try {
