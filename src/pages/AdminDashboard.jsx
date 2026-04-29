@@ -80,7 +80,7 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
       const data = await response.json();
       setUploadProgress(100);
       
-      return data.url;
+      return "https://pub-2b7cf8fddd9747b69e66cdac8a86c7fd.r2.dev/" + data.filename;
     } catch (error) {
       console.error('Upload error:', error);
       return null;
@@ -90,7 +90,6 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
     }
   };
 
-  // Прямая вставка текста в позицию курсора
   const insertAtCursor = (text) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -108,13 +107,12 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
     }, 0);
   };
 
-  // Вставка Markdown с изображением
   const insertImageMarkdown = (imageUrl, fileName) => {
     const imageMarkdown = `![${fileName || 'изображение'}](${imageUrl})`;
     insertAtCursor(imageMarkdown);
   };
 
-  // Обработка вставки из буфера
+  // ✅ Исправленный handlePaste — без временной метки
   const handlePaste = async (e) => {
     const items = e.clipboardData?.items;
     
@@ -127,49 +125,35 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
         const file = item.getAsFile();
         if (!file) continue;
         
-        // Вставляем временную метку
-        const tempId = `⌛️${Date.now()}⌛️`;
-        insertAtCursor(tempId);
-        
         const imageUrl = await uploadImage(file);
         
         if (imageUrl) {
-          // Заменяем временную метку на Markdown
-          const markdown = `![${file.name || 'image'}](${imageUrl})`;
-          const newValue = value.replace(tempId, markdown);
-          onChange(newValue);
+          insertImageMarkdown(imageUrl, file.name || 'image');
         } else {
-          const newValue = value.replace(tempId, '❌ Ошибка загрузки');
-          onChange(newValue);
+          insertAtCursor('❌ Ошибка загрузки изображения');
         }
         break;
       }
     }
   };
 
-  // Выбор файла через кнопку
+  // ✅ Исправленный handleFileSelect
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
     
-    const tempId = `⌛️${Date.now()}⌛️`;
-    insertAtCursor(tempId);
-    
     const imageUrl = await uploadImage(file);
     
     if (imageUrl) {
-      const markdown = `![${file.name}](${imageUrl})`;
-      const newValue = value.replace(tempId, markdown);
-      onChange(newValue);
+      insertImageMarkdown(imageUrl, file.name);
     } else {
-      const newValue = value.replace(tempId, '❌ Ошибка загрузки');
-      onChange(newValue);
+      insertAtCursor('❌ Ошибка загрузки изображения');
     }
     
     e.target.value = '';
   };
 
-  // Drag & Drop
+  // ✅ Исправленный handleDrop
   const handleDrop = async (e) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -177,18 +161,12 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.type.startsWith('image/')) {
-        const tempId = `⌛️${Date.now()}⌛️`;
-        insertAtCursor(tempId);
-        
         const imageUrl = await uploadImage(file);
         
         if (imageUrl) {
-          const markdown = `![${file.name}](${imageUrl})`;
-          const newValue = value.replace(tempId, markdown);
-          onChange(newValue);
+          insertImageMarkdown(imageUrl, file.name);
         } else {
-          const newValue = value.replace(tempId, '❌ Ошибка загрузки');
-          onChange(newValue);
+          insertAtCursor('❌ Ошибка загрузки изображения');
         }
         break;
       }
