@@ -1,21 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
-import remarkGfm from 'remark-gfm'; // 👈 новый импорт
+import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import { useNavigate } from 'react-router-dom';
 import { 
   PlusCircle, Database, Users, LayoutDashboard, 
   Search, Send, Eye, UserX, Image as ImageIcon, 
   ChevronRight, Layers, Trash2, Edit3, CheckCircle2,
-  ChevronDown, ChevronUp, MailCheck, // добавь в импорт из 'lucide-react'
-  ShieldCheck,
-  XCircle
+  ChevronDown, ChevronUp, MailCheck, ShieldCheck, XCircle,
+  Upload, Loader2
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
-// --- 1. ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
+// --- КОМПОНЕНТ ПРЕДПРОСМОТРА MARKDOWN ---
 const MarkdownPreview = ({ text, title, type }) => (
   <div className={`p-6 rounded-[2rem] border shadow-sm ${
     type === 'hint' ? 'bg-amber-50/40 border-amber-100' : 
@@ -30,134 +29,306 @@ const MarkdownPreview = ({ text, title, type }) => (
                     [&_.katex-display]:my-6 [&_.katex-display]:text-center [&_.katex-display]:w-full
                     [&_table]:w-full [&_table]:border-collapse [&_table]:my-4
                     [&_th]:border [&_th]:border-slate-300 [&_th]:px-4 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:font-semibold
-                    [&_td]:border [&_td]:border-slate-300 [&_td]:px-4 [&_td]:py-2
-                    [&_tr]:border-b [&_tr]:border-slate-200">
-      <ReactMarkdown 
-        remarkPlugins={[remarkMath, remarkGfm]} // 👈 добавили GFM
-        rehypePlugins={[rehypeKatex]}
-      >
+                    [&_td]:border [&_td]:border-slate-300 [&_td]:px-4 [&_td]:py-2">
+      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
         {text || "*Пусто...*"}
       </ReactMarkdown>
     </div>
   </div>
 );
 
-// --- 2. ГЛАВНЫЙ КОМПОНЕНТ ---
+const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows = 4, required = false }) => {
+  const textareaRef = useRef(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
+  const uploadImage = async (file) => {
+    setIsUploading(true);
+    setUploadProgress(null);
+    
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      setUploadProgress(30);
+
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token;
+
+      setUploadProgress(60);
+
+      const response = await fetch('https://tests-production-46d5.up.railway.app/admin/upload-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ image: base64 }),
+      });
+
+      setUploadProgress(90);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Upload failed');
+      }
+
+      const data = await response.json();
+      setUploadProgress(100);
+      
+      return data.url;
+    } catch (error) {
+      console.error('Upload error:', error);
+      return null;
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setUploadProgress(null), 500);
+    }
+  };
+
+  // Прямая вставка текста в позицию курсора
+  const insertAtCursor = (text) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newValue = value.substring(0, start) + text + value.substring(end);
+    
+    onChange(newValue);
+
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + text.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  // Вставка Markdown с изображением
+  const insertImageMarkdown = (imageUrl, fileName) => {
+    const imageMarkdown = `![${fileName || 'изображение'}](${imageUrl})`;
+    insertAtCursor(imageMarkdown);
+  };
+
+  // Обработка вставки из буфера
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        
+        const file = item.getAsFile();
+        if (!file) continue;
+        
+        // Вставляем временную метку
+        const tempId = `⌛️${Date.now()}⌛️`;
+        insertAtCursor(tempId);
+        
+        const imageUrl = await uploadImage(file);
+        
+        if (imageUrl) {
+          // Заменяем временную метку на Markdown
+          const markdown = `![${file.name || 'image'}](${imageUrl})`;
+          const newValue = value.replace(tempId, markdown);
+          onChange(newValue);
+        } else {
+          const newValue = value.replace(tempId, '❌ Ошибка загрузки');
+          onChange(newValue);
+        }
+        break;
+      }
+    }
+  };
+
+  // Выбор файла через кнопку
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    
+    const tempId = `⌛️${Date.now()}⌛️`;
+    insertAtCursor(tempId);
+    
+    const imageUrl = await uploadImage(file);
+    
+    if (imageUrl) {
+      const markdown = `![${file.name}](${imageUrl})`;
+      const newValue = value.replace(tempId, markdown);
+      onChange(newValue);
+    } else {
+      const newValue = value.replace(tempId, '❌ Ошибка загрузки');
+      onChange(newValue);
+    }
+    
+    e.target.value = '';
+  };
+
+  // Drag & Drop
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith('image/')) {
+        const tempId = `⌛️${Date.now()}⌛️`;
+        insertAtCursor(tempId);
+        
+        const imageUrl = await uploadImage(file);
+        
+        if (imageUrl) {
+          const markdown = `![${file.name}](${imageUrl})`;
+          const newValue = value.replace(tempId, markdown);
+          onChange(newValue);
+        } else {
+          const newValue = value.replace(tempId, '❌ Ошибка загрузки');
+          onChange(newValue);
+        }
+        break;
+      }
+    }
+  };
+
+  return (
+    <div className="relative">
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onPaste={handlePaste}
+        onDrop={handleDrop}
+        onDragOver={(e) => e.preventDefault()}
+        placeholder={placeholder}
+        className={className}
+        rows={rows}
+        required={required}
+      />
+      
+      <div className="absolute bottom-2 right-2 flex gap-1">
+        <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 rounded-lg p-1.5 transition-colors">
+          <Upload size={14} className="text-slate-500" />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </label>
+      </div>
+      
+      {isUploading && (
+        <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-md animate-pulse flex items-center gap-1">
+          <Loader2 size={12} className="animate-spin" />
+          {uploadProgress ? `${uploadProgress}%` : 'Загрузка...'}
+        </div>
+      )}
+      
+      <div className="absolute bottom-2 left-2 text-[10px] text-slate-400 bg-white/80 px-2 py-0.5 rounded-md pointer-events-none">
+        📋 Ctrl+V / 🖱️ Drag & Drop / 📁 Кнопка
+      </div>
+    </div>
+  );
+};
+
+// --- ОСНОВНОЙ КОМПОНЕНТ АДМИНКИ ---
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('create');
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [allowedEmails, setAllowedEmails] = useState([]);
-const [newEmail, setNewEmail] = useState('');
-
-  // Состояния для раскрывашек
+  const [newEmail, setNewEmail] = useState('');
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [bankClass, setBankClass] = useState(null);
+  const [bankTopic, setBankTopic] = useState(null);
 
-  // Состояние формы (ВАЖНО: классы и темы теперь строки)
   const initialTaskState = {
-    task_class: '11', 
-    topic_number: '1', 
-    content: '', 
+    task_class: '11',
+    topic_number: '1',
+    content: '',
     answer: '',
-    hint: '', 
-    solution: '', 
-    is_open_answer: true, 
-    options: '', 
+    hint: '',
+    solution: '',
+    is_open_answer: true,
+    options: '',
     difficulty: 1
   };
   const [taskData, setTaskData] = useState(initialTaskState);
 
-  const [bankClass, setBankClass] = useState(null);
-  const [bankTopic, setBankTopic] = useState(null);
-
-  
-
   useEffect(() => {
     fetchUsers();
     fetchTasks();
+    fetchAllowedEmails();
   }, []);
 
-  // Добавьте этот useEffect где-нибудь рядом с другими
-useEffect(() => {
-  // Устанавливаем метатег для верификации домена Postimages
-  let meta = document.querySelector('meta[name="postimage-verification"]');
-  if (!meta) {
-    meta = document.createElement('meta');
-    meta.name = 'postimage-verification';
-    document.head.appendChild(meta);
-  }
-  meta.content = '85751d20436185eb56c6cc94cea4061b';
-}, []);
-
-  // --- API ФУНКЦИИ ---
   const fetchAllowedEmails = async () => {
-  try {
-    // Достаем токен из localStorage (или где ты его хранишь)
-    const session = JSON.parse(localStorage.getItem('edu_session'));
-    const token = session?.token; 
+    try {
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token;
+      const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/allowed/emails', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAllowedEmails(res.data);
+    } catch (e) {
+      console.error("Ошибка:", e);
+    }
+  };
 
-    const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/allowed/emails', {
-      headers: {
-        Authorization: `Bearer ${token}` // Передаем токен авторизации
-      }
-    });
-    setAllowedEmails(res.data);
-  } catch (e) {
-    console.error("Ошибка авторизации:", e);
-  }
-};
+  const handleAddEmail = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post('https://tests-production-46d5.up.railway.app/admin/allowed-emails', { email: newEmail });
+      setAllowedEmails([...allowedEmails, res.data]);
+      setNewEmail('');
+    } catch (e) {
+      alert(e.response?.data?.detail || "Ошибка при добавлении");
+    }
+  };
 
-// Вызови fetchAllowedEmails в useEffect
-useEffect(() => {
-  fetchUsers();
-  fetchTasks();
-  fetchAllowedEmails(); // Добавили
-}, []);
-
-const handleAddEmail = async (e) => {
-  e.preventDefault();
-  try {
-    const res = await axios.post('https://tests-production-46d5.up.railway.app/admin/allowed-emails', { email: newEmail });
-    setAllowedEmails([...allowedEmails, res.data]);
-    setNewEmail('');
-  } catch (e) {
-    alert(e.response?.data?.detail || "Ошибка при добавлении");
-  }
-};
-
-const handleDeleteEmail = async (emailString) => {
-  if (!confirm(`Удалить ${emailString} из списка?`)) return;
-  try {
-    // В URL теперь передаем саму почту
-    await axios.delete(`https://tests-production-46d5.up.railway.app/admin/allowed-emails/${emailString}`);
-    setAllowedEmails(prev => prev.filter(e => e.email !== emailString));
-  } catch (e) { 
-    alert("Ошибка при удалении"); 
-  }
-};
+  const handleDeleteEmail = async (emailString) => {
+    if (!confirm(`Удалить ${emailString} из списка?`)) return;
+    try {
+      await axios.delete(`https://tests-production-46d5.up.railway.app/admin/allowed-emails/${emailString}`);
+      setAllowedEmails(prev => prev.filter(e => e.email !== emailString));
+    } catch (e) {
+      alert("Ошибка при удалении");
+    }
+  };
 
   const fetchUsers = async () => {
-    try { const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/users'); setUsers(res.data); } 
-    catch (e) { console.error(e); }
+    try {
+      const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/users');
+      setUsers(res.data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchTasks = async () => {
-    try { const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/'); setTasks(res.data); } 
-    catch (e) { console.error(e); }
+    try {
+      const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/');
+      setTasks(res.data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleTaskSubmit = async (e) => {
     e.preventDefault();
-    const finalTask = { 
-        ...taskData, 
-        task_class: String(taskData.task_class),
-        topic_number: String(taskData.topic_number),
-        options: taskData.is_open_answer ? null : (typeof taskData.options === 'string' ? taskData.options.split(';').map(s => s.trim()) : taskData.options)
+    const finalTask = {
+      ...taskData,
+      task_class: String(taskData.task_class),
+      topic_number: String(taskData.topic_number),
+      options: taskData.is_open_answer ? null : (typeof taskData.options === 'string' ? taskData.options.split(';').map(s => s.trim()) : taskData.options)
     };
 
     try {
@@ -169,8 +340,10 @@ const handleDeleteEmail = async (emailString) => {
         alert("Задание создано!");
       }
       fetchTasks();
-      setTaskData(finalTask);
-    } catch (e) { alert("Ошибка при сохранении"); }
+      setTaskData(initialTaskState);
+    } catch (e) {
+      alert("Ошибка при сохранении");
+    }
   };
 
   const handleDeleteTask = async (taskId) => {
@@ -178,7 +351,9 @@ const handleDeleteEmail = async (emailString) => {
     try {
       await axios.delete(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskId}`);
       setTasks(prev => prev.filter(t => t.id !== taskId));
-    } catch (error) { alert("Ошибка при удалении"); }
+    } catch (error) {
+      alert("Ошибка при удалении");
+    }
   };
 
   const handleChangeRole = async (e, userId, currentRole) => {
@@ -188,7 +363,9 @@ const handleDeleteEmail = async (emailString) => {
     try {
       await axios.patch(`https://tests-production-46d5.up.railway.app/admin/users/${userId}/role?new_role=${nextRole}`);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: nextRole } : u));
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const handleDeleteUser = async (e, userId) => {
@@ -197,18 +374,20 @@ const handleDeleteEmail = async (emailString) => {
     try {
       await axios.delete(`https://tests-production-46d5.up.railway.app/admin/users/${userId}`);
       setUsers(prev => prev.filter(u => u.id !== userId));
-    } catch (error) { alert("Ошибка при удалении"); }
+    } catch (error) {
+      alert("Ошибка при удалении");
+    }
   };
 
   const handleGlobalSync = async () => {
     if (!confirm("Запустить пересборку статики?")) return;
     try {
       await axios.post('https://tests-production-46d5.up.railway.app/admin/rebuild-all-static-tests');
-      alert(`Успех!`);
-    } catch (err) { alert("Ошибка"); }
+      alert("Успех!");
+    } catch (err) {
+      alert("Ошибка");
+    }
   };
-
-  // --- ЛОГИКА ФИЛЬТРАЦИИ ---
 
   const filteredUsers = users.filter(u => {
     const match = (u.first_name + u.last_name + u.username).toLowerCase().includes(userSearch.toLowerCase());
@@ -227,65 +406,64 @@ const handleDeleteEmail = async (emailString) => {
 
   const availableClasses = useMemo(() => {
     return Object.keys(groupedTasks).sort((a, b) => {
-        const numA = parseInt(a); const numB = parseInt(b);
-        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-        return a.localeCompare(b);
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
     });
   }, [groupedTasks]);
 
-  
+  const getDifficultyColor = (lvl) => {
+    if (lvl >= 4) return 'text-red-500 bg-red-50 border-red-100';
+    if (lvl >= 3) return 'text-amber-500 bg-amber-50 border-amber-100';
+    return 'text-emerald-500 bg-emerald-50 border-emerald-100';
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
-      
       {/* HEADER */}
-<div className="max-w-7xl mx-auto p-4 md:p-6">
-  <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col gap-6 border-b-4 border-blue-600">
-    
-    {/* Верхняя часть: логотип + название */}
-    <div className="flex justify-between items-center gap-4 flex-wrap">
-      <div className="flex items-center gap-3 md:gap-4">
-        <div className="p-3 md:p-4 bg-blue-600 rounded-2xl md:rounded-3xl text-white shadow-lg shadow-blue-500/40">
-          <LayoutDashboard size={24} className="md:w-7 md:h-7" />
-        </div>
-        <div>
-          <h1 className="text-xl md:text-3xl font-black text-white italic tracking-tighter uppercase">Admin.Core</h1>
-          <p className="text-slate-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em]">
-            Education Engine v5.0
-          </p>
+      <div className="max-w-7xl mx-auto p-4 md:p-6">
+        <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col gap-6 border-b-4 border-blue-600">
+          <div className="flex justify-between items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="p-3 md:p-4 bg-blue-600 rounded-2xl md:rounded-3xl text-white shadow-lg shadow-blue-500/40">
+                <LayoutDashboard size={24} className="md:w-7 md:h-7" />
+              </div>
+              <div>
+                <h1 className="text-xl md:text-3xl font-black text-white italic tracking-tighter uppercase">Admin.Core</h1>
+                <p className="text-slate-500 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em]">
+                  Education Engine v5.0
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <nav className="flex gap-2 bg-slate-800 p-1.5 rounded-[2rem] w-full">
+            {[
+              { id: 'create', icon: PlusCircle, label: 'Создать' },
+              { id: 'bank', icon: Database, label: 'Банк' },
+              { id: 'users', icon: Users, label: 'Юзеры' },
+              { id: 'access', icon: ShieldCheck, label: 'Доступ' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-0 py-2 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs transition-all flex-1 ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-lg scale-[0.98] md:scale-105'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <tab.icon size={14} className="md:w-4 md:h-4" />
+                <span className="hidden sm:inline">{tab.label.toUpperCase()}</span>
+                <span className="sm:hidden">{tab.label.toUpperCase().slice(0, 1)}</span>
+              </button>
+            ))}
+          </nav>
         </div>
       </div>
-    </div>
-
-    {/* Навигация - растягивается на всю ширину */}
-    <nav className="flex gap-2 bg-slate-800 p-1.5 rounded-[2rem] w-full">
-      {[
-        { id: 'create', icon: PlusCircle, label: 'Создать' },
-        { id: 'bank', icon: Database, label: 'Банк' },
-        { id: 'users', icon: Users, label: 'Юзеры' },
-        { id: 'access', icon: ShieldCheck, label: 'Доступ' }
-      ].map(tab => (
-        <button 
-          key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
-          className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-0 py-2 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs transition-all flex-1 ${
-            activeTab === tab.id 
-              ? 'bg-blue-600 text-white shadow-lg scale-[0.98] md:scale-105' 
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <tab.icon size={14} className="md:w-4 md:h-4" /> 
-          <span className="hidden sm:inline">{tab.label.toUpperCase()}</span>
-          <span className="sm:hidden">{tab.label.toUpperCase().slice(0, 1)}</span>
-        </button>
-      ))}
-    </nav>
-    
-  </div>
-</div>
 
       <main className="max-w-7xl mx-auto px-6">
-        
         {/* ВКЛАДКА: КОНСТРУКТОР */}
         {activeTab === 'create' && (
           <div className="space-y-10">
@@ -296,97 +474,149 @@ const handleDeleteEmail = async (emailString) => {
                     {taskData.id ? `Редактор #${taskData.id}` : 'Конструктор'}
                   </h2>
                   <div className="flex bg-slate-100 p-1 rounded-2xl">
-                    <button type="button" onClick={() => setTaskData({...taskData, is_open_answer: true})} className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${taskData.is_open_answer ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>ОТКРЫТЫЙ</button>
-                    <button type="button" onClick={() => setTaskData({...taskData, is_open_answer: false})} className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${!taskData.is_open_answer ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>ТЕСТ</button>
+                    <button
+                      type="button"
+                      onClick={() => setTaskData({ ...taskData, is_open_answer: true })}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${taskData.is_open_answer ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                    >
+                      ОТКРЫТЫЙ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTaskData({ ...taskData, is_open_answer: false })}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${!taskData.is_open_answer ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                    >
+                      ТЕСТ
+                    </button>
                   </div>
                 </div>
-                
+
                 <form onSubmit={handleTaskSubmit} className="space-y-5">
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Сложность</span>
                       <div className="flex gap-1 bg-slate-50 p-1 rounded-xl">
-                        {[1,2,3,4,5].map(n => (
-                          <button key={n} type="button" onClick={() => setTaskData({...taskData, difficulty: n})} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all ${taskData.difficulty === n ? 'bg-white text-blue-600 shadow-sm scale-110' : 'text-slate-400'}`}>{n}</button>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setTaskData({ ...taskData, difficulty: n })}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all ${taskData.difficulty === n ? 'bg-white text-blue-600 shadow-sm scale-110' : 'text-slate-400'}`}
+                          >
+                            {n}
+                          </button>
                         ))}
                       </div>
                     </div>
                     <label className="block space-y-1">
                       <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Класс</span>
-                      <input type="text" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold" value={taskData.task_class} onChange={e => setTaskData({...taskData, task_class: e.target.value})}/>
+                      <input
+                        type="text"
+                        className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold"
+                        value={taskData.task_class}
+                        onChange={e => setTaskData({ ...taskData, task_class: e.target.value })}
+                      />
                     </label>
                     <label className="block space-y-1">
                       <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Тема</span>
-                      <input type="text" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold" value={taskData.topic_number} onChange={e => setTaskData({...taskData, topic_number: e.target.value})}/>
+                      <input
+                        type="text"
+                        className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold"
+                        value={taskData.topic_number}
+                        onChange={e => setTaskData({ ...taskData, topic_number: e.target.value })}
+                      />
                     </label>
                   </div>
 
-                  <textarea required className="w-full p-6 bg-slate-50 border-none rounded-[2rem] h-32 font-mono text-sm" placeholder="Текст задачи..." value={taskData.content} onChange={e => setTaskData({...taskData, content: e.target.value})}/>
-                  <textarea className="w-full p-6 bg-emerald-50/30 border-none rounded-[2rem] h-32 font-mono text-sm" placeholder="Решение..." value={taskData.solution} onChange={e => setTaskData({...taskData, solution: e.target.value})}/>
+                  <ImageAwareTextarea
+                    required
+                    value={taskData.content}
+                    onChange={(value) => setTaskData({ ...taskData, content: value })}
+                    placeholder="Текст задачи (можно вставить изображение)..."
+                    className="w-full p-6 bg-slate-50 border-none rounded-[2rem] min-h-[120px] font-mono text-sm resize-y"
+                    rows={4}
+                  />
+
+                  <ImageAwareTextarea
+                    value={taskData.solution}
+                    onChange={(value) => setTaskData({ ...taskData, solution: value })}
+                    placeholder="Решение (можно вставить изображение)..."
+                    className="w-full p-6 bg-emerald-50/30 border-none rounded-[2rem] min-h-[100px] font-mono text-sm resize-y"
+                    rows={3}
+                  />
 
                   {!taskData.is_open_answer && (
-                    <input className="w-full p-4 bg-blue-50/50 border-2 border-dashed border-blue-100 rounded-2xl font-bold text-sm" placeholder="Вариант А; Вариант Б; Вариант В" value={taskData.options} onChange={e => setTaskData({...taskData, options: e.target.value})}/>
+                    <input
+                      className="w-full p-4 bg-blue-50/50 border-2 border-dashed border-blue-100 rounded-2xl font-bold text-sm"
+                      placeholder="Вариант А; Вариант Б; Вариант В"
+                      value={taskData.options}
+                      onChange={e => setTaskData({ ...taskData, options: e.target.value })}
+                    />
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
-                    <input required className="w-full p-4 bg-emerald-50 text-emerald-700 border-none rounded-2xl font-black text-center" placeholder="Ответ" value={taskData.answer} onChange={e => setTaskData({...taskData, answer: e.target.value})}/>
-                    <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm" placeholder="Hint" value={taskData.hint} onChange={e => setTaskData({...taskData, hint: e.target.value})}/>
+                    <input
+                      required
+                      className="w-full p-4 bg-emerald-50 text-emerald-700 border-none rounded-2xl font-black text-center"
+                      placeholder="Ответ"
+                      value={taskData.answer}
+                      onChange={e => setTaskData({ ...taskData, answer: e.target.value })}
+                    />
+                    <ImageAwareTextarea
+                      value={taskData.hint}
+                      onChange={(value) => setTaskData({ ...taskData, hint: value })}
+                      placeholder="Подсказка (можно вставить изображение)..."
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm resize-y"
+                      rows={2}
+                    />
                   </div>
 
                   <button className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3">
                     <Send size={20} /> {taskData.id ? 'ОБНОВИТЬ' : 'ОПУБЛИКОВАТЬ'}
                   </button>
-                  
+
                   {taskData.id && (
-                    <button type="button" onClick={() => setTaskData(initialTaskState)} className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors">Отменить редактирование</button>
+                    <button
+                      type="button"
+                      onClick={() => setTaskData(initialTaskState)}
+                      className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"
+                    >
+                      Отменить редактирование
+                    </button>
                   )}
                 </form>
               </div>
 
               <div className="space-y-6 sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
-  {/* Предпросмотр основного текста задачи */}
-  <MarkdownPreview text={taskData.content} title={`ПРЕДПРОСМОТР`} />
+                <MarkdownPreview text={taskData.content} title="ПРЕДПРОСМОТР" />
 
-{/* В правой колонке конструктора */}
-{!taskData.is_open_answer && taskData.options && (
-  <MarkdownPreview 
-    title="ВАРИАНТЫ ОТВЕТА" 
-    text={
-      (typeof taskData.options === 'string' 
-        ? taskData.options.split(';') 
-        : Array.isArray(taskData.options) ? taskData.options : []
-      )
-      .map(opt => opt.trim())
-      .filter(opt => opt.length > 0)
-      // Используем жирную нумерацию и принудительный перенос строки в конце
-      .map((opt, i) => `**${i + 1}.** ${opt}`) 
-      .join('\n\n') 
-    } 
-  />
-)}
-  {/* Подсказка (Hint) */}
-  {taskData.hint && (
-    <MarkdownPreview 
-      text={`> **Подсказка:** ${taskData.hint}`} 
-      title="HINT" 
-      type="hint" 
-    />
-  )}
+                {!taskData.is_open_answer && taskData.options && (
+                  <MarkdownPreview
+                    title="ВАРИАНТЫ ОТВЕТА"
+                    text={(typeof taskData.options === 'string'
+                      ? taskData.options.split(';')
+                      : Array.isArray(taskData.options) ? taskData.options : []
+                    )
+                      .map(opt => opt.trim())
+                      .filter(opt => opt.length > 0)
+                      .map((opt, i) => `**${i + 1}.** ${opt}`)
+                      .join('\n\n')}
+                  />
+                )}
 
-  {/* Решение */}
-  {taskData.solution && (
-    <MarkdownPreview 
-      text={taskData.solution} 
-      title="РЕШЕНИЕ" 
-      type="solution" 
-    />
-  )}
-</div>
+                {taskData.hint && (
+                  <MarkdownPreview text={`> **Подсказка:** ${taskData.hint}`} title="HINT" type="hint" />
+                )}
+
+                {taskData.solution && (
+                  <MarkdownPreview text={taskData.solution} title="РЕШЕНИЕ" type="solution" />
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* ВКЛАДКА: БАНК ЗАДАНИЙ */}
+        {/* ВКЛАДКА: БАНК ЗАДАНИЙ (оставляем как есть) */}
         {activeTab === 'bank' && (
           <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex">
             <aside className="w-64 bg-slate-50 border-r border-slate-100 p-8 flex flex-col gap-8">
@@ -394,7 +624,11 @@ const handleDeleteEmail = async (emailString) => {
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Классы</h3>
                 <div className="flex flex-col gap-2">
                   {availableClasses.map(cls => (
-                    <button key={cls} onClick={() => {setBankClass(cls); setBankTopic(null);}} className={`p-4 rounded-2xl text-left font-black text-xs transition-all ${bankClass === cls ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-100'}`}>
+                    <button
+                      key={cls}
+                      onClick={() => { setBankClass(cls); setBankTopic(null); }}
+                      className={`p-4 rounded-2xl text-left font-black text-xs transition-all ${bankClass === cls ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-100'}`}
+                    >
                       {cls} КЛАСС
                     </button>
                   ))}
@@ -405,7 +639,11 @@ const handleDeleteEmail = async (emailString) => {
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Темы</h3>
                   <div className="grid grid-cols-2 gap-2">
                     {Object.keys(groupedTasks[bankClass]).sort().map(topic => (
-                      <button key={topic} onClick={() => setBankTopic(topic)} className={`p-3 rounded-xl font-black text-[10px] transition-all ${bankTopic === topic ? 'bg-slate-800 text-white' : 'bg-slate-200/50 text-slate-500'}`}>
+                      <button
+                        key={topic}
+                        onClick={() => setBankTopic(topic)}
+                        className={`p-3 rounded-xl font-black text-[10px] transition-all ${bankTopic === topic ? 'bg-slate-800 text-white' : 'bg-slate-200/50 text-slate-500'}`}
+                      >
                         № {topic}
                       </button>
                     ))}
@@ -423,119 +661,107 @@ const handleDeleteEmail = async (emailString) => {
                 <div className="space-y-6">
                   <div className="flex justify-between items-center mb-8 border-b border-slate-50 pb-6">
                     <h3 className="text-2xl font-black text-slate-800 uppercase italic">Темы №{bankTopic}</h3>
-                    <span className="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Найдено: {groupedTasks[bankClass][bankTopic].length}</span>
+                    <span className="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase">
+                      Найдено: {groupedTasks[bankClass][bankTopic].length}
+                    </span>
                   </div>
 
                   {groupedTasks[bankClass][bankTopic]
-  .slice() // Копируем массив для сортировки
-    .sort((a, b) => {
-    if (a.id !== b.id) return a.id - b.id; // Сначала по id
-    // Если id равны — сортируем по сложности
-    return (a.difficulty || 0) - (b.difficulty || 0);
-  })
-  .sort((a, b) => {
-    // Сначала тесты (false), потом открытые (true)
-    if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-    // Внутри групп — по возрастанию сложности
-    return (a.difficulty || 0) - (b.difficulty || 0);
-  })
-  .map((t, index) => {
-    const isSolOpen = openSolutions[t.id];
-    const isHintOpen = openHints[t.id];
-    
-    // Определяем цвет в зависимости от сложности
-    const getLvlColor = (lvl) => {
-      if (lvl >= 4) return 'text-red-500 bg-red-50 border-red-100';
-      if (lvl >= 3) return 'text-amber-500 bg-amber-50 border-amber-100';
-      return 'text-emerald-500 bg-emerald-50 border-emerald-100';
-    };
+                    .slice()
+                    .sort((a, b) => {
+                      if (a.id !== b.id) return a.id - b.id;
+                      return (a.difficulty || 0) - (b.difficulty || 0);
+                    })
+                    .sort((a, b) => {
+                      if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+                      return (a.difficulty || 0) - (b.difficulty || 0);
+                    })
+                    .map((t, index) => {
+                      const isSolOpen = openSolutions[t.id];
+                      const isHintOpen = openHints[t.id];
 
-    return (
-      <div key={t.id} className="group p-8 bg-slate-50 rounded-[2.5rem] border border-transparent hover:border-blue-100 hover:bg-white hover:shadow-2xl transition-all mb-6">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-8">
-          <div className="flex-1 space-y-4 w-full">
-            <div className="flex items-center gap-4">
-              <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">№ {index + 1}</span>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-200 pl-4">ID: {t.id}</span>
-              
-              {/* НОВОЕ: Отображение сложности через цифру и цветной индикатор */}
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-xl border ${getLvlColor(t.difficulty)}`}>
-                <span className="text-[9px] font-black uppercase tracking-tight">LVL</span>
-                <span className="text-sm font-black italic leading-none">{t.difficulty}</span>
-                <div className="flex gap-0.5 ml-1">
-                  {[1, 2, 3, 4, 5].map(step => (
-                    <div key={step} className={`w-1 h-2 rounded-full ${step <= t.difficulty ? 'bg-current' : 'opacity-20 bg-slate-400'}`} />
-                  ))}
-                </div>
-              </div>
+                      return (
+                        <div key={t.id} className="group p-8 bg-slate-50 rounded-[2.5rem] border border-transparent hover:border-blue-100 hover:bg-white hover:shadow-2xl transition-all mb-6">
+                          <div className="flex flex-col md:flex-row justify-between items-start gap-8">
+                            <div className="flex-1 space-y-4 w-full">
+                              <div className="flex items-center gap-4 flex-wrap">
+                                <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">№ {index + 1}</span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-200 pl-4">ID: {t.id}</span>
+                                <div className={`flex items-center gap-2 px-3 py-1 rounded-xl border ${getDifficultyColor(t.difficulty)}`}>
+                                  <span className="text-[9px] font-black uppercase tracking-tight">LVL</span>
+                                  <span className="text-sm font-black italic leading-none">{t.difficulty}</span>
+                                  <div className="flex gap-0.5 ml-1">
+                                    {[1, 2, 3, 4, 5].map(step => (
+                                      <div key={step} className={`w-1 h-2 rounded-full ${step <= t.difficulty ? 'bg-current' : 'opacity-20 bg-slate-400'}`} />
+                                    ))}
+                                  </div>
+                                </div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.1em]">
+                                  {t.is_open_answer ? '• Открытый ответ' : '• Выбор варианта'}
+                                </span>
+                              </div>
 
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.1em]">
-                {t.is_open_answer ? '• Открытый ответ' : '• Выбор варианта'}
-              </span>
-            </div>
+                              <MarkdownPreview text={t.content} title="Условие задания" type="default" />
 
-            <MarkdownPreview text={t.content} title="Условие задания" type="default" />
+                              {!t.is_open_answer && t.options && (
+                                <div className="mt-4 pl-4 border-l-2 border-blue-100 bg-slate-50/50 py-2 rounded-r-xl">
+                                  <MarkdownPreview
+                                    type="default"
+                                    text={(Array.isArray(t.options) ? t.options : t.options.split(';'))
+                                      .map(opt => opt.trim())
+                                      .filter(opt => opt !== "")
+                                      .map((opt, i) => `**${i + 1}.** ${opt}`)
+                                      .join('\n\n')}
+                                  />
+                                </div>
+                              )}
 
-            {!t.is_open_answer && t.options && (
-              <div className="mt-4 pl-4 border-l-2 border-blue-100 bg-slate-50/50 py-2 rounded-r-xl">
-                <MarkdownPreview 
-                  type="default"
-                  text={(Array.isArray(t.options) ? t.options : t.options.split(';'))
-                    .map(opt => opt.trim())
-                    .filter(opt => opt !== "")
-                    .map((opt, i) => `**${i + 1}.** ${opt}`)
-                    .join('\n\n')
-                  } 
-                />
-              </div>
-            )}
+                              <div className="flex flex-wrap gap-3 mt-4">
+                                <div className="bg-emerald-50 border border-emerald-100 px-5 py-3 rounded-2xl flex items-center gap-3">
+                                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Ответ:</span>
+                                  <span className="text-sm font-black text-emerald-700 font-mono">{t.answer}</span>
+                                </div>
 
-            <div className="flex flex-wrap gap-3 mt-4">
-              <div className="bg-emerald-50 border border-emerald-100 px-5 py-3 rounded-2xl flex items-center gap-3">
-                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Ответ:</span>
-                <span className="text-sm font-black text-emerald-700 font-mono">{t.answer}</span>
-              </div>
-              
-              {t.hint && (
-                <button onClick={() => setOpenHints(prev => ({...prev, [t.id]: !prev[t.id]}))} className={`px-5 py-3 rounded-2xl border flex items-center gap-2 transition-all ${isHintOpen ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-100' : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'}`}>
-                  <PlusCircle size={14} className={isHintOpen ? 'rotate-0' : 'rotate-45 transition-transform'} />
-                  <span className="text-[10px] font-black uppercase">Подсказка</span>
-                </button>
-              )}
-              
-              {t.solution && (
-                <button onClick={() => setOpenSolutions(prev => ({...prev, [t.id]: !prev[t.id]}))} className={`px-5 py-3 rounded-2xl border flex items-center gap-2 transition-all ${isSolOpen ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
-                  <CheckCircle2 size={14} />
-                  <span className="text-[10px] font-black uppercase">Решение</span>
-                </button>
-              )}
-            </div>
+                                {t.hint && (
+                                  <button onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className={`px-5 py-3 rounded-2xl border flex items-center gap-2 transition-all ${isHintOpen ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-100' : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'}`}>
+                                    <PlusCircle size={14} className={isHintOpen ? 'rotate-0' : 'rotate-45 transition-transform'} />
+                                    <span className="text-[10px] font-black uppercase">Подсказка</span>
+                                  </button>
+                                )}
 
-            <div className="space-y-3 mt-4">
-              {isHintOpen && <div className="animate-in slide-in-from-top-2 duration-300"><MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" /></div>}
-              {isSolOpen && <div className="animate-in slide-in-from-top-2 duration-300"><MarkdownPreview text={t.solution} title="ПОЛНОЕ РЕШЕНИЕ" type="solution" /></div>}
-            </div>
-          </div>
+                                {t.solution && (
+                                  <button onClick={() => setOpenSolutions(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className={`px-5 py-3 rounded-2xl border flex items-center gap-2 transition-all ${isSolOpen ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
+                                    <CheckCircle2 size={14} />
+                                    <span className="text-[10px] font-black uppercase">Решение</span>
+                                  </button>
+                                )}
+                              </div>
 
-          <div className="flex md:flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-            <button 
-              className="p-4 bg-white text-slate-400 hover:text-blue-600 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all" 
-              onClick={() => { 
-                setTaskData({...t, options: t.options ? (Array.isArray(t.options) ? t.options.join('; ') : t.options) : ''}); 
-                setActiveTab('create'); 
-                window.scrollTo(0,0);
-              }}
-            >
-              <Edit3 size={20}/>
-            </button>
-            <button className="p-4 bg-white text-slate-400 hover:text-red-500 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all" onClick={() => handleDeleteTask(t.id)}>
-              <Trash2 size={20}/>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-})}
+                              <div className="space-y-3 mt-4">
+                                {isHintOpen && <div className="animate-in slide-in-from-top-2 duration-300"><MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" /></div>}
+                                {isSolOpen && <div className="animate-in slide-in-from-top-2 duration-300"><MarkdownPreview text={t.solution} title="ПОЛНОЕ РЕШЕНИЕ" type="solution" /></div>}
+                              </div>
+                            </div>
+
+                            <div className="flex md:flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                              <button
+                                className="p-4 bg-white text-slate-400 hover:text-blue-600 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all"
+                                onClick={() => {
+                                  setTaskData({ ...t, options: t.options ? (Array.isArray(t.options) ? t.options.join('; ') : t.options) : '' });
+                                  setActiveTab('create');
+                                  window.scrollTo(0, 0);
+                                }}
+                              >
+                                <Edit3 size={20} />
+                              </button>
+                              <button className="p-4 bg-white text-slate-400 hover:text-red-500 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all" onClick={() => handleDeleteTask(t.id)}>
+                                <Trash2 size={20} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </main>
@@ -586,7 +812,7 @@ const handleDeleteEmail = async (emailString) => {
                     </td>
                     <td className="p-8 text-right">
                       <button onClick={(e) => handleDeleteUser(e, u.id)} className="p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                        <UserX size={20}/>
+                        <UserX size={20} />
                       </button>
                     </td>
                   </tr>
@@ -597,93 +823,92 @@ const handleDeleteEmail = async (emailString) => {
         )}
 
         {/* ВКЛАДКА: УПРАВЛЕНИЕ ДОСТУПОМ */}
-{activeTab === 'access' && (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-    
-    {/* Форма добавления */}
-    <div className="lg:col-span-1 space-y-6">
-      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
-        <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-6">Добавить доступ</h2>
-        <form onSubmit={handleAddEmail} className="space-y-4">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Email адрес</span>
-            <input 
-              required
-              type="email" 
-              className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-500/20"
-              placeholder="example@mail.com"
-              value={newEmail}
-              onChange={e => setNewEmail(e.target.value)}
-            />
-          </div>
-          <button className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-3">
-            <PlusCircle size={18} /> РАЗРЕШИТЬ
-          </button>
-        </form>
-      </div>
-    </div>
+        {activeTab === 'access' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
+                <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-6">Добавить доступ</h2>
+                <form onSubmit={handleAddEmail} className="space-y-4">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Email адрес</span>
+                    <input
+                      required
+                      type="email"
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-500/20"
+                      placeholder="example@mail.com"
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                    />
+                  </div>
+                  <button className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-3">
+                    <PlusCircle size={18} /> РАЗРЕШИТЬ
+                  </button>
+                </form>
+              </div>
+            </div>
 
-    {/* Список разрешенных Email */}
-    <div className="lg:col-span-2">
-      <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
-        <div className="p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-xl font-black italic uppercase text-slate-900">Белый список почт</h3>
-          <span className="bg-emerald-100 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
-            Всего: {allowedEmails.length}
-          </span>
-        </div>
-        
-        <div className="max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-slate-50 shadow-sm z-10">
-              <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <th className="p-8">Разрешенный Email</th>
-                <th className="p-8 text-right">Действие</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allowedEmails.length === 0 ? (
-                <tr>
-                  <td colSpan="2" className="p-20 text-center text-slate-300 italic font-black uppercase text-xs tracking-widest">
-                    Список пуст
-                  </td>
-                </tr>
-              ) : (
-                allowedEmails.map(item => (
-                  <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/80 transition-all group">
-                    <td className="p-8">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform">
-                          <MailCheck size={18} />
-                        </div>
-                        <span className="font-bold text-slate-700">{item.email}</span>
-                      </div>
-                    </td>
-                    <td className="p-8 text-right">
-                      <button 
-                        onClick={() => handleDeleteEmail(item.email)}
-                        className="p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
-                      >
-                        <Trash2 size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
+                <div className="p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+                  <h3 className="text-xl font-black italic uppercase text-slate-900">Белый список почт</h3>
+                  <span className="bg-emerald-100 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
+                    Всего: {allowedEmails.length}
+                  </span>
+                </div>
+
+                <div className="max-h-[600px] overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 bg-slate-50 shadow-sm z-10">
+                      <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                        <th className="p-8">Разрешенный Email</th>
+                        <th className="p-8 text-right">Действие</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allowedEmails.length === 0 ? (
+                        <tr>
+                          <td colSpan="2" className="p-20 text-center text-slate-300 italic font-black uppercase text-xs tracking-widest">
+                            Список пуст
+                          </td>
+                        </tr>
+                      ) : (
+                        allowedEmails.map(item => (
+                          <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/80 transition-all group">
+                            <td className="p-8">
+                              <div className="flex items-center gap-4">
+                                <div className="p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform">
+                                  <MailCheck size={18} />
+                                </div>
+                                <span className="font-bold text-slate-700">{item.email}</span>
+                              </div>
+                            </td>
+                            <td className="p-8 text-right">
+                              <button
+                                onClick={() => handleDeleteEmail(item.email)}
+                                className="p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-10 p-8 bg-blue-600 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
           <div>
             <h3 className="text-xl font-black uppercase italic tracking-tighter">Глобальная синхронизация</h3>
             <p className="text-blue-100 text-[10px] font-bold uppercase tracking-widest mt-1">Обновить структуру тестов</p>
           </div>
-          <button onClick={handleGlobalSync} className="bg-white text-blue-600 px-8 py-4 rounded-2xl font-black text-xs uppercase hover:bg-slate-100 transition-colors shadow-lg">Запустить итератор</button>
+          <button onClick={handleGlobalSync} className="bg-white text-blue-600 px-8 py-4 rounded-2xl font-black text-xs uppercase hover:bg-slate-100 transition-colors shadow-lg">
+            Запустить итератор
+          </button>
         </div>
       </main>
     </div>
