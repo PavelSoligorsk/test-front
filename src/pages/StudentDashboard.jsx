@@ -186,7 +186,7 @@ const displayTests = selectedSubject === 'Все'
     
     <aside className="w-full md:w-72 bg-slate-50 border-r border-slate-100 p-8 flex flex-col gap-6 shrink-0">
   <div>
-    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 italic px-2">Поиск параллели</h3>
+    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 italic px-2">Поиск темы</h3>
     
     {/* ВВОД ДЛЯ ПОИСКА КЛАССА */}
     <div className="relative mb-6">
@@ -195,7 +195,7 @@ const displayTests = selectedSubject === 'Все'
       </div>
       <input 
         type="text"
-        placeholder="Номер класса..."
+        placeholder="Название темы..."
         value={classSearch}
         onChange={(e) => setClassSearch(e.target.value)}
         className="w-full bg-white border border-slate-200 py-3 pl-10 pr-4 rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-600 transition-all"
@@ -214,7 +214,7 @@ const displayTests = selectedSubject === 'Все'
               : 'bg-white text-slate-500 border border-slate-100 hover:border-blue-200 hover:translate-x-1'
             }`}
           >
-            <span className="font-black text-xs uppercase">{cls} КЛАСС</span>
+            <span className="font-black text-xs uppercase">{cls}</span>
             <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
               bankClass === cls ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'
             }`}>
@@ -251,7 +251,7 @@ const displayTests = selectedSubject === 'Все'
             <div className="space-y-2">
               <span className="text-blue-600 font-black uppercase text-[9px] tracking-[0.2em]">Выбранный уровень</span>
               <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">
-                {bankClass} КЛАСС
+                {bankClass} 
               </h2>
             </div>
             
@@ -280,7 +280,7 @@ const displayTests = selectedSubject === 'Все'
         
         <div className="space-y-2 mb-8">
           <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
-            Тема №{test.target_topic || '0'}
+            Тема {test.target_topic || '0'}
           </div>
           <h3 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
             {test.title}
@@ -297,7 +297,7 @@ const displayTests = selectedSubject === 'Все'
           {/* Можно добавить время, раз места стало больше */}
           <div className="flex items-center gap-2 text-slate-400">
             <Clock size={14} />
-            <span className="text-[10px] font-black uppercase">45 мин</span>
+            <span className="text-[10px] font-black uppercase">210 мин</span>
           </div>
         </div>
 
