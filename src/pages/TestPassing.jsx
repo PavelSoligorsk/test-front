@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin  } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin, XCircle   } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -55,67 +55,80 @@ const QuestionMap = ({ tasks, userAnswers, currentIdx, onNavigate }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
-      >
-        <MapPin size={14} />
-        Карта вопросов
-        <span className="text-slate-300">·</span>
-        <span className="text-blue-600">{Object.keys(userAnswers).filter(id => userAnswers[id]?.length > 0).length}</span>
-        <span className="text-slate-300">/</span>
-        <span>{tasks?.length || 0}</span>
-      </button>
+    <>
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white border border-slate-700 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-800 transition-all shadow-2xl shadow-slate-900/20"
+        >
+          <MapPin size={14} />
+          Карта
+          <span className="bg-white/20 px-2 py-0.5 rounded-full text-[9px]">
+            {Object.keys(userAnswers).filter(id => userAnswers[id]?.length > 0).length}/{tasks?.length || 0}
+          </span>
+        </button>
+      </div>
 
       {isExpanded && (
-        <div className="absolute top-full mt-3 left-0 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-xl z-50 w-80 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Навигация</span>
-            <button onClick={() => setIsExpanded(false)} className="text-slate-300 hover:text-slate-600">
-              <X size={14} />
-            </button>
+        <>
+          <div 
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+            onClick={() => setIsExpanded(false)}
+          />
+          
+          <div className="fixed bottom-24 right-6 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-2xl z-50 w-80 animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Навигация</span>
+              <button 
+                onClick={() => setIsExpanded(false)} 
+                className="p-1 bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all"
+              >
+                <XCircle size={14} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-5 gap-2 max-h-[50vh] overflow-y-auto p-1">
+              {tasks?.map((task, idx) => {
+                const hasAnswer = userAnswers[task.id] && (
+                  Array.isArray(userAnswers[task.id]) 
+                    ? userAnswers[task.id].length > 0 
+                    : userAnswers[task.id] !== ''
+                );
+                const isCurrent = idx === currentIdx;
+                
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => {
+                      onNavigate(idx);
+                      setIsExpanded(false);
+                    }}
+                    className={`aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all hover:scale-110 ${
+                      isCurrent 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110 ring-2 ring-blue-600/20'
+                        : hasAnswer
+                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="flex gap-4 mt-4 text-[9px] font-bold text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-blue-100 rounded-md"></span> Отвечено
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-slate-100 rounded-md"></span> Без ответа
+              </span>
+            </div>
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            {tasks?.map((task, idx) => {
-              const hasAnswer = userAnswers[task.id] && (
-                Array.isArray(userAnswers[task.id]) 
-                  ? userAnswers[task.id].length > 0 
-                  : userAnswers[task.id] !== ''
-              );
-              const isCurrent = idx === currentIdx;
-              
-              return (
-                <button
-                  key={task.id}
-                  onClick={() => {
-                    onNavigate(idx);
-                    setIsExpanded(false);
-                  }}
-                  className={`aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all ${
-                    isCurrent 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110'
-                      : hasAnswer
-                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex gap-4 mt-4 text-[9px] font-bold text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 bg-blue-100 rounded-md"></span> Отвечено
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 bg-slate-100 rounded-md"></span> Без ответа
-            </span>
-          </div>
-        </div>
+        </>
       )}
-    </div>
+    </>
   );
 };
 
