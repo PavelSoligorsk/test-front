@@ -10,7 +10,7 @@ import {
   Search, Send, Eye, UserX, Image as ImageIcon, 
   ChevronRight, Layers, Trash2, Edit3, CheckCircle2,
   ChevronDown, ChevronUp, MailCheck, ShieldCheck, XCircle,
-  Upload, Loader2
+  Upload, Loader2, MapPin 
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
@@ -209,6 +209,75 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
       
     
     </div>
+  );
+};
+
+const TaskMap = ({ tasks, onScroll }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Применяем ту же сортировку что и в списке
+  const sortedTasks = tasks
+    ?.slice()
+    .sort((a, b) => {
+      if (a.id !== b.id) return a.id - b.id;
+      return (a.difficulty || 0) - (b.difficulty || 0);
+    })
+    .sort((a, b) => {
+      if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+      return (a.difficulty || 0) - (b.difficulty || 0);
+    });
+  
+  return (
+    <>
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white border border-slate-700 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-800 transition-all shadow-2xl shadow-slate-900/20"
+        >
+          <MapPin size={14} />
+          Карта
+          <span className="bg-white/20 px-2 py-0.5 rounded-full text-[9px]">
+            {sortedTasks?.length || 0}
+          </span>
+        </button>
+      </div>
+
+      {isExpanded && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+            onClick={() => setIsExpanded(false)}
+          />
+          
+          <div className="fixed bottom-24 right-6 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-2xl z-50 w-80 animate-in slide-in-from-bottom-2 duration-200 max-h-[70vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Задания ({sortedTasks?.length || 0})</span>
+              <button 
+                onClick={() => setIsExpanded(false)} 
+                className="p-1 bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all"
+              >
+                <XCircle size={14} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-5 gap-2">
+              {sortedTasks?.map((task, idx) => (
+                <button
+                  key={task.id}
+                  onClick={() => {
+                    onScroll(task.id);
+                    setIsExpanded(false);
+                  }}
+                  className="aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all hover:scale-110 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700"
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 };
 
@@ -729,7 +798,7 @@ export default function AdminDashboard() {
               const isHintOpen = openHints[t.id];
 
               return (
-                <div key={t.id} className="group p-4 md:p-8 bg-slate-50 rounded-2xl md:rounded-[2.5rem] border border-transparent hover:border-blue-100 hover:bg-white hover:shadow-2xl transition-all mb-4 md:mb-6">
+                <div key={t.id} data-task-id={t.id} className="group p-4 md:p-8 bg-slate-50 rounded-2xl md:rounded-[2.5rem] border border-transparent hover:border-blue-100 hover:bg-white hover:shadow-2xl transition-all mb-4 md:mb-6">
                   <div className="flex flex-col gap-6 md:gap-8">
                     {/* Левая часть с контентом */}
                     <div className="flex-1 space-y-4 w-full">
@@ -854,124 +923,157 @@ export default function AdminDashboard() {
                   <input type="text" placeholder="Поиск..." className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 </div>
                 <div className="flex bg-slate-200/50 p-1 rounded-2xl">
-                  {['all', 'admin', 'teacher', 'user'].map(role => (
-                    <button key={role} onClick={() => setUserRoleFilter(role)} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${userRoleFilter === role ? 'bg-white text-blue-600 shadow-md scale-105' : 'text-slate-400'}`}>{role === 'all' ? 'Все' : role}</button>
-                  ))}
-                </div>
+  {['all', 'admin', 'teacher', 'student'].map(role => (
+    <button 
+      key={role} 
+      onClick={() => setUserRoleFilter(role)} 
+      className={`flex-1 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
+        userRoleFilter === role 
+          ? 'bg-white text-blue-600 shadow-md scale-105' 
+          : 'text-slate-400'
+      }`}
+    >
+      {role === 'all' ? 'Все' : role}
+    </button>
+  ))}
+</div>
               </div>
             </div>
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                  <th className="p-8">Пользователь</th>
-                  <th className="p-8">Роль</th>
-                  <th className="p-8 text-right">Управление</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map(u => (
-                  <tr key={u.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/admin/users/${u.id}`)}>
-                    <td className="p-8">
-                      <div className="font-black text-slate-800 uppercase tracking-tighter text-base group-hover:text-blue-600 transition-colors">
-                        {u.first_name} {u.last_name}
-                      </div>
-                      <div className="text-[10px] text-blue-500 font-bold">@{u.username}</div>
-                    </td>
-                    <td className="p-8">
-                      <button onClick={(e) => handleChangeRole(e, u.id, u.role)} className={`px-4 py-1.5 rounded-full font-black text-[9px] uppercase border transition-all ${u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : u.role === 'teacher' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-400'}`}>
-                        {u.role}
-                      </button>
-                    </td>
-                    <td className="p-8 text-right">
-                      <button onClick={(e) => handleDeleteUser(e, u.id)} className="p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                        <UserX size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+  <table className="w-full text-left min-w-[600px]">
+    <thead>
+      <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+        <th className="p-4 sm:p-8">Пользователь</th>
+        <th className="p-4 sm:p-8">Роль</th>
+        <th className="p-4 sm:p-8 text-right">Управление</th>
+      </tr>
+    </thead>
+    <tbody>
+      {filteredUsers.map(u => (
+        <tr key={u.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/admin/users/${u.id}`)}>
+          <td className="p-4 sm:p-8">
+            <div className="font-black text-slate-800 uppercase tracking-tighter text-sm sm:text-base group-hover:text-blue-600 transition-colors">
+              {u.first_name} {u.last_name}
+            </div>
+            <div className="text-[10px] text-blue-500 font-bold">@{u.username}</div>
+          </td>
+          <td className="p-4 sm:p-8">
+            <button onClick={(e) => handleChangeRole(e, u.id, u.role)} className={`px-3 sm:px-4 py-1.5 rounded-full font-black text-[9px] uppercase border transition-all ${
+              u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 
+              u.role === 'teacher' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
+              'bg-slate-50 text-slate-400'
+            }`}>
+              {u.role}
+            </button>
+          </td>
+          <td className="p-4 sm:p-8 text-right">
+            <button onClick={(e) => handleDeleteUser(e, u.id)} className="p-2 sm:p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+              <UserX size={18} className="sm:w-5 sm:h-5" />
+            </button>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
           </div>
         )}
 
         {/* ВКЛАДКА: УПРАВЛЕНИЕ ДОСТУПОМ */}
-        {activeTab === 'access' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
-                <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-6">Добавить доступ</h2>
-                <form onSubmit={handleAddEmail} className="space-y-4">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Email адрес</span>
-                    <input
-                      required
-                      type="email"
-                      className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-500/20"
-                      placeholder="example@mail.com"
-                      value={newEmail}
-                      onChange={e => setNewEmail(e.target.value)}
-                    />
-                  </div>
-                  <button className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-3">
-                    <PlusCircle size={18} /> РАЗРЕШИТЬ
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
-                <div className="p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
-                  <h3 className="text-xl font-black italic uppercase text-slate-900">Белый список почт</h3>
-                  <span className="bg-emerald-100 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
-                    Всего: {allowedEmails.length}
-                  </span>
-                </div>
-
-                <div className="max-h-[600px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 bg-slate-50 shadow-sm z-10">
-                      <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        <th className="p-8">Разрешенный Email</th>
-                        <th className="p-8 text-right">Действие</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allowedEmails.length === 0 ? (
-                        <tr>
-                          <td colSpan="2" className="p-20 text-center text-slate-300 italic font-black uppercase text-xs tracking-widest">
-                            Список пуст
-                          </td>
-                        </tr>
-                      ) : (
-                        allowedEmails.map(item => (
-                          <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/80 transition-all group">
-                            <td className="p-8">
-                              <div className="flex items-center gap-4">
-                                <div className="p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform">
-                                  <MailCheck size={18} />
-                                </div>
-                                <span className="font-bold text-slate-700">{item.email}</span>
-                              </div>
-                            </td>
-                            <td className="p-8 text-right">
-                              <button
-                                onClick={() => handleDeleteEmail(item.email)}
-                                className="p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
-                              >
-                                <Trash2 size={20} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+{activeTab === 'access' && (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+    <div className="lg:col-span-1 space-y-6">
+      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
+        <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-6">Добавить доступ</h2>
+        <form onSubmit={handleAddEmail} className="space-y-4">
+          <div className="space-y-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Email адрес</span>
+            <input
+              required
+              type="email"
+              className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-500/20"
+              placeholder="example@mail.com"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+            />
           </div>
-        )}
+          <button className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-3">
+            <PlusCircle size={18} /> РАЗРЕШИТЬ
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div className="lg:col-span-2">
+      <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
+        <div className="p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+          <h3 className="text-xl font-black italic uppercase text-slate-900">Белый список почт</h3>
+          <span className="bg-emerald-100 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
+            Всего: {allowedEmails.length}
+          </span>
+        </div>
+
+        <div className="max-h-[600px] overflow-y-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="sticky top-0 bg-slate-50 shadow-sm z-10">
+              <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                <th className="p-4 sm:p-8">Разрешенный Email</th>
+                <th className="p-4 sm:p-8">Пользователь</th>
+                <th className="p-4 sm:p-8 text-right">Действие</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allowedEmails.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="p-20 text-center text-slate-300 italic font-black uppercase text-xs tracking-widest">
+                    Список пуст
+                  </td>
+                </tr>
+              ) : (
+                allowedEmails.map(item => (
+                  <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/80 transition-all group">
+                    <td className="p-4 sm:p-8">
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform shrink-0">
+                          <MailCheck size={18} />
+                        </div>
+                        <span className="font-bold text-slate-700 text-sm break-all">{item.email}</span>
+                      </div>
+                    </td>
+                    <td className="p-4 sm:p-8">
+                      {item.first_name ? (
+                        <div className="space-y-0.5">
+                          <div className="font-black text-slate-800 text-sm">
+                            {item.first_name} {item.last_name || ''}
+                          </div>
+                          {item.tg_username && (
+                            <div className="text-[10px] text-blue-500 font-bold">
+                              {item.tg_username}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-300 font-bold uppercase">Не зарегистрирован</span>
+                      )}
+                    </td>
+                    <td className="p-4 sm:p-8 text-right">
+                      <button
+                        onClick={() => handleDeleteEmail(item.email)}
+                        className="p-3 sm:p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                      >
+                        <Trash2 size={18} className="sm:w-5 sm:h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         <div className="mt-10 p-8 bg-blue-600 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
           <div>
@@ -983,6 +1085,16 @@ export default function AdminDashboard() {
           </button>
         </div>
       </main>
+
+      {activeTab === 'bank' && bankTopic && (
+  <TaskMap 
+    tasks={groupedTasks[bankClass][bankTopic]} 
+    onScroll={(taskId) => {
+      const el = document.querySelector(`[data-task-id="${taskId}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }} 
+  />
+)}
     </div>
   );
 }

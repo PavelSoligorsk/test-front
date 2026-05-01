@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin  } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -50,6 +50,74 @@ const MarkdownPreview = ({ text, title }) => (
     </div>
   </div>
 );
+
+const QuestionMap = ({ tasks, userAnswers, currentIdx, onNavigate }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+      >
+        <MapPin size={14} />
+        Карта вопросов
+        <span className="text-slate-300">·</span>
+        <span className="text-blue-600">{Object.keys(userAnswers).filter(id => userAnswers[id]?.length > 0).length}</span>
+        <span className="text-slate-300">/</span>
+        <span>{tasks?.length || 0}</span>
+      </button>
+
+      {isExpanded && (
+        <div className="absolute top-full mt-3 left-0 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-xl z-50 w-80 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Навигация</span>
+            <button onClick={() => setIsExpanded(false)} className="text-slate-300 hover:text-slate-600">
+              <X size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {tasks?.map((task, idx) => {
+              const hasAnswer = userAnswers[task.id] && (
+                Array.isArray(userAnswers[task.id]) 
+                  ? userAnswers[task.id].length > 0 
+                  : userAnswers[task.id] !== ''
+              );
+              const isCurrent = idx === currentIdx;
+              
+              return (
+                <button
+                  key={task.id}
+                  onClick={() => {
+                    onNavigate(idx);
+                    setIsExpanded(false);
+                  }}
+                  className={`aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all ${
+                    isCurrent 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110'
+                      : hasAnswer
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                  }`}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-4 mt-4 text-[9px] font-bold text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 bg-blue-100 rounded-md"></span> Отвечено
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 bg-slate-100 rounded-md"></span> Без ответа
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function TestPassing() {
   const { testId } = useParams();
@@ -189,16 +257,23 @@ export default function TestPassing() {
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
       <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6">
         
-        {/* Header Прогресса */}
         <header className="flex justify-between items-center bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Вопрос</span>
-            <span className="text-lg font-black italic">{currentIdx + 1} <span className="text-slate-200 font-medium not-italic mx-1">/</span> {test?.tasks?.length}</span>
-          </div>
-          <button onClick={() => navigate(-1)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
-            <X size={20}/>
-          </button>
-        </header>
+  <div className="flex items-center gap-6">
+    <div className="flex flex-col">
+      <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Вопрос</span>
+      <span className="text-lg font-black italic">{currentIdx + 1} <span className="text-slate-200 font-medium not-italic mx-1">/</span> {test?.tasks?.length}</span>
+    </div>
+    <QuestionMap 
+      tasks={test?.tasks} 
+      userAnswers={userAnswers} 
+      currentIdx={currentIdx} 
+      onNavigate={(idx) => setCurrentIdx(idx)} 
+    />
+  </div>
+  <button onClick={() => navigate(-1)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
+    <X size={20}/>
+  </button>
+</header>
 
         {/* Тело задания */}
         {currentTask && (

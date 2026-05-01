@@ -136,46 +136,32 @@ const displayTests = selectedSubject === 'Все'
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-6 py-3">
-  <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
-  
-  {/* ЛОГОТИП С ЭФФЕКТОМ */}
-  <div className="flex items-center gap-3 group cursor-pointer w-full md:w-auto justify-center md:justify-start">
-    <div className="relative">
-      <div className="absolute inset-0 bg-blue-600 blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-      <div className="relative w-10 h-10 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black transform group-hover:rotate-6 transition-transform duration-300">
-        E
-      </div>
-    </div>
-    <div className="flex flex-col">
-      <span className="font-black uppercase tracking-tighter text-lg leading-none">EduSpace</span>
-      <span className="text-[8px] font-bold text-blue-600 uppercase tracking-[0.2em] leading-none mt-1">Platform</span>
+  <div className="max-w-7xl mx-auto flex justify-end">
+  <div className="max-w-7xl mx-auto">
+  {/* ИНТЕРАКТИВНОЕ МЕНЮ - СПРАВА, НА ТЕЛЕФОНЕ НА ВСЮ ШИРИНУ */}
+  <div className="flex justify-end">
+    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100 w-full md:w-auto">
+      {['tests', 'history', 'profile'].map((tab) => (
+        <button 
+          key={tab}
+          onClick={() => setActiveTab(tab)}
+          className={`relative px-3 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
+            activeTab === tab 
+              ? 'text-white' 
+              : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'
+          }`}
+        >
+          {activeTab === tab && (
+            <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300 -z-0"></div>
+          )}
+          <span className="relative z-10 whitespace-nowrap">
+            {tab === 'tests' ? 'Обучение' : tab === 'history' ? 'История' : 'Профиль'}
+          </span>
+        </button>
+      ))}
     </div>
   </div>
-  
-  {/* ИНТЕРАКТИВНОЕ МЕНЮ - РАСТЯГИВАЕТСЯ НА ТЕЛЕФОНЕ */}
-  <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100 w-full md:w-auto">
-    {['tests', 'history', 'profile'].map((tab) => (
-      <button 
-        key={tab}
-        onClick={() => setActiveTab(tab)}
-        className={`relative px-3 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
-          activeTab === tab 
-            ? 'text-white' 
-            : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'
-        }`}
-      >
-        {/* ФОН АКТИВНОЙ КНОПКИ */}
-        {activeTab === tab && (
-          <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300 -z-0"></div>
-        )}
-        
-        <span className="relative z-10 whitespace-nowrap md:whitespace-normal">
-          {tab === 'tests' ? 'Обучение' : tab === 'history' ? 'История' : 'Профиль'}
-        </span>
-      </button>
-    ))}
-  </div>
-
+</div>
 </div>
 </nav>
 
@@ -247,13 +233,13 @@ const displayTests = selectedSubject === 'Все'
         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
           
           {/* ШАПКА РАЗДЕЛА */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-slate-50 pb-8">
-            <div className="space-y-2">
-              <span className="text-blue-600 font-black uppercase text-[9px] tracking-[0.2em]">Выбранный уровень</span>
-              <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">
-                {bankClass} 
-              </h2>
-            </div>
+<div className="border-b border-slate-50 pb-8">
+  <div className="space-y-2 text-center">
+    <span className="text-blue-600 font-black uppercase text-[9px] tracking-[0.2em]">Выбранный уровень</span>
+    <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">
+      {bankClass} 
+    </h2>
+  </div>
             
             
           </div>
@@ -279,11 +265,8 @@ const displayTests = selectedSubject === 'Все'
         </div>
         
         <div className="space-y-2 mb-8">
-          <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
-            Тема {test.target_topic || '0'}
-          </div>
           <h3 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">
-            {test.title}
+            {test.title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}
           </h3>
         </div>
         
@@ -348,7 +331,7 @@ const displayTests = selectedSubject === 'Все'
                 <tbody className="divide-y divide-slate-50">
                   {filteredHistory.map((res) => (
                     <tr key={res.id} onClick={() => navigate(`/result/${res.id}`)} className="hover:bg-slate-50 cursor-pointer transition-colors group">
-                      <td className="px-8 py-6 font-black uppercase text-slate-800 text-sm group-hover:text-blue-600">{res.test_title}</td>
+                      <td className="px-8 py-6 font-black uppercase text-slate-800 text-sm group-hover:text-blue-600">{res.test_title.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}</td>
                       <td className="px-8 py-6 text-center font-black italic text-lg text-blue-600">{res.total_points}</td>
                       <td className="px-8 py-6 text-[10px] font-bold text-slate-400 uppercase">
                         <div className="flex items-center gap-2"><Calendar size={12}/> {new Date(res.completed_at).toLocaleDateString()}</div>

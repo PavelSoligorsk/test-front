@@ -224,7 +224,7 @@ const filteredHistory = history.filter(item =>
               >
                 <td className="px-8 py-6">
                   <div className="font-black uppercase text-slate-800 text-sm group-hover:text-blue-600 transition-colors">
-                    {item.test_title}
+                    {item.test_title.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}
                   </div>
                   <div className="text-[9px] font-black text-slate-400 uppercase mt-1 tracking-tighter">
                     ID {item.result.id}

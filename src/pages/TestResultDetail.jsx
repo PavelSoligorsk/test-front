@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3 } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3, MapPin } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -104,6 +104,92 @@ const DifficultyBadge = ({ level, correct, total }) => {
   );
 };
 
+const QuestionMap = ({ details, onScroll }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const correctCount = details?.filter(d => d.is_correct).length || 0;
+  const wrongCount = details?.filter(d => !d.is_correct && d.user_answer !== "Нет ответа").length || 0;
+  const skippedCount = details?.filter(d => d.user_answer === "Нет ответа").length || 0;
+  
+  return (
+    <>
+      {/* Кнопка всегда на виду */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white border border-slate-700 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-800 transition-all shadow-2xl shadow-slate-900/20"
+        >
+          <MapPin size={14} />
+          Карта
+          <span className="bg-white/20 px-2 py-0.5 rounded-full text-[9px]">
+            {details?.length || 0}
+          </span>
+        </button>
+      </div>
+
+      {/* Выпадающая панель */}
+      {isExpanded && (
+        <>
+          {/* Затемнение фона */}
+          <div 
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+            onClick={() => setIsExpanded(false)}
+          />
+          
+          {/* Панель с картой */}
+          <div className="fixed bottom-24 right-6 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-2xl z-50 w-80 animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Навигация</span>
+              <button 
+                onClick={() => setIsExpanded(false)} 
+                className="p-1 bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all"
+              >
+                <XCircle size={14} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-5 gap-2">
+              {details?.map((item, idx) => {
+                const hasNoAnswer = item.user_answer === "Нет ответа";
+                
+                return (
+                  <button
+                    key={item.task_id}
+                    onClick={() => {
+                      onScroll(item.task_id);
+                      setIsExpanded(false);
+                    }}
+                    className={`aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all hover:scale-110 ${
+                      hasNoAnswer 
+                        ? 'bg-slate-200 text-slate-400 hover:bg-slate-300'
+                        : item.is_correct
+                          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                          : 'bg-red-100 text-red-700 hover:bg-red-200'
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="flex gap-4 mt-4 text-[9px] font-bold text-slate-400 flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-emerald-100 rounded-md"></span> Верно ({correctCount})
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-red-100 rounded-md"></span> Ошибки ({wrongCount})
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 bg-slate-200 rounded-md"></span> Пропущено ({skippedCount})
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+};
 export default function TestResultDetail() {
   const { resultId } = useParams();
   const navigate = useNavigate();
@@ -147,18 +233,18 @@ export default function TestResultDetail() {
           <ArrowLeft size={14}/> Назад в кабинет
         </button>
 
-        <header className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center">
-          <div>
-            <h1 className="text-4xl font-black uppercase italic tracking-tighter text-black">
-              {data.test_title}
-            </h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase mt-2">Результат прохождения</p>
-          </div>
-          <div className="bg-slate-950 text-white px-8 py-6 rounded-[2rem] text-center">
-            <div className="text-3xl font-black">{data.total_points} / {data.max_points}</div>
-            <div className="text-[9px] font-bold text-slate-500 uppercase">Баллов набрано</div>
-          </div>
-        </header>
+<header className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center">
+  <div>
+    <h1 className="text-4xl font-black uppercase italic tracking-tighter text-black">
+      {data.test_title}
+    </h1>
+    <p className="text-[10px] font-black text-slate-400 uppercase mt-2">Результат прохождения</p>
+  </div>
+  <div className="bg-slate-950 text-white px-8 py-6 rounded-[2rem] text-center mt-4 md:mt-0">
+    <div className="text-3xl font-black">{data.total_points} / {data.max_points}</div>
+    <div className="text-[9px] font-bold text-slate-500 uppercase">Баллов набрано</div>
+  </div>
+</header>
 
         {data.difficulty_stats && (
           <section className="space-y-4">
@@ -187,10 +273,7 @@ export default function TestResultDetail() {
             const isSolutionOpen = openSolutions[item.task_id];
 
             return (
-              <div key={item.task_id} className={`bg-white rounded-[2.5rem] border-2 transition-all overflow-hidden ${
-                hasNoAnswer ? 'border-slate-200 opacity-80' : 
-                item.is_correct ? 'border-emerald-500/20' : 'border-red-500/20'
-              }`}>
+              <div key={item.task_id} data-task-id={item.task_id} className={`bg-white rounded-[2.5rem] border-2 transition-all overflow-hidden`}>
                 <div className="p-8">
                   <div className="flex justify-between items-start mb-6">
                     <div>
@@ -231,41 +314,68 @@ export default function TestResultDetail() {
                   </div>
 
                   {/* ✅ Варианты ответа */}
-                  {item.options && (
-                    <div className="mb-8 space-y-2">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block mb-3 ml-1">Варианты:</span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {(Array.isArray(item.options) ? item.options : item.options.split(';'))
-                          .map(opt => opt.trim())
-                          .filter(opt => opt.length > 0)
-                          .map((opt, i) => {
-                            const isUserChoice = item.user_answer === opt;
-                            const isCorrectChoice = item.correct_answer === opt;
+{/* ✅ Варианты ответа */}
+{item.options && (
+  <div className="mb-8 space-y-2">
+    <span className="text-[9px] font-black uppercase text-slate-400 block mb-3 ml-1">Варианты:</span>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {(Array.isArray(item.options) ? item.options : item.options.split(';'))
+        .map(opt => opt.trim())
+        .filter(opt => opt.length > 0)
+        .map((opt, i) => {
+          const indexStr = String(i + 1);
+          
+          // Правильные ответы — массив
+          const correctAnswers = item.correct_answer
+            ? item.correct_answer.split(',').map(a => a.trim())
+            : [];
+          
+          // Ответы пользователя — массив
+          const userAnswersList = item.user_answer
+            ? item.user_answer.split(',').map(a => a.trim())
+            : [];
+          
+          const isCorrectAnswer = correctAnswers.includes(indexStr);
+          const isUserChoice = userAnswersList.includes(indexStr);
+          
+          // Логика подсветки:
+          // 1. Если вариант правильный — зелёный всегда
+          // 2. Если вариант выбран пользователем, но НЕ правильный — красный
+          // 3. Если вариант правильный И выбран пользователем — зелёный (уже covered)
+          // 4. Если вариант не выбран и не правильный — серый
 
-                            return (
-                              <div 
-                                key={i} 
-                                className={`p-4 rounded-2xl border-2 text-sm font-bold flex gap-3 transition-all ${
-                                  isCorrectChoice 
-                                    ? 'border-emerald-500 bg-emerald-50/50 text-emerald-700' 
-                                    : isUserChoice && !item.is_correct
-                                      ? 'border-red-500 bg-red-50/50 text-red-700'
-                                      : 'border-slate-50 bg-slate-50/30 text-slate-600'
-                                }`}
-                              >
-                                <span className="opacity-40">{i + 1}.</span>
-                                <div className="flex-1">
-                                  <MarkdownRenderer>
-                                    {opt}
-                                  </MarkdownRenderer>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  )}
-
+          return (
+            <div 
+              key={i} 
+              className={`p-4 rounded-2xl border-2 text-sm font-bold flex gap-3 transition-all ${
+                isCorrectAnswer 
+                  ? 'border-emerald-500 bg-emerald-50/50 text-emerald-700' 
+                  : isUserChoice && !isCorrectAnswer
+                    ? 'border-red-500 bg-red-50/50 text-red-700'
+                    : 'border-slate-50 bg-slate-50/30 text-slate-600'
+              }`}
+            >
+              <span className="opacity-40">{i + 1}.</span>
+              <div className="flex-1">
+                <MarkdownRenderer>
+                  {opt}
+                </MarkdownRenderer>
+              </div>
+              {isCorrectAnswer && isUserChoice && (
+                <CheckCircle2 size={16} className="text-emerald-500 shrink-0 self-center" />
+              )}
+              {isCorrectAnswer && !isUserChoice && (
+                <CheckCircle2 size={16} className="text-emerald-400/60 shrink-0 self-center" />
+              )}
+              {isUserChoice && !isCorrectAnswer && (
+                <XCircle size={16} className="text-red-500 shrink-0 self-center" />
+              )}
+            </div>
+          );
+        })}
+    </div>
+  </div>
+)}
                   {/* ✅ Ответы студента и эталон */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className={`p-5 rounded-3xl border transition-colors ${
@@ -326,6 +436,13 @@ export default function TestResultDetail() {
           })}
         </div>
       </div>
+      <QuestionMap 
+        details={sortedDetails} 
+        onScroll={(taskId) => {
+          const el = document.querySelector(`[data-task-id="${taskId}"]`);
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }} 
+      />
     </div>
   );
 }
