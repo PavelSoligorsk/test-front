@@ -14,6 +14,11 @@ import axios from 'axios'; // Добавь эту строку первой
 
 
 
+const savedSession = localStorage.getItem('edu_session');
+if (savedSession) {
+  const userData = JSON.parse(savedSession);
+  axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+}
 
 const PrivateRoute = ({ children, allowedRoles }) => {
   const savedUser = JSON.parse(localStorage.getItem('edu_session'));
