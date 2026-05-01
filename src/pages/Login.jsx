@@ -11,41 +11,51 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
+  try {
+    const loginData = new URLSearchParams();
+    loginData.append('username', formData.username);
+    loginData.append('password', formData.password);
+
+    const res = await axios.post(`${API_URL}/login`, loginData, {
+      withCredentials: true  // включаем куки
+    });
+
+    const userData = {
+      username: res.data.username,
+      role: res.data.role,
+      token: res.data.access_token
+    };
+
+    // Способ 1: localStorage (для обычных браузеров)
     try {
-      // FastAPI OAuth2 стандарт требует передачи данных как Form Data, а не JSON
-      const loginData = new URLSearchParams();
-      loginData.append('username', formData.username);
-      loginData.append('password', formData.password);
-
-      const res = await axios.post(`${API_URL}/login`, loginData);
-
-      // Сохраняем данные пользователя и токен
-      const userData = {
-        username: res.data.username,
-        role: res.data.role,
-        token: res.data.access_token
-      };
-
       localStorage.setItem('edu_session', JSON.stringify(userData));
-      
-      // Настраиваем axios для всех последующих запросов
-      axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+    } catch(e) { console.log('localStorage не доступен', e); }
 
-      // Редирект в зависимости от роли
-      if (userData.role === 'admin') navigate('/admin');
-      else if (userData.role === 'teacher') navigate('/teacher');
-      else navigate('/student');
+    // Способ 2: sessionStorage (резерв)
+    try {
+      sessionStorage.setItem('edu_session', JSON.stringify(userData));
+    } catch(e) {}
 
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Неверный логин или пароль');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Способ 3: кука (самый надёжный на телефонах)
+    document.cookie = `edu_session=${encodeURIComponent(JSON.stringify(userData))}; path=/; max-age=604800; samesite=lax`;
+
+    // Устанавливаем заголовок
+    axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+
+    // Редирект
+    if (userData.role === 'admin') navigate('/admin');
+    else if (userData.role === 'teacher') navigate('/teacher');
+    else navigate('/student');
+
+  } catch (err) {
+    setError(err.response?.data?.detail || 'Неверный логин или пароль');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
