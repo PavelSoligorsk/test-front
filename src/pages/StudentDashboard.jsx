@@ -245,7 +245,7 @@ const displayTests = selectedSubject === 'Все'
           </div>
 
           {/* СЕТКА СТАЛА ШИРЕ: макс 2 колонки вместо 3 */}
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
   {displayTests.length > 0 ? displayTests.map(test => (
     <div 
       key={test.id} 
