@@ -14,7 +14,79 @@ import {
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
-// --- КОМПОНЕНТ ПРЕДПРОСМОТРА MARKDOWN ---
+// ==================== КОНСТАНТЫ ТЕМ И РАЗДЕЛОВ ====================
+const MAIN_TOPICS = {
+  'numbers': 'Числа и вычисления',
+  'expressions': 'Выражения и их преобразования',
+  'equations': 'Уравнения и неравенства',
+  'functions': 'Координаты и функции',
+  'geometry': 'Геометрия'
+};
+
+const SECTIONS_BY_TOPIC = {
+  'numbers': [
+    'Типы чисел. Признаки делимости. Деление с остатком. Разложение на простые множители. НОК и НОД',
+    'Обыкновенные дроби и основные операции с ними',
+    'Десятичные дроби. Рациональные числа. Модуль. Проценты. Прямая и обратная пропорциональность',
+    'Степени',
+    'Квадратные корни',
+    'Корень n-ой степени',
+    'Обобщенное понятие степени',
+    'Логарифм',
+    'Арифметическая и геометрическая прогрессии'
+  ],
+  'expressions': [
+    'Одночлены и многочлены',
+    'Рациональная дробь',
+    'Дробно-рациональные выражения',
+    'Тригонометрия',
+    'Степенная функция',
+    'Показательная функция',
+    'Логарифмическая функция'
+  ],
+  'equations': [
+    'Линейные уравнения и неравенства',
+    'Системы линейных уравнений',
+    'Системы и совокупности линейных неравенств',
+    'Квадратные уравнения',
+    'Квадратичные неравенства',
+    'Дробно-рациональные уравнения',
+    'Дробно-рациональные неравенства',
+    'Системы нелинейных уравнений',
+    'Показательные уравнения',
+    'Показательные неравенства',
+    'Логарифмические уравнения',
+    'Логарифмические неравенства',
+    'Текстовые задачи',
+    'ЦЭ 2023',
+    'РЦЭ 2026',
+    'ДРТ 2023',
+    'РТ 1/1',
+    'РТ 1/2',
+    'Комплексный тест 1'
+  ],
+  'functions': [
+    'Линейные функции',
+    'Функции (8 класс)',
+    'Квадратичная функция',
+    'Функции (9 класс)',
+    'Производная'
+  ],
+  'geometry': [
+    'Основные понятия геометрии',
+    'Треугольник',
+    'Многоугольники. Правильные многоугольники',
+    'Четырехугольники: квадрат, прямоугольник, параллелограмм, ромб, трапеция',
+    'Круг и окружность',
+    'Отрезок. Окружность',
+    'Основы стереометрии',
+    'Пространственные фигуры: Призма, Пирамида',
+    'Фигуры вращения',
+    'Угол между прямыми, расстояние от точки до прямой, двугранный угол'
+  ]
+};
+
+// ==================== КОМПОНЕНТ ПРЕДПРОСМОТРА MARKDOWN ====================
 const MarkdownPreview = ({ text, title, type }) => (
   <div className={`p-6 rounded-[2rem] border shadow-sm ${
     type === 'hint' ? 'bg-amber-50/40 border-amber-100' : 
@@ -37,6 +109,7 @@ const MarkdownPreview = ({ text, title, type }) => (
   </div>
 );
 
+// ==================== КОМПОНЕНТ ТЕКСТОВОГО ПОЛЯ С ЗАГРУЗКОЙ ИЗОБРАЖЕНИЙ ====================
 const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows = 4, required = false }) => {
   const textareaRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -112,7 +185,6 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
     insertAtCursor(imageMarkdown);
   };
 
-  // ✅ Исправленный handlePaste — без временной метки
   const handlePaste = async (e) => {
     const items = e.clipboardData?.items;
     
@@ -137,7 +209,6 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
     }
   };
 
-  // ✅ Исправленный handleFileSelect
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
@@ -153,7 +224,6 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
     e.target.value = '';
   };
 
-  // ✅ Исправленный handleDrop
   const handleDrop = async (e) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -206,22 +276,16 @@ const ImageAwareTextarea = ({ value, onChange, placeholder, className = '', rows
           {uploadProgress ? `${uploadProgress}%` : 'Загрузка...'}
         </div>
       )}
-      
-    
     </div>
   );
 };
 
+// ==================== КОМПОНЕНТ КАРТЫ ЗАДАНИЙ ====================
 const TaskMap = ({ tasks, onScroll }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Применяем ту же сортировку что и в списке
   const sortedTasks = tasks
     ?.slice()
-    .sort((a, b) => {
-      if (a.id !== b.id) return a.id - b.id;
-      return (a.difficulty || 0) - (b.difficulty || 0);
-    })
     .sort((a, b) => {
       if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
       return (a.difficulty || 0) - (b.difficulty || 0);
@@ -281,7 +345,7 @@ const TaskMap = ({ tasks, onScroll }) => {
   );
 };
 
-// --- ОСНОВНОЙ КОМПОНЕНТ АДМИНКИ ---
+// ==================== ОСНОВНОЙ КОМПОНЕНТ АДМИНКИ ====================
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('create');
   const [users, setUsers] = useState([]);
@@ -293,12 +357,15 @@ export default function AdminDashboard() {
   const [openHints, setOpenHints] = useState({});
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [bankFilter, setBankFilter] = useState({ topic: null, section: null });
   const [bankClass, setBankClass] = useState(null);
-  const [bankTopic, setBankTopic] = useState(null);
+const [bankTopic, setBankTopic] = useState(null);
 
   const initialTaskState = {
     task_class: '11',
     topic_number: '1',
+    topic: '',
+    section: '',
     content: '',
     answer: '',
     hint: '',
@@ -308,6 +375,12 @@ export default function AdminDashboard() {
     difficulty: 1
   };
   const [taskData, setTaskData] = useState(initialTaskState);
+
+  const [returnContext, setReturnContext] = useState({
+    bankTopic: null,
+    bankSection: null,
+    scrollPosition: 0
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -327,6 +400,26 @@ export default function AdminDashboard() {
       console.error("Ошибка:", e);
     }
   };
+  
+
+  const groupedTasks = useMemo(() => {
+  return tasks.reduce((acc, t) => {
+    if (!acc[t.task_class]) acc[t.task_class] = {};
+    if (!acc[t.task_class][t.topic_number]) acc[t.task_class][t.topic_number] = [];
+    acc[t.task_class][t.topic_number].push(t);
+    return acc;
+  }, {});
+}, [tasks]);
+
+// 2. Потом availableClasses (зависит от groupedTasks)
+const availableClasses = useMemo(() => {
+  return Object.keys(groupedTasks).sort((a, b) => {
+    const numA = parseInt(a);
+    const numB = parseInt(b);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.localeCompare(b);
+  });
+}, [groupedTasks]);
 
   const handleAddEmail = async (e) => {
     e.preventDefault();
@@ -367,6 +460,14 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleTopicChange = (topicKey) => {
+    setTaskData({ 
+      ...taskData, 
+      topic: topicKey,
+      section: ''
+    });
+  };
+
   const handleTaskSubmit = async (e) => {
     e.preventDefault();
     const finalTask = {
@@ -378,34 +479,26 @@ export default function AdminDashboard() {
 
     try {
       if (taskData.id) {
-        if (taskData.id) {
-  await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskData.id}`, finalTask);
-  alert("Задание обновлено!");
-  
-  // Возвращаемся в банк заданий после обновления
-  if (returnContext.bankClass && returnContext.bankTopic) {
-    setBankClass(returnContext.bankClass);
-    setBankTopic(returnContext.bankTopic);
-    setActiveTab('bank');
-    
-    setTimeout(() => {
-      window.scrollTo(0, returnContext.scrollPosition);
-    }, 100);
-    
-    setReturnContext({ bankClass: null, bankTopic: null, scrollPosition: 0 });
-    setTaskData(initialTaskState);
-  }
-} else {
-  await axios.post('https://tests-production-46d5.up.railway.app/admin/tasks', finalTask);
-  alert("Задание создано!");
-  setTaskData(initialTaskState);
-}
+        await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskData.id}`, finalTask);
+        alert("Задание обновлено!");
+        
+        if (returnContext.bankTopic && returnContext.bankSection) {
+          setBankFilter({ topic: returnContext.bankTopic, section: returnContext.bankSection });
+          setActiveTab('bank');
+          
+          setTimeout(() => {
+            window.scrollTo(0, returnContext.scrollPosition);
+          }, 100);
+          
+          setReturnContext({ bankTopic: null, bankSection: null, scrollPosition: 0 });
+          setTaskData(initialTaskState);
+        }
       } else {
         await axios.post('https://tests-production-46d5.up.railway.app/admin/tasks', finalTask);
         alert("Задание создано!");
+        setTaskData(initialTaskState);
       }
       fetchTasks();
-      setTaskData(initialTaskState);
     } catch (e) {
       alert("Ошибка при сохранении");
     }
@@ -460,23 +553,16 @@ export default function AdminDashboard() {
     return match && role;
   });
 
-  const groupedTasks = useMemo(() => {
-    return tasks.reduce((acc, t) => {
-      if (!acc[t.task_class]) acc[t.task_class] = {};
-      if (!acc[t.task_class][t.topic_number]) acc[t.task_class][t.topic_number] = [];
-      acc[t.task_class][t.topic_number].push(t);
-      return acc;
-    }, {});
-  }, [tasks]);
 
-  const availableClasses = useMemo(() => {
-    return Object.keys(groupedTasks).sort((a, b) => {
-      const numA = parseInt(a);
-      const numB = parseInt(b);
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-      return a.localeCompare(b);
-    });
-  }, [groupedTasks]);
+  // Задачи для отображения в банке
+  const filteredBankTasks = useMemo(() => {
+    if (!bankFilter.topic && !bankFilter.section) return [];
+    if (!bankFilter.section) {
+      // Показать все задачи по теме
+      return tasks.filter(t => t.topic === bankFilter.topic);
+    }
+    return tasks.filter(t => t.topic === bankFilter.topic && t.section === bankFilter.section);
+  }, [tasks, bankFilter]);
 
   const getDifficultyColor = (lvl) => {
     if (lvl >= 4) return 'text-red-500 bg-red-50 border-red-100';
@@ -484,11 +570,16 @@ export default function AdminDashboard() {
     return 'text-emerald-500 bg-emerald-50 border-emerald-100';
   };
 
-  const [returnContext, setReturnContext] = useState({
-  bankClass: null,
-  bankTopic: null,
-  scrollPosition: 0
-});
+  const getTopicColor = (topic) => {
+    const colors = {
+      'numbers': 'text-orange-600 bg-orange-50 border-orange-100',
+      'expressions': 'text-purple-600 bg-purple-50 border-purple-100',
+      'equations': 'text-blue-600 bg-blue-50 border-blue-100',
+      'functions': 'text-emerald-600 bg-emerald-50 border-emerald-100',
+      'geometry': 'text-rose-600 bg-rose-50 border-rose-100'
+    };
+    return colors[topic] || 'text-slate-500 bg-slate-50 border-slate-100';
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
@@ -535,7 +626,7 @@ export default function AdminDashboard() {
       </div>
 
       <main className="max-w-7xl mx-auto px-6">
-        {/* ВКЛАДКА: КОНСТРУКТОР */}
+        {/* ==================== ВКЛАДКА: КОНСТРУКТОР ==================== */}
         {activeTab === 'create' && (
           <div className="space-y-10">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
@@ -545,47 +636,29 @@ export default function AdminDashboard() {
                     {taskData.id ? `Редактор #${taskData.id}` : 'Конструктор'}
                   </h2>
                   <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 sm:gap-2">
-  <button
-    type="button"
-    onClick={() => setTaskData({ ...taskData, is_open_answer: true })}
-    className={`
-      flex-1 sm:flex-none
-      px-2 sm:px-3 md:px-4
-      py-1.5 sm:py-2
-      rounded-xl
-      text-[8px] sm:text-[10px] md:text-xs
-      font-black
-      transition-all
-      whitespace-nowrap
-      ${taskData.is_open_answer 
-        ? 'bg-white text-blue-600 shadow-sm' 
-        : 'text-slate-400 hover:text-slate-600'
-      }
-    `}
-  >
-    ОТКРЫТЫЙ
-  </button>
-  <button
-    type="button"
-    onClick={() => setTaskData({ ...taskData, is_open_answer: false })}
-    className={`
-      flex-1 sm:flex-none
-      px-2 sm:px-3 md:px-4
-      py-1.5 sm:py-2
-      rounded-xl
-      text-[8px] sm:text-[10px] md:text-xs
-      font-black
-      transition-all
-      whitespace-nowrap
-      ${!taskData.is_open_answer 
-        ? 'bg-white text-blue-600 shadow-sm' 
-        : 'text-slate-400 hover:text-slate-600'
-      }
-    `}
-  >
-    ТЕСТ
-  </button>
-</div>
+                    <button
+                      type="button"
+                      onClick={() => setTaskData({ ...taskData, is_open_answer: true })}
+                      className={`flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-xl text-[8px] sm:text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${
+                        taskData.is_open_answer 
+                          ? 'bg-white text-blue-600 shadow-sm' 
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      ОТКРЫТЫЙ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTaskData({ ...taskData, is_open_answer: false })}
+                      className={`flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-xl text-[8px] sm:text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${
+                        !taskData.is_open_answer 
+                          ? 'bg-white text-blue-600 shadow-sm' 
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      ТЕСТ
+                    </button>
+                  </div>
                 </div>
 
                 <form onSubmit={handleTaskSubmit} className="space-y-5">
@@ -615,13 +688,57 @@ export default function AdminDashboard() {
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Тема</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Тема №</span>
                       <input
                         type="text"
                         className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold"
                         value={taskData.topic_number}
                         onChange={e => setTaskData({ ...taskData, topic_number: e.target.value })}
                       />
+                    </label>
+                  </div>
+
+                  {/* НОВЫЕ ПОЛЯ: Основная тема и раздел */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="block space-y-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Основная тема</span>
+                      <select
+                        className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm appearance-none cursor-pointer"
+                        value={taskData.topic}
+                        onChange={e => handleTopicChange(e.target.value)}
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 12px center',
+                          paddingRight: '36px'
+                        }}
+                      >
+                        <option value="">— Выберите тему —</option>
+                        {Object.entries(MAIN_TOPICS).map(([key, label]) => (
+                          <option key={key} value={key}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block space-y-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Раздел (подтема)</span>
+                      <select
+                        className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        value={taskData.section}
+                        onChange={e => setTaskData({ ...taskData, section: e.target.value })}
+                        disabled={!taskData.topic}
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 12px center',
+                          paddingRight: '36px'
+                        }}
+                      >
+                        <option value="">— Выберите раздел —</option>
+                        {taskData.topic && SECTIONS_BY_TOPIC[taskData.topic]?.map(section => (
+                          <option key={section} value={section}>{section}</option>
+                        ))}
+                      </select>
                     </label>
                   </div>
 
@@ -644,12 +761,12 @@ export default function AdminDashboard() {
 
                   {!taskData.is_open_answer && (
                     <ImageAwareTextarea
-  value={taskData.options}
-  onChange={(value) => setTaskData({ ...taskData, options: value })}
-  placeholder="Вариант А; Вариант Б; Вариант В (можно вставить изображение)..."
-  className="w-full p-4 bg-blue-50/50 border-2 border-dashed border-blue-100 rounded-2xl font-bold text-sm min-h-[80px] resize-y"
-  rows={2}
-/>
+                      value={taskData.options}
+                      onChange={(value) => setTaskData({ ...taskData, options: value })}
+                      placeholder="Вариант А; Вариант Б; Вариант В (можно вставить изображение)..."
+                      className="w-full p-4 bg-blue-50/50 border-2 border-dashed border-blue-100 rounded-2xl font-bold text-sm min-h-[80px] resize-y"
+                      rows={2}
+                    />
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
@@ -674,30 +791,28 @@ export default function AdminDashboard() {
                   </button>
 
                   {taskData.id && (
-  <button
-    type="button"
-    onClick={() => {
-      if (returnContext.bankClass && returnContext.bankTopic) {
-        // Возвращаемся в банк
-        setBankClass(returnContext.bankClass);
-        setBankTopic(returnContext.bankTopic);
-        setActiveTab('bank');
-        
-        setTimeout(() => {
-          window.scrollTo(0, returnContext.scrollPosition);
-        }, 100);
-        
-        setReturnContext({ bankClass: null, bankTopic: null, scrollPosition: 0 });
-        setTaskData(initialTaskState);
-      } else {
-        setTaskData(initialTaskState);
-      }
-    }}
-    className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"
-  >
-    {returnContext.bankTopic ? '← Отменить и вернуться в банк' : 'Отменить редактирование'}
-  </button>
-)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (returnContext.bankTopic && returnContext.bankSection) {
+                          setBankFilter({ topic: returnContext.bankTopic, section: returnContext.bankSection });
+                          setActiveTab('bank');
+                          
+                          setTimeout(() => {
+                            window.scrollTo(0, returnContext.scrollPosition);
+                          }, 100);
+                          
+                          setReturnContext({ bankTopic: null, bankSection: null, scrollPosition: 0 });
+                          setTaskData(initialTaskState);
+                        } else {
+                          setTaskData(initialTaskState);
+                        }
+                      }}
+                      className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"
+                    >
+                      {returnContext.bankSection ? '← Отменить и вернуться в банк' : 'Отменить редактирование'}
+                    </button>
+                  )}
                 </form>
               </div>
 
@@ -733,7 +848,7 @@ export default function AdminDashboard() {
         {/* ВКЛАДКА: БАНК ЗАДАНИЙ */}
 {activeTab === 'bank' && (
   <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
-    {/* Боковая панель - на телефоне сверху, на компах слева */}
+    {/* Боковая панель - как было */}
     <aside className="w-full md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-8 flex flex-col gap-6 md:gap-8">
       <div>
         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 md:mb-4 italic">Раздел</h3>
@@ -800,12 +915,24 @@ export default function AdminDashboard() {
               return (
                 <div key={t.id} data-task-id={t.id} className="group p-4 md:p-8 bg-slate-50 rounded-2xl md:rounded-[2.5rem] border border-transparent hover:border-blue-100 hover:bg-white hover:shadow-2xl transition-all mb-4 md:mb-6">
                   <div className="flex flex-col gap-6 md:gap-8">
-                    {/* Левая часть с контентом */}
                     <div className="flex-1 space-y-4 w-full">
                       {/* Верхняя информационная панель */}
                       <div className="flex flex-wrap items-center gap-2 md:gap-4">
                         <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-2 md:px-3 py-1 rounded-lg">№ {index + 1}</span>
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-200 pl-2 md:pl-4">ID: {t.id}</span>
+                        
+                        {/* НОВОЕ: тема и раздел */}
+                        {t.topic && MAIN_TOPICS[t.topic] && (
+                          <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg border border-purple-100">
+                            {MAIN_TOPICS[t.topic]}
+                          </span>
+                        )}
+                        {t.section && (
+                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg truncate max-w-[200px]">
+                            {t.section}
+                          </span>
+                        )}
+                        
                         <div className={`flex items-center gap-2 px-2 md:px-3 py-1 rounded-xl border ${getDifficultyColor(t.difficulty)}`}>
                           <span className="text-[9px] font-black uppercase tracking-tight">LVL</span>
                           <span className="text-sm font-black italic leading-none">{t.difficulty}</span>
@@ -868,30 +995,27 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* Кнопки действий - на телефоне снизу, на десктопе справа */}
+                    {/* Кнопки действий */}
                     <div className="flex flex-row md:flex-col gap-2 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0 justify-end md:justify-start">
                       <button
-  className="flex-1 md:flex-none p-3 md:p-4 bg-white text-slate-400 hover:text-blue-600 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all"
-  onClick={() => {
-  // Сохраняем контекст перед переходом
-  setReturnContext({
-    bankClass: bankClass,
-    bankTopic: bankTopic,
-    scrollPosition: window.scrollY
-  });
-  
-  // Загружаем задание в редактор
-  setTaskData({ 
-    ...t, 
-    options: t.options ? (Array.isArray(t.options) ? t.options.join('; ') : t.options) : '' 
-  });
-  
-  // Переключаемся на вкладку конструктора
-  setActiveTab('create');
-}}
->
-  <Edit3 size={18} className="md:w-5 md:h-5" />
-</button>
+                        className="flex-1 md:flex-none p-3 md:p-4 bg-white text-slate-400 hover:text-blue-600 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all"
+                        onClick={() => {
+                          setReturnContext({
+                            bankClass: bankClass,
+                            bankTopic: bankTopic,
+                            scrollPosition: window.scrollY
+                          });
+                          
+                          setTaskData({ 
+                            ...t, 
+                            options: t.options ? (Array.isArray(t.options) ? t.options.join('; ') : t.options) : '' 
+                          });
+                          
+                          setActiveTab('create');
+                        }}
+                      >
+                        <Edit3 size={18} className="md:w-5 md:h-5" />
+                      </button>
                       <button 
                         className="flex-1 md:flex-none p-3 md:p-4 bg-white text-slate-400 hover:text-red-500 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all" 
                         onClick={() => handleDeleteTask(t.id)}
@@ -909,7 +1033,7 @@ export default function AdminDashboard() {
   </div>
 )}
 
-        {/* ВКЛАДКА: ПОЛЬЗОВАТЕЛИ */}
+        {/* ==================== ВКЛАДКА: ПОЛЬЗОВАТЕЛИ ==================== */}
         {activeTab === 'users' && (
           <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
             <div className="p-10 bg-slate-50/50 border-b border-slate-100 space-y-6">
@@ -923,158 +1047,159 @@ export default function AdminDashboard() {
                   <input type="text" placeholder="Поиск..." className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 </div>
                 <div className="flex bg-slate-200/50 p-1 rounded-2xl">
-  {['all', 'admin', 'teacher', 'student'].map(role => (
-    <button 
-      key={role} 
-      onClick={() => setUserRoleFilter(role)} 
-      className={`flex-1 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
-        userRoleFilter === role 
-          ? 'bg-white text-blue-600 shadow-md scale-105' 
-          : 'text-slate-400'
-      }`}
-    >
-      {role === 'all' ? 'Все' : role}
-    </button>
-  ))}
-</div>
+                  {['all', 'admin', 'teacher', 'student'].map(role => (
+                    <button 
+                      key={role} 
+                      onClick={() => setUserRoleFilter(role)} 
+                      className={`flex-1 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
+                        userRoleFilter === role 
+                          ? 'bg-white text-blue-600 shadow-md scale-105' 
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {role === 'all' ? 'Все' : role}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
-  <table className="w-full text-left min-w-[600px]">
-    <thead>
-      <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-        <th className="p-4 sm:p-8">Пользователь</th>
-        <th className="p-4 sm:p-8">Роль</th>
-        <th className="p-4 sm:p-8 text-right">Управление</th>
-      </tr>
-    </thead>
-    <tbody>
-      {filteredUsers.map(u => (
-        <tr key={u.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/admin/users/${u.id}`)}>
-          <td className="p-4 sm:p-8">
-            <div className="font-black text-slate-800 uppercase tracking-tighter text-sm sm:text-base group-hover:text-blue-600 transition-colors">
-              {u.first_name} {u.last_name}
+              <table className="w-full text-left min-w-[600px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                    <th className="p-4 sm:p-8">Пользователь</th>
+                    <th className="p-4 sm:p-8">Роль</th>
+                    <th className="p-4 sm:p-8 text-right">Управление</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map(u => (
+                    <tr key={u.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/admin/users/${u.id}`)}>
+                      <td className="p-4 sm:p-8">
+                        <div className="font-black text-slate-800 uppercase tracking-tighter text-sm sm:text-base group-hover:text-blue-600 transition-colors">
+                          {u.first_name} {u.last_name}
+                        </div>
+                        <div className="text-[10px] text-blue-500 font-bold">@{u.username}</div>
+                      </td>
+                      <td className="p-4 sm:p-8">
+                        <button onClick={(e) => handleChangeRole(e, u.id, u.role)} className={`px-3 sm:px-4 py-1.5 rounded-full font-black text-[9px] uppercase border transition-all ${
+                          u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 
+                          u.role === 'teacher' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
+                          'bg-slate-50 text-slate-400'
+                        }`}>
+                          {u.role}
+                        </button>
+                      </td>
+                      <td className="p-4 sm:p-8 text-right">
+                        <button onClick={(e) => handleDeleteUser(e, u.id)} className="p-2 sm:p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                          <UserX size={18} className="sm:w-5 sm:h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="text-[10px] text-blue-500 font-bold">@{u.username}</div>
-          </td>
-          <td className="p-4 sm:p-8">
-            <button onClick={(e) => handleChangeRole(e, u.id, u.role)} className={`px-3 sm:px-4 py-1.5 rounded-full font-black text-[9px] uppercase border transition-all ${
-              u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 
-              u.role === 'teacher' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-              'bg-slate-50 text-slate-400'
-            }`}>
-              {u.role}
-            </button>
-          </td>
-          <td className="p-4 sm:p-8 text-right">
-            <button onClick={(e) => handleDeleteUser(e, u.id)} className="p-2 sm:p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-              <UserX size={18} className="sm:w-5 sm:h-5" />
-            </button>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-</div>
           </div>
         )}
 
-        {/* ВКЛАДКА: УПРАВЛЕНИЕ ДОСТУПОМ */}
-{activeTab === 'access' && (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-    <div className="lg:col-span-1 space-y-6">
-      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
-        <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-6">Добавить доступ</h2>
-        <form onSubmit={handleAddEmail} className="space-y-4">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Email адрес</span>
-            <input
-              required
-              type="email"
-              className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-500/20"
-              placeholder="example@mail.com"
-              value={newEmail}
-              onChange={e => setNewEmail(e.target.value)}
-            />
-          </div>
-          <button className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-3">
-            <PlusCircle size={18} /> РАЗРЕШИТЬ
-          </button>
-        </form>
-      </div>
-    </div>
+        {/* ==================== ВКЛАДКА: УПРАВЛЕНИЕ ДОСТУПОМ ==================== */}
+        {activeTab === 'access' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
+                <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-6">Добавить доступ</h2>
+                <form onSubmit={handleAddEmail} className="space-y-4">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Email адрес</span>
+                    <input
+                      required
+                      type="email"
+                      className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-blue-500/20"
+                      placeholder="example@mail.com"
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                    />
+                  </div>
+                  <button className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-3">
+                    <PlusCircle size={18} /> РАЗРЕШИТЬ
+                  </button>
+                </form>
+              </div>
+            </div>
 
-    <div className="lg:col-span-2">
-      <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
-        <div className="p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-xl font-black italic uppercase text-slate-900">Белый список почт</h3>
-          <span className="bg-emerald-100 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
-            Всего: {allowedEmails.length}
-          </span>
-        </div>
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
+                <div className="p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+                  <h3 className="text-xl font-black italic uppercase text-slate-900">Белый список почт</h3>
+                  <span className="bg-emerald-100 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
+                    Всего: {allowedEmails.length}
+                  </span>
+                </div>
 
-        <div className="max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-slate-50 shadow-sm z-10">
-              <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <th className="p-4 sm:p-8">Разрешенный Email</th>
-                <th className="p-4 sm:p-8">Пользователь</th>
-                <th className="p-4 sm:p-8 text-right">Действие</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allowedEmails.length === 0 ? (
-                <tr>
-                  <td colSpan="3" className="p-20 text-center text-slate-300 italic font-black uppercase text-xs tracking-widest">
-                    Список пуст
-                  </td>
-                </tr>
-              ) : (
-                allowedEmails.map(item => (
-                  <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/80 transition-all group">
-                    <td className="p-4 sm:p-8">
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform shrink-0">
-                          <MailCheck size={18} />
-                        </div>
-                        <span className="font-bold text-slate-700 text-sm break-all">{item.email}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 sm:p-8">
-                      {item.first_name ? (
-                        <div className="space-y-0.5">
-                          <div className="font-black text-slate-800 text-sm">
-                            {item.first_name} {item.last_name || ''}
-                          </div>
-                          {item.tg_username && (
-                            <div className="text-[10px] text-blue-500 font-bold">
-                              {item.tg_username}
-                            </div>
-                          )}
-                        </div>
+                <div className="max-h-[600px] overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 bg-slate-50 shadow-sm z-10">
+                      <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                        <th className="p-4 sm:p-8">Разрешенный Email</th>
+                        <th className="p-4 sm:p-8">Пользователь</th>
+                        <th className="p-4 sm:p-8 text-right">Действие</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allowedEmails.length === 0 ? (
+                        <tr>
+                          <td colSpan="3" className="p-20 text-center text-slate-300 italic font-black uppercase text-xs tracking-widest">
+                            Список пуст
+                          </td>
+                        </tr>
                       ) : (
-                        <span className="text-[10px] text-slate-300 font-bold uppercase">Не зарегистрирован</span>
+                        allowedEmails.map(item => (
+                          <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/80 transition-all group">
+                            <td className="p-4 sm:p-8">
+                              <div className="flex items-center gap-3 sm:gap-4">
+                                <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-500 rounded-xl group-hover:scale-110 transition-transform shrink-0">
+                                  <MailCheck size={18} />
+                                </div>
+                                <span className="font-bold text-slate-700 text-sm break-all">{item.email}</span>
+                              </div>
+                            </td>
+                            <td className="p-4 sm:p-8">
+                              {item.first_name ? (
+                                <div className="space-y-0.5">
+                                  <div className="font-black text-slate-800 text-sm">
+                                    {item.first_name} {item.last_name || ''}
+                                  </div>
+                                  {item.tg_username && (
+                                    <div className="text-[10px] text-blue-500 font-bold">
+                                      {item.tg_username}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-300 font-bold uppercase">Не зарегистрирован</span>
+                              )}
+                            </td>
+                            <td className="p-4 sm:p-8 text-right">
+                              <button
+                                onClick={() => handleDeleteEmail(item.email)}
+                                className="p-3 sm:p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                              >
+                                <Trash2 size={18} className="sm:w-5 sm:h-5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
                       )}
-                    </td>
-                    <td className="p-4 sm:p-8 text-right">
-                      <button
-                        onClick={() => handleDeleteEmail(item.email)}
-                        className="p-3 sm:p-4 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
-                      >
-                        <Trash2 size={18} className="sm:w-5 sm:h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
+        {/* ==================== ГЛОБАЛЬНАЯ СИНХРОНИЗАЦИЯ ==================== */}
         <div className="mt-10 p-8 bg-blue-600 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
           <div>
             <h3 className="text-xl font-black uppercase italic tracking-tighter">Глобальная синхронизация</h3>
@@ -1086,15 +1211,16 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {activeTab === 'bank' && bankTopic && (
-  <TaskMap 
-    tasks={groupedTasks[bankClass][bankTopic]} 
-    onScroll={(taskId) => {
-      const el = document.querySelector(`[data-task-id="${taskId}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }} 
-  />
-)}
+      {/* ==================== КАРТА ЗАДАНИЙ ==================== */}
+      {activeTab === 'bank' && bankFilter.topic && filteredBankTasks.length > 0 && (
+        <TaskMap 
+          tasks={filteredBankTasks} 
+          onScroll={(taskId) => {
+            const el = document.querySelector(`[data-task-id="${taskId}"]`);
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }} 
+        />
+      )}
     </div>
   );
 }
