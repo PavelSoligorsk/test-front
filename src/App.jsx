@@ -10,6 +10,8 @@ import UserProfile from './pages/UserProfile';
 import TestPassing from './pages/TestPassing';
 import TestResultDetail from './pages/TestResultDetail';
 import AdminResultView from './pages/AdminResultView';
+import TeacherResultView from './pages/TeacherResultView';
+import TeacherStudentProfile from './pages/TeacherStudentProfile';
 import axios from 'axios';
 
 // ========== ФУНКЦИЯ ДЛЯ НАДЁЖНОГО ВОССТАНОВЛЕНИЯ СЕССИИ ==========
@@ -115,6 +117,10 @@ export default function App() {
           <Route path="/student" element={
             <PrivateRoute allowedRoles={['student']}><StudentDashboard /></PrivateRoute>
           } />
+
+          <Route path="/teacher/students/:userId" element={<TeacherStudentProfile />} />
+
+          <Route path="/teacher/results/:resultId" element={<TeacherResultView />} />
 
           <Route path="/test/:testId" element={<TestPassing />} />
           
