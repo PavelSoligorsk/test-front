@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin, XCircle   } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin, XCircle } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import remarkGfm from 'remark-gfm'; // 👈 новый импорт
+import remarkGfm from 'remark-gfm';
 
 import 'katex/dist/katex.min.css';
 
@@ -138,11 +138,41 @@ export default function TestPassing() {
   
   const [test, setTest] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [userAnswers, setUserAnswers] = useState({}); // Храним как {taskId: ["1", "3"]}
+  const [currentIdx, setCurrentIdx] = useState(() => {
+    const saved = localStorage.getItem(`test_progress_${testId}`);
+    return saved ? JSON.parse(saved).currentIdx : 0;
+  });
+  const [userAnswers, setUserAnswers] = useState(() => {
+    const saved = localStorage.getItem(`test_progress_${testId}`);
+    return saved ? JSON.parse(saved).answers : {};
+  });
   const [finished, setFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHint, setShowHint] = useState(false);
+
+  // Функция сохранения прогресса
+  const saveProgress = useCallback(() => {
+    if (test && !finished) {
+      localStorage.setItem(`test_progress_${testId}`, JSON.stringify({
+        currentIdx,
+        answers: userAnswers,
+        timestamp: Date.now()
+      }));
+    }
+  }, [currentIdx, userAnswers, testId, test, finished]);
+
+  // Автосохранение при изменении данных
+  useEffect(() => {
+    const timer = setTimeout(saveProgress, 500);
+    return () => clearTimeout(timer);
+  }, [currentIdx, userAnswers, saveProgress]);
+
+  // Сохранение при закрытии вкладки
+  useEffect(() => {
+    const handleBeforeUnload = () => saveProgress();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveProgress]);
 
   // Сброс подсказки при смене вопроса
   useEffect(() => {
@@ -150,6 +180,8 @@ export default function TestPassing() {
   }, [currentIdx]);
 
   useEffect(() => {
+    let isMounted = true; // Флаг для отслеживания монтирования
+
     const fetchTest = async () => {
       try {
         const session = localStorage.getItem('edu_session');
@@ -160,44 +192,73 @@ export default function TestPassing() {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        // --- ОБНОВЛЕННАЯ ЛОГИКА СОРТИРОВКИ ---
+        if (!isMounted) return; // Прерываем если компонент размонтирован
+
         if (res.data && res.data.tasks) {
-  res.data.tasks.sort((a, b) => {
-    // 1. Сначала по возрастанию id
-    if (a.id !== b.id) {
-      return a.id - b.id;
-    }
-    
-    // 2. При равных id — закрытые (есть options) сначала, потом открытые
-    const aTypeWeight = a.options ? 0 : 1;
-    const bTypeWeight = b.options ? 0 : 1;
-    
-    if (aTypeWeight !== bTypeWeight) {
-      return aTypeWeight - bTypeWeight;
-    }
-    
-    // 3. Внутри групп — по возрастанию сложности (1 -> 5)
-    return (a.difficulty || 0) - (b.difficulty || 0);
-  });
-}
-        // -------------------------------------
+          res.data.tasks.sort((a, b) => {
+            if (a.id !== b.id) {
+              return a.id - b.id;
+            }
+            
+            const aTypeWeight = a.options ? 0 : 1;
+            const bTypeWeight = b.options ? 0 : 1;
+            
+            if (aTypeWeight !== bTypeWeight) {
+              return aTypeWeight - bTypeWeight;
+            }
+            
+            return (a.difficulty || 0) - (b.difficulty || 0);
+          });
+        }
 
         setTest(res.data);
+
+        // Проверка сохраненного прогресса
+        const savedProgress = localStorage.getItem(`test_progress_${testId}`);
+        if (savedProgress && isMounted) {
+          const { currentIdx: savedIdx, answers: savedAnswers, timestamp } = JSON.parse(savedProgress);
+          const hoursSinceSave = (Date.now() - timestamp) / (1000 * 60 * 60);
+          
+          // Проверяем, не был ли уже восстановлен прогресс
+          const alreadyRestored = localStorage.getItem(`test_restored_${testId}`);
+          
+          if (!alreadyRestored && hoursSinceSave < 24 && Object.keys(savedAnswers).length > 0) {
+            // Помечаем что диалог был показан
+            localStorage.setItem(`test_restored_${testId}`, 'true');
+            
+            const shouldRestore = window.confirm(
+              'У вас есть сохраненный прогресс. Хотите продолжить с того места, где остановились?'
+            );
+            
+            if (shouldRestore) {
+              setCurrentIdx(savedIdx);
+              setUserAnswers(savedAnswers);
+            } else {
+              localStorage.removeItem(`test_progress_${testId}`);
+            }
+          } else if (!alreadyRestored) {
+            localStorage.removeItem(`test_progress_${testId}`);
+          }
+        }
       } catch (err) {
         console.error("Ошибка загрузки теста:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
+    
     fetchTest();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [testId, navigate]);
 
   const currentTask = test?.tasks?.[currentIdx];
 
-  // Логика переключения ответов (ИНДЕКС + 1)
   const handleToggleAnswer = (index) => {
     const taskId = currentTask.id;
-    const val = String(index + 1); // Сохраняем "1" вместо 0, "2" вместо 1...
+    const val = String(index + 1);
     
     const currentSelection = Array.isArray(userAnswers[taskId]) ? userAnswers[taskId] : [];
     
@@ -214,12 +275,10 @@ export default function TestPassing() {
     }
   };
 
-  // Текстовый ввод для открытых вопросов
   const handleTextChange = (val) => {
     setUserAnswers({ ...userAnswers, [currentTask.id]: val });
   };
 
-  // Финальная отправка
   const submitTest = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -230,7 +289,6 @@ export default function TestPassing() {
         const ans = userAnswers[id];
         return {
           task_id: parseInt(id),
-          // Склеиваем индексы через запятую и сортируем их
           user_answer: Array.isArray(ans) ? ans.sort((a, b) => a - b).join(',') : String(ans)
         };
       });
@@ -238,6 +296,9 @@ export default function TestPassing() {
       await axios.post(`https://tests-production-46d5.up.railway.app/student/tests/${testId}/submit`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      localStorage.removeItem(`test_progress_${testId}`);
+      localStorage.removeItem(`test_restored_${testId}`); // Очищаем флаг
       setFinished(true);
     } catch (err) {
       alert("Не удалось отправить тест. Проверьте интернет-соединение.");
@@ -245,7 +306,7 @@ export default function TestPassing() {
       setIsSubmitting(false);
     }
   };
-
+  
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-blue-500" size={32} />
@@ -271,24 +332,23 @@ export default function TestPassing() {
       <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6">
         
         <header className="flex justify-between items-center bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
-  <div className="flex items-center gap-6">
-    <div className="flex flex-col">
-      <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Вопрос</span>
-      <span className="text-lg font-black italic">{currentIdx + 1} <span className="text-slate-200 font-medium not-italic mx-1">/</span> {test?.tasks?.length}</span>
-    </div>
-    <QuestionMap 
-      tasks={test?.tasks} 
-      userAnswers={userAnswers} 
-      currentIdx={currentIdx} 
-      onNavigate={(idx) => setCurrentIdx(idx)} 
-    />
-  </div>
-  <button onClick={() => navigate(-1)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
-    <X size={20}/>
-  </button>
-</header>
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Вопрос</span>
+              <span className="text-lg font-black italic">{currentIdx + 1} <span className="text-slate-200 font-medium not-italic mx-1">/</span> {test?.tasks?.length}</span>
+            </div>
+            <QuestionMap 
+              tasks={test?.tasks} 
+              userAnswers={userAnswers} 
+              currentIdx={currentIdx} 
+              onNavigate={(idx) => setCurrentIdx(idx)} 
+            />
+          </div>
+          <button onClick={() => navigate(-1)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
+            <X size={20}/>
+          </button>
+        </header>
 
-        {/* Тело задания */}
         {currentTask && (
           <MarkdownPreview 
             text={currentTask.content} 
@@ -296,7 +356,6 @@ export default function TestPassing() {
           />
         )}
 
-        {/* Подсказка */}
         {currentTask?.hint && (
           <div className="mt-2">
             {!showHint ? (
@@ -320,7 +379,6 @@ export default function TestPassing() {
           </div>
         )}
 
-        {/* Секция выбора ответов */}
         <div className="space-y-4">
           <div className="flex items-center gap-3 ml-2">
             <div className="w-1 h-4 bg-blue-500 rounded-full"></div>
@@ -339,7 +397,7 @@ export default function TestPassing() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {currentTask?.options?.map((opt, i) => {
-                const currentVal = String(i + 1); // Сверка по "1", "2"...
+                const currentVal = String(i + 1);
                 const isSelected = Array.isArray(userAnswers[currentTask.id]) 
                   ? userAnswers[currentTask.id].includes(currentVal)
                   : userAnswers[currentTask.id] === currentVal;
@@ -376,7 +434,6 @@ export default function TestPassing() {
           )}
         </div>
 
-        {/* Нижняя панель навигации */}
         <footer className="flex justify-between items-center pt-8">
           <button 
             disabled={currentIdx === 0}

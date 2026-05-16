@@ -224,21 +224,20 @@ export default function StudentDashboard() {
       setStaticTests(testsRes.data);
       
       const customTestsData = (assignmentsRes.data || []).map(a => {
-        const fullTest = testsRes.data.find(t => t.id === a.test_id);
-        return {
-          id: a.test_id,
-          title: a.test_title,
-          target_class: fullTest?.target_class || '',
-          target_topic: fullTest?.target_topic || '',
-          subject: fullTest?.subject || '',
-          tasks: fullTest?.tasks || [],
-          is_assigned: true,
-          due_date: a.due_date,
-          is_completed: a.is_completed,
-          assignment_id: a.assignment_id,
-          is_autocompile: fullTest?.is_autocompile
-        };
-      });
+  return {
+    id: a.test_id,
+    title: a.test_title,
+    target_class: a.target_class || '',        // ← из assignments
+    target_topic: a.target_topic || '',        // ← из assignments
+    subject: a.subject || '',                  // ← из assignments
+    tasks: a.tasks || [],                      // ← из assignments
+    is_assigned: true,
+    due_date: a.due_date,
+    is_completed: a.is_completed,
+    assignment_id: a.assignment_id,
+    is_autocompile: a.is_autocompile
+  };
+});
       setCustomTests(customTestsData);
       
       setAiTests((aiRes.data || []).map(t => ({
