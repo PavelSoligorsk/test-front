@@ -10,11 +10,12 @@ import {
   PlusCircle, Database, Users, LayoutDashboard, 
   Search, Send, Trash2, Edit3, CheckCircle2,
   XCircle, BookOpen, ClipboardList, GraduationCap,
-  ChevronLeft, ArrowRight, Calendar, Trophy, Target
+  ChevronLeft, ArrowRight, Calendar, Trophy, Target,
+  UserPlus, Clock, AlertCircle, CheckSquare, Square
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
-// ==================== КОНСТАНТЫ (такие же как в админке) ====================
+// ==================== КОНСТАНТЫ ====================
 const MAIN_TOPICS = {
   'numbers': 'Числа и вычисления',
   'expressions': 'Выражения и их преобразования',
@@ -44,6 +45,253 @@ const MarkdownPreview = ({ text, title, type }) => (
     </div>
   </div>
 );
+
+// ==================== МОДАЛЬНОЕ ОКНО НАЗНАЧЕНИЯ ====================
+const AssignTestModal = ({ test, students, onClose, onAssign }) => {
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [dueDate, setDueDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredStudents = students.filter(s => {
+    const fullName = `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase();
+    return fullName.includes(searchTerm.toLowerCase());
+  });
+
+  const toggleStudent = (studentId) => {
+    setSelectedStudents(prev => 
+      prev.includes(studentId) 
+        ? prev.filter(id => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const selectAll = () => {
+    if (selectedStudents.length === filteredStudents.length) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(filteredStudents.map(s => s.id));
+    }
+  };
+
+  const handleSubmit = () => {
+    if (selectedStudents.length === 0) {
+      alert('Выберите хотя бы одного ученика');
+      return;
+    }
+    onAssign({
+      test_id: test.id,
+      user_ids: selectedStudents,
+      due_date: dueDate || null
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        {/* Заголовок */}
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-black text-slate-800">Назначить тест</h3>
+              <p className="text-sm text-slate-500 mt-1">{test.title}</p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
+              <XCircle size={20} className="text-slate-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Тело */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* Дедлайн */}
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">
+              <Clock size={14} className="inline mr-1" />
+              Дедлайн (необязательно)
+            </label>
+            <input
+              type="datetime-local"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
+            />
+          </div>
+
+          {/* Поиск учеников */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+            <input
+              type="text"
+              placeholder="Поиск учеников..."
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl text-sm font-bold"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {/* Выбрать всех */}
+          <button
+            onClick={selectAll}
+            className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600"
+          >
+            {selectedStudents.length === filteredStudents.length && filteredStudents.length > 0 ? (
+              <CheckSquare size={16} className="text-emerald-600" />
+            ) : (
+              <Square size={16} />
+            )}
+            Выбрать всех ({filteredStudents.length})
+          </button>
+
+          {/* Список учеников */}
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {filteredStudents.map(student => (
+              <button
+                key={student.id}
+                onClick={() => toggleStudent(student.id)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
+                  selectedStudents.includes(student.id)
+                    ? 'bg-emerald-50 border border-emerald-200'
+                    : 'bg-slate-50 hover:bg-slate-100 border border-transparent'
+                }`}
+              >
+                {selectedStudents.includes(student.id) ? (
+                  <CheckSquare size={18} className="text-emerald-600" />
+                ) : (
+                  <Square size={18} className="text-slate-300" />
+                )}
+                <div>
+                  <div className="font-bold text-sm text-slate-800">
+                    {student.first_name} {student.last_name}
+                  </div>
+                  <div className="text-[10px] text-slate-400">@{student.username}</div>
+                </div>
+                {student.tg_username && (
+                  <span className="ml-auto text-[9px] text-blue-400">{student.tg_username}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Футер */}
+        <div className="p-6 border-t border-slate-100 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+          >
+            ОТМЕНА
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={selectedStudents.length === 0}
+            className="flex-1 p-4 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+          >
+            <Send size={16} />
+            НАЗНАЧИТЬ ({selectedStudents.length})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== КОМПОНЕНТ НАЗНАЧЕНИЙ ТЕСТА ====================
+const TestAssignmentsPanel = ({ test, onClose }) => {
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, []);
+
+  const fetchAssignments = async () => {
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const res = await axios.get(`${API_BASE}/teacher/test/${test.id}/assignments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAssignments(res.data);
+    } catch (e) {
+      console.error('Ошибка загрузки назначений:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (assignmentId) => {
+    if (!confirm('Отменить назначение?')) return;
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      await axios.delete(`${API_BASE}/teacher/assignments/${assignmentId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAssignments(prev => prev.filter(a => a.id !== assignmentId));
+    } catch (e) {
+      alert('Ошибка при удалении');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-black text-slate-800">Назначения теста</h3>
+            <p className="text-sm text-slate-500">{test.title}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
+            <XCircle size={20} className="text-slate-400" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="text-center py-8 text-slate-400">Загрузка...</div>
+          ) : assignments.length === 0 ? (
+            <div className="text-center py-8">
+              <Users size={48} className="mx-auto text-slate-200 mb-3" />
+              <p className="text-slate-400 text-sm font-bold">Нет назначений</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {assignments.map(assignment => (
+                <div key={assignment.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="flex-1">
+                    <div className="font-bold text-sm text-slate-800">
+                      {assignment.student_name}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      {assignment.is_completed ? (
+                        <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Выполнено
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-amber-600 flex items-center gap-1">
+                          <Clock size={12} /> Ожидается
+                        </span>
+                      )}
+                      {assignment.due_date && (
+                        <span className="text-[9px] text-slate-400">
+                          до {new Date(assignment.due_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(assignment.id)}
+                    className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
 export default function TeacherDashboard() {
@@ -76,6 +324,10 @@ export default function TeacherDashboard() {
   
   // Поиск учеников
   const [studentSearch, setStudentSearch] = useState('');
+  
+  // Модальные окна
+  const [assignModalTest, setAssignModalTest] = useState(null);
+  const [assignmentsModalTest, setAssignmentsModalTest] = useState(null);
 
   // Загрузка данных
   useEffect(() => {
@@ -85,24 +337,24 @@ export default function TeacherDashboard() {
   }, []);
 
   const getAuthHeaders = () => {
-  try {
-    const sessionStr = localStorage.getItem('edu_session');
-    if (!sessionStr) return {};
-    
-    const session = JSON.parse(sessionStr);
-    const token = session?.token || session?.access_token; // Проверяем оба варианта
-    
-    if (!token) {
-      console.warn('Токен не найден в сессии');
+    try {
+      const sessionStr = localStorage.getItem('edu_session');
+      if (!sessionStr) return {};
+      
+      const session = JSON.parse(sessionStr);
+      const token = session?.token || session?.access_token;
+      
+      if (!token) {
+        console.warn('Токен не найден в сессии');
+        return {};
+      }
+      
+      return { Authorization: `Bearer ${token}` };
+    } catch (e) {
+      console.error('Ошибка чтения сессии:', e);
       return {};
     }
-    
-    return { Authorization: `Bearer ${token}` };
-  } catch (e) {
-    console.error('Ошибка чтения сессии:', e);
-    return {};
-  }
-};
+  };
 
   const fetchTasks = async () => {
     try {
@@ -200,6 +452,18 @@ export default function TeacherDashboard() {
       setTests(prev => prev.filter(t => t.id !== testId));
     } catch (e) {
       alert('Ошибка при удалении');
+    }
+  };
+
+  // Назначение теста
+  const handleAssignTest = async (assignmentData) => {
+    try {
+      await axios.post(`${API_BASE}/teacher/assign-test`, assignmentData, { headers: getAuthHeaders() });
+      alert(`Тест назначен ${assignmentData.user_ids.length} ученикам!`);
+      setAssignModalTest(null);
+    } catch (e) {
+      alert('Ошибка при назначении теста');
+      console.error(e);
     }
   };
 
@@ -333,14 +597,11 @@ export default function TeacherDashboard() {
                   </div>
 
                   {groupedTasks[bankClass][bankTopic]
-                        .sort((a, b) => {
-        // 1. Сначала сортируем по ID (по возрастанию)
-        if (a.id !== b.id) return a.id - b.id;
-        // 2. Потом открытые/закрытые
-        if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-        // 3. Потом по сложности
-        return (a.difficulty || 0) - (b.difficulty || 0);
-    })
+                    .sort((a, b) => {
+                      if (a.id !== b.id) return a.id - b.id;
+                      if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+                      return (a.difficulty || 0) - (b.difficulty || 0);
+                    })
                     .map((t, index) => {
                       const isSolOpen = openSolutions[t.id];
                       const isHintOpen = openHints[t.id];
@@ -415,18 +676,16 @@ export default function TeacherDashboard() {
                               )}
 
                               {/* Кнопка добавления в тест */}
-                              {activeTab === 'bank' && (
-                                <button
-                                  onClick={() => toggleTaskSelection(t)}
-                                  className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
-                                    isSelected 
-                                      ? 'bg-emerald-600 text-white' 
-                                      : 'bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700'
-                                  }`}
-                                >
-                                  {isSelected ? '✓ В тесте' : '+ В тест'}
-                                </button>
-                              )}
+                              <button
+                                onClick={() => toggleTaskSelection(t)}
+                                className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
+                                  isSelected 
+                                    ? 'bg-emerald-600 text-white' 
+                                    : 'bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700'
+                                }`}
+                              >
+                                {isSelected ? '✓ В тесте' : '+ В тест'}
+                              </button>
                             </div>
 
                             {/* Подсказка и решение */}
@@ -444,212 +703,204 @@ export default function TeacherDashboard() {
 
         {/* ==================== ВКЛАДКА: КОНСТРУКТОР ТЕСТОВ ==================== */}
         {activeTab === 'constructor' && (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    {/* Форма теста */}
-    <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-[3rem] shadow-xl border border-slate-100 h-fit">
-      <h2 className="text-xl font-black text-slate-800 uppercase mb-6">
-        {testForm.id ? 'Редактировать тест' : 'Новый тест'}
-      </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Форма теста */}
+            <div className="lg:col-span-1 bg-white p-6 md:p-8 rounded-[3rem] shadow-xl border border-slate-100 h-fit">
+              <h2 className="text-xl font-black text-slate-800 uppercase mb-6">
+                {testForm.id ? 'Редактировать тест' : 'Новый тест'}
+              </h2>
 
-      <form onSubmit={handleTestSubmit} className="space-y-4">
-        <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase">Название</label>
-          <input
-            required
-            className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
-            value={testForm.title}
-            onChange={e => setTestForm({ ...testForm, title: e.target.value })}
-            placeholder="Контрольная работа №1"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase">Класс</label>
-            <input
-              className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
-              value={testForm.target_class}
-              onChange={e => setTestForm({ ...testForm, target_class: e.target.value })}
-              placeholder="9"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase">Тема</label>
-            <input
-              className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
-              value={testForm.target_topic}
-              onChange={e => setTestForm({ ...testForm, target_topic: e.target.value })}
-              placeholder="1"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-          <input
-            type="checkbox"
-            checked={testForm.is_autocompile}
-            onChange={e => setTestForm({ ...testForm, is_autocompile: e.target.checked })}
-            className="w-4 h-4"
-          />
-          <span className="text-[10px] font-black text-slate-600 uppercase">Автосборка</span>
-        </div>
-
-        {/* Выбранные задания */}
-        <div>
-          <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">
-            Задания ({selectedTasks.length})
-          </label>
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            {selectedTasks
-              .sort((a, b) => a.id - b.id)
-              .map((task, idx) => (
-                <div key={task.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-xs">
-                  <span className="font-bold truncate">
-                    {idx + 1}. {task.content?.substring(0, 50)}...
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => toggleTaskSelection(task)}
-                    className="text-red-400 hover:text-red-600 ml-2"
-                  >
-                    <XCircle size={14} />
-                  </button>
+              <form onSubmit={handleTestSubmit} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Название</label>
+                  <input
+                    required
+                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
+                    value={testForm.title}
+                    onChange={e => setTestForm({ ...testForm, title: e.target.value })}
+                    placeholder="Контрольная работа №1"
+                  />
                 </div>
-              ))}
-            {selectedTasks.length === 0 && (
-              <p className="text-xs text-slate-400 italic p-2">Выберите задания во вкладке "Банк заданий"</p>
-            )}
-          </div>
-        </div>
 
-        <button className="w-full bg-emerald-600 text-white py-5 rounded-[2rem] font-black hover:bg-emerald-700 transition-all shadow-lg flex items-center justify-center gap-2">
-          <Send size={18} />
-          {testForm.id ? 'ОБНОВИТЬ ТЕСТ' : 'СОЗДАТЬ ТЕСТ'}
-        </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Класс</label>
+                    <input
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
+                      value={testForm.target_class}
+                      onChange={e => setTestForm({ ...testForm, target_class: e.target.value })}
+                      placeholder="9"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Тема</label>
+                    <input
+                      className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
+                      value={testForm.target_topic}
+                      onChange={e => setTestForm({ ...testForm, target_topic: e.target.value })}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
 
-        {testForm.id && (
-          <button
-            type="button"
-            onClick={resetTestForm}
-            className="w-full text-slate-400 text-[10px] font-black uppercase hover:text-red-500"
-          >
-            Отменить
-          </button>
-        )}
-      </form>
-    </div>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <input
+                    type="checkbox"
+                    checked={testForm.is_autocompile}
+                    onChange={e => setTestForm({ ...testForm, is_autocompile: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-[10px] font-black text-slate-600 uppercase">Автосборка</span>
+                </div>
 
-    {/* Предпросмотр заданий теста */}
-    <div className="lg:col-span-2 space-y-4">
-      <div className="bg-white p-6 rounded-[3rem] shadow-xl border border-slate-100">
-        <h3 className="text-lg font-black text-slate-800 uppercase mb-4">Предпросмотр теста</h3>
-        {selectedTasks.length === 0 ? (
-          <p className="text-slate-300 italic text-sm">Выберите задания для теста</p>
-        ) : (
-          <div className="space-y-6">
-            {selectedTasks
-              .sort((a, b) => {
-                if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-                return (a.difficulty || 0) - (b.difficulty || 0);
-              })
-              .map((task, idx) => {
-                const isSolOpen = openSolutions[task.id];
-                const isHintOpen = openHints[task.id];
-
-                return (
-                  <div key={task.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                    {/* Заголовок задания */}
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-sm font-black text-emerald-600">№{idx + 1}</span>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg ${getDifficultyColor(task.difficulty)}`}>
-                        LVL {task.difficulty}
-                      </span>
-                      <span className="text-[9px] text-slate-400">
-                        {task.is_open_answer ? 'Открытый ответ' : 'Выбор варианта'}
-                      </span>
-                      <span className="text-[9px] text-slate-400 ml-auto">ID: {task.id}</span>
-                    </div>
-
-                    {/* Условие задачи */}
-                    <MarkdownPreview text={task.content} title="Условие" />
-
-                    {/* Варианты ответов для тестов */}
-                    {/* Варианты ответов для тестов */}
-{!task.is_open_answer && task.options && (
-  <div className="mt-4">
-    <MarkdownPreview
-      title="ВАРИАНТЫ ОТВЕТА"
-      text={(typeof task.options === 'string'
-        ? task.options.split(';')
-        : Array.isArray(task.options) ? task.options : []
-      )
-        .map(opt => opt.trim())
-        .filter(opt => opt.length > 0)
-        .map((opt, i) => `**${i + 1}.** ${opt}`)
-        .join('\n\n')}
-    />
-  </div>
-)}
-
-                    {/* Ответ */}
-                    <div className="mt-4 bg-emerald-50/50 border border-emerald-100 px-4 py-3 rounded-2xl flex items-center gap-3">
-                      <span className="text-[10px] font-black text-emerald-600 uppercase">Ответ:</span>
-                      <span className="text-sm font-black text-emerald-700">{task.answer}</span>
-                    </div>
-
-                    {/* Кнопки подсказки и решения */}
-                    <div className="flex gap-2 mt-3">
-                      {task.hint && (
-                        <button
-                          type="button"
-                          onClick={() => setOpenHints(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
-                          className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase transition-all ${
-                            isHintOpen 
-                              ? 'bg-amber-500 text-white border-amber-500' 
-                              : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'
-                          }`}
-                        >
-                          {isHintOpen ? 'Скрыть подсказку' : 'Подсказка'}
-                        </button>
-                      )}
-
-                      {task.solution && (
-                        <button
-                          type="button"
-                          onClick={() => setOpenSolutions(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
-                          className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase transition-all ${
-                            isSolOpen 
-                              ? 'bg-blue-600 text-white border-blue-600' 
-                              : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
-                          }`}
-                        >
-                          {isSolOpen ? 'Скрыть решение' : 'Решение'}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Подсказка */}
-                    {isHintOpen && (
-                      <div className="mt-3 animate-in slide-in-from-top-2 duration-300">
-                        <MarkdownPreview text={task.hint} title="ПОДСКАЗКА" type="hint" />
-                      </div>
-                    )}
-
-                    {/* Решение */}
-                    {isSolOpen && (
-                      <div className="mt-3 animate-in slide-in-from-top-2 duration-300">
-                        <MarkdownPreview text={task.solution} title="РЕШЕНИЕ" type="solution" />
-                      </div>
+                {/* Выбранные задания */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">
+                    Задания ({selectedTasks.length})
+                  </label>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {selectedTasks
+                      .sort((a, b) => a.id - b.id)
+                      .map((task, idx) => (
+                        <div key={task.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-xs">
+                          <span className="font-bold truncate">
+                            {idx + 1}. {task.content?.substring(0, 50)}...
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleTaskSelection(task)}
+                            className="text-red-400 hover:text-red-600 ml-2"
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    {selectedTasks.length === 0 && (
+                      <p className="text-xs text-slate-400 italic p-2">Выберите задания во вкладке "Банк заданий"</p>
                     )}
                   </div>
-                );
-              })}
+                </div>
+
+                <button className="w-full bg-emerald-600 text-white py-5 rounded-[2rem] font-black hover:bg-emerald-700 transition-all shadow-lg flex items-center justify-center gap-2">
+                  <Send size={18} />
+                  {testForm.id ? 'ОБНОВИТЬ ТЕСТ' : 'СОЗДАТЬ ТЕСТ'}
+                </button>
+
+                {testForm.id && (
+                  <button
+                    type="button"
+                    onClick={resetTestForm}
+                    className="w-full text-slate-400 text-[10px] font-black uppercase hover:text-red-500"
+                  >
+                    Отменить
+                  </button>
+                )}
+              </form>
+            </div>
+
+            {/* Предпросмотр заданий теста */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="bg-white p-6 rounded-[3rem] shadow-xl border border-slate-100">
+                <h3 className="text-lg font-black text-slate-800 uppercase mb-4">Предпросмотр теста</h3>
+                {selectedTasks.length === 0 ? (
+                  <p className="text-slate-300 italic text-sm">Выберите задания для теста</p>
+                ) : (
+                  <div className="space-y-6">
+                    {selectedTasks
+                      .sort((a, b) => {
+                        if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+                        return (a.difficulty || 0) - (b.difficulty || 0);
+                      })
+                      .map((task, idx) => {
+                        const isSolOpen = openSolutions[task.id];
+                        const isHintOpen = openHints[task.id];
+
+                        return (
+                          <div key={task.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="flex items-center gap-3 mb-4">
+                              <span className="text-sm font-black text-emerald-600">№{idx + 1}</span>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg ${getDifficultyColor(task.difficulty)}`}>
+                                LVL {task.difficulty}
+                              </span>
+                              <span className="text-[9px] text-slate-400">
+                                {task.is_open_answer ? 'Открытый ответ' : 'Выбор варианта'}
+                              </span>
+                              <span className="text-[9px] text-slate-400 ml-auto">ID: {task.id}</span>
+                            </div>
+
+                            <MarkdownPreview text={task.content} title="Условие" />
+
+                            {!task.is_open_answer && task.options && (
+                              <div className="mt-4">
+                                <MarkdownPreview
+                                  title="ВАРИАНТЫ ОТВЕТА"
+                                  text={(typeof task.options === 'string'
+                                    ? task.options.split(';')
+                                    : Array.isArray(task.options) ? task.options : []
+                                  )
+                                    .map(opt => opt.trim())
+                                    .filter(opt => opt.length > 0)
+                                    .map((opt, i) => `**${i + 1}.** ${opt}`)
+                                    .join('\n\n')}
+                                />
+                              </div>
+                            )}
+
+                            <div className="mt-4 bg-emerald-50/50 border border-emerald-100 px-4 py-3 rounded-2xl flex items-center gap-3">
+                              <span className="text-[10px] font-black text-emerald-600 uppercase">Ответ:</span>
+                              <span className="text-sm font-black text-emerald-700">{task.answer}</span>
+                            </div>
+
+                            <div className="flex gap-2 mt-3">
+                              {task.hint && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenHints(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                                  className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase transition-all ${
+                                    isHintOpen 
+                                      ? 'bg-amber-500 text-white border-amber-500' 
+                                      : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'
+                                  }`}
+                                >
+                                  {isHintOpen ? 'Скрыть подсказку' : 'Подсказка'}
+                                </button>
+                              )}
+
+                              {task.solution && (
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenSolutions(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                                  className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase transition-all ${
+                                    isSolOpen 
+                                      ? 'bg-blue-600 text-white border-blue-600' 
+                                      : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+                                  }`}
+                                >
+                                  {isSolOpen ? 'Скрыть решение' : 'Решение'}
+                                </button>
+                              )}
+                            </div>
+
+                            {isHintOpen && (
+                              <div className="mt-3 animate-in slide-in-from-top-2 duration-300">
+                                <MarkdownPreview text={task.hint} title="ПОДСКАЗКА" type="hint" />
+                              </div>
+                            )}
+
+                            {isSolOpen && (
+                              <div className="mt-3 animate-in slide-in-from-top-2 duration-300">
+                                <MarkdownPreview text={task.solution} title="РЕШЕНИЕ" type="solution" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
-      </div>
-    </div>
-  </div>
-)}
 
         {/* ==================== ВКЛАДКА: УЧЕНИКИ ==================== */}
         {activeTab === 'students' && (
@@ -684,8 +935,7 @@ export default function TeacherDashboard() {
                 </thead>
                 <tbody>
                   {filteredStudents.map(student => (
-                    <tr key={student.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all cursor-pointer"
-                      onClick={() => navigate(`/teacher/students/${student.id}`)}>
+                    <tr key={student.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all">
                       <td className="p-4 md:p-8">
                         <div className="font-black text-slate-800 uppercase text-sm">
                           {student.first_name} {student.last_name}
@@ -700,7 +950,12 @@ export default function TeacherDashboard() {
                         )}
                       </td>
                       <td className="p-4 md:p-8 text-right">
-                        <ArrowRight size={18} className="inline text-slate-300 group-hover:text-emerald-600" />
+                        <button
+                          onClick={() => navigate(`/teacher/students/${student.id}`)}
+                          className="p-2 hover:bg-emerald-50 rounded-xl text-slate-400 hover:text-emerald-600 transition-all"
+                        >
+                          <ArrowRight size={18} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -733,7 +988,7 @@ export default function TeacherDashboard() {
                 .map(test => (
                   <div key={test.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 hover:shadow-xl transition-all">
                     <h3 className="font-black text-slate-800 mb-2">{test.title}</h3>
-                    <div className="flex gap-2 mb-3">
+                    <div className="flex gap-2 mb-3 flex-wrap">
                       {test.target_class && (
                         <span className="text-[9px] font-black bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">
                           {test.target_class} класс
@@ -748,12 +1003,27 @@ export default function TeacherDashboard() {
                         {test.tasks?.length || 0} заданий
                       </span>
                     </div>
+                    
+                    {/* Кнопки действий */}
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEditTest(test)}
-                        className="flex-1 p-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black hover:bg-emerald-50 hover:text-emerald-600 transition-all"
+                        className="flex-1 p-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black hover:bg-emerald-50 hover:text-emerald-600 transition-all flex items-center justify-center gap-1"
                       >
-                        <Edit3 size={14} className="inline mr-1" /> Изменить
+                        <Edit3 size={14} /> Изменить
+                      </button>
+                      <button
+                        onClick={() => setAssignModalTest(test)}
+                        className="flex-1 p-2 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black hover:bg-blue-100 transition-all flex items-center justify-center gap-1"
+                      >
+                        <UserPlus size={14} /> Назначить
+                      </button>
+                      <button
+                        onClick={() => setAssignmentsModalTest(test)}
+                        className="p-2 bg-slate-100 text-slate-400 rounded-xl hover:bg-amber-50 hover:text-amber-600 transition-all"
+                        title="Список назначений"
+                      >
+                        <Users size={14} />
                       </button>
                       <button
                         onClick={() => handleDeleteTest(test.id)}
@@ -776,9 +1046,26 @@ export default function TeacherDashboard() {
 
       </main>
 
+      {/* Модальные окна */}
+      {assignModalTest && (
+        <AssignTestModal
+          test={assignModalTest}
+          students={students}
+          onClose={() => setAssignModalTest(null)}
+          onAssign={handleAssignTest}
+        />
+      )}
+
+      {assignmentsModalTest && (
+        <TestAssignmentsPanel
+          test={assignmentsModalTest}
+          onClose={() => setAssignmentsModalTest(null)}
+        />
+      )}
+
       {/* Индикатор выбранных заданий (плавающий) */}
       {selectedTasks.length > 0 && activeTab !== 'constructor' && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="fixed bottom-6 right-6 z-40">
           <button
             onClick={() => setActiveTab('constructor')}
             className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-2xl hover:bg-emerald-700 transition-all"
@@ -791,7 +1078,7 @@ export default function TeacherDashboard() {
 
       {/* Кнопка перехода в банк из конструктора */}
       {activeTab === 'constructor' && (
-        <div className="fixed bottom-6 left-6 z-50">
+        <div className="fixed bottom-6 left-6 z-40">
           <button
             onClick={() => setActiveTab('bank')}
             className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase shadow-2xl hover:bg-slate-800 transition-all"
