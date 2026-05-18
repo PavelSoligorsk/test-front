@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin, XCircle, Lightbulb, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -9,7 +9,6 @@ import remarkGfm from 'remark-gfm';
 
 import 'katex/dist/katex.min.css';
 
-// Компактный компонент для рендеринга контента с поддержкой формул и изображений
 const MarkdownPreview = ({ text, title }) => (
   <div className="p-6 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
     {title && <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">{title}</h4>}
@@ -50,6 +49,74 @@ const MarkdownPreview = ({ text, title }) => (
     </div>
   </div>
 );
+
+const MathHintPreview = ({ text, title = "💡 AI-ПОДСКАЗКА", isLoading = false, error = null }) => {
+  if (isLoading) {
+    return (
+      <div className="p-6 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+        {title && <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">{title}</h4>}
+        <div className="flex items-center space-x-3 py-4">
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-blue-500"></div>
+          <p className="text-sm text-slate-500">Генерирую подсказку...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 rounded-[2rem] border border-red-200 bg-red-50 shadow-sm">
+        {title && <h4 className="text-[10px] font-black uppercase text-red-400 tracking-widest mb-4">{title}</h4>}
+        <p className="text-sm text-red-600">{error}</p>
+      </div>
+    );
+  }
+
+  // Обработка переносов строк
+  const formattedText = text 
+    ? text.replace(/\\n/g, '  \n').replace(/\n/g, '  \n')
+    : "*Подсказка появится здесь...*";
+
+  return (
+    <div className="p-6 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      {title && <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">{title}</h4>}
+      <div className="text-slate-700 text-sm md:text-base leading-relaxed">
+        <ReactMarkdown 
+          remarkPlugins={[remarkMath, remarkGfm]} 
+          rehypePlugins={[rehypeKatex]}
+          components={{
+            // Обычные параграфы - слева
+            p: ({ children }) => <p className="mb-4 last:mb-0 text-left">{children}</p>,
+            
+            // Строчные формулы - в строке
+            inlineMath: ({ children }) => <span className="inline justify-center text-blue-600">{children}</span>,
+            
+            // Блочные формулы - ПО ЦЕНТРУ!
+            math: ({ children }) => (
+              <div className="my-4 flex justify-center overflow-x-auto">
+                {children}
+              </div>
+            ),
+            
+            // Перенос строк
+            br: () => <br className="block my-1" />,
+            
+            ul: ({ children }) => <ul className="list-disc pl-5 mb-4 text-left space-y-1">{children}</ul>,
+            ol: ({ children }) => <ol className="list-decimal pl-5 mb-4 text-left space-y-1">{children}</ol>,
+            li: ({ children }) => <li className="text-slate-700">{children}</li>,
+          }}
+        >
+          {formattedText}
+        </ReactMarkdown>
+      </div>
+      {text && text !== "*Подсказка появится здесь..." && (
+        <div className="mt-4 pt-3 border-t border-slate-100 text-left">
+          <p className="text-xs text-slate-400">Ответ сгенерирован с помощью ИИ. Возможны ошибки</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const QuestionMap = ({ tasks, userAnswers, currentIdx, onNavigate }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -148,9 +215,12 @@ export default function TestPassing() {
   });
   const [finished, setFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showHint, setShowHint] = useState(false);
 
-  // Функция сохранения прогресса
+  // Состояния для подсказок
+  const [hintData, setHintData] = useState({});
+  const [hintLoading, setHintLoading] = useState({});
+  const [hintUsed, setHintUsed] = useState({});
+
   const saveProgress = useCallback(() => {
     if (test && !finished) {
       localStorage.setItem(`test_progress_${testId}`, JSON.stringify({
@@ -161,26 +231,19 @@ export default function TestPassing() {
     }
   }, [currentIdx, userAnswers, testId, test, finished]);
 
-  // Автосохранение при изменении данных
   useEffect(() => {
     const timer = setTimeout(saveProgress, 500);
     return () => clearTimeout(timer);
   }, [currentIdx, userAnswers, saveProgress]);
 
-  // Сохранение при закрытии вкладки
   useEffect(() => {
     const handleBeforeUnload = () => saveProgress();
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [saveProgress]);
 
-  // Сброс подсказки при смене вопроса
   useEffect(() => {
-    setShowHint(false);
-  }, [currentIdx]);
-
-  useEffect(() => {
-    let isMounted = true; // Флаг для отслеживания монтирования
+    let isMounted = true;
 
     const fetchTest = async () => {
       try {
@@ -192,43 +255,29 @@ export default function TestPassing() {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        if (!isMounted) return; // Прерываем если компонент размонтирован
+        if (!isMounted) return;
 
         if (res.data && res.data.tasks) {
           res.data.tasks.sort((a, b) => {
-            if (a.id !== b.id) {
-              return a.id - b.id;
-            }
-            
+            if (a.id !== b.id) return a.id - b.id;
             const aTypeWeight = a.options ? 0 : 1;
             const bTypeWeight = b.options ? 0 : 1;
-            
-            if (aTypeWeight !== bTypeWeight) {
-              return aTypeWeight - bTypeWeight;
-            }
-            
+            if (aTypeWeight !== bTypeWeight) return aTypeWeight - bTypeWeight;
             return (a.difficulty || 0) - (b.difficulty || 0);
           });
         }
 
         setTest(res.data);
 
-        // Проверка сохраненного прогресса
         const savedProgress = localStorage.getItem(`test_progress_${testId}`);
         if (savedProgress && isMounted) {
           const { currentIdx: savedIdx, answers: savedAnswers, timestamp } = JSON.parse(savedProgress);
           const hoursSinceSave = (Date.now() - timestamp) / (1000 * 60 * 60);
-          
-          // Проверяем, не был ли уже восстановлен прогресс
           const alreadyRestored = localStorage.getItem(`test_restored_${testId}`);
           
           if (!alreadyRestored && hoursSinceSave < 24 && Object.keys(savedAnswers).length > 0) {
-            // Помечаем что диалог был показан
             localStorage.setItem(`test_restored_${testId}`, 'true');
-            
-            const shouldRestore = window.confirm(
-              'У вас есть сохраненный прогресс. Хотите продолжить с того места, где остановились?'
-            );
+            const shouldRestore = window.confirm('У вас есть сохраненный прогресс. Хотите продолжить с того места, где остановились?');
             
             if (shouldRestore) {
               setCurrentIdx(savedIdx);
@@ -255,6 +304,32 @@ export default function TestPassing() {
   }, [testId, navigate]);
 
   const currentTask = test?.tasks?.[currentIdx];
+
+  // Функция запроса AI-подсказки
+  const fetchHint = async (taskId) => {
+    if (hintUsed[taskId]) return;
+    
+    setHintUsed(prev => ({ ...prev, [taskId]: true }));
+    setHintLoading(prev => ({ ...prev, [taskId]: true }));
+    
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const res = await axios.post(
+        `https://tests-production-46d5.up.railway.app/student/tasks/${taskId}/hint`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (res.data?.hint) {
+        setHintData(prev => ({ ...prev, [taskId]: res.data.hint }));
+      }
+    } catch (err) {
+      console.error('Ошибка загрузки подсказки:', err);
+      setHintData(prev => ({ ...prev, [taskId]: 'Не удалось загрузить подсказку. Попробуйте позже.' }));
+    } finally {
+      setHintLoading(prev => ({ ...prev, [taskId]: false }));
+    }
+  };
 
   const handleToggleAnswer = (index) => {
     const taskId = currentTask.id;
@@ -298,7 +373,7 @@ export default function TestPassing() {
       });
       
       localStorage.removeItem(`test_progress_${testId}`);
-      localStorage.removeItem(`test_restored_${testId}`); // Очищаем флаг
+      localStorage.removeItem(`test_restored_${testId}`);
       setFinished(true);
     } catch (err) {
       alert("Не удалось отправить тест. Проверьте интернет-соединение.");
@@ -356,28 +431,43 @@ export default function TestPassing() {
           />
         )}
 
-        {currentTask?.hint && (
-          <div className="mt-2">
-            {!showHint ? (
-              <button 
-                onClick={() => setShowHint(true)}
-                className="flex items-center gap-2 text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-5 py-3 rounded-2xl hover:bg-amber-100 transition-all border border-amber-200/40"
-              >
-                <span>💡</span> Нужна помощь?
-              </button>
-            ) : (
-              <div className="p-6 bg-amber-50 border border-amber-200/60 rounded-[2rem] animate-in fade-in zoom-in-95 duration-300">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-[9px] font-black uppercase text-amber-600 tracking-widest">Методическая подсказка</span>
-                  <button onClick={() => setShowHint(false)} className="text-amber-400 hover:text-amber-600"><X size={16}/></button>
-                </div>
-                <div className="prose prose-slate prose-sm text-amber-900/80 max-w-none font-medium">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{currentTask.hint}</ReactMarkdown>
-                </div>
+        {/* AI Подсказка */}
+        <div className="mt-2">
+          {!hintUsed[currentTask?.id] ? (
+            <button
+              onClick={() => fetchHint(currentTask?.id)}
+              className="flex items-center gap-2 text-[10px] font-black uppercase text-violet-600 bg-violet-50 px-5 py-3 rounded-2xl hover:bg-violet-100 transition-all border border-violet-200/40 active:scale-95"
+            >
+              <Sparkles size={14} className="text-violet-500" />
+              ИИ-подсказка (1 раз)
+            </button>
+          ) : hintLoading[currentTask?.id] ? (
+            <div className="flex items-center gap-3 p-5 bg-violet-50/50 border border-violet-100 rounded-[2rem]">
+              <Loader2 size={16} className="animate-spin text-violet-400" />
+              <span className="text-[10px] font-black uppercase text-violet-400 tracking-widest">
+                ИИ думает...
+              </span>
+            </div>
+          ) : hintData[currentTask?.id] ? (
+            <div className="p-6 bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200/40 rounded-[2rem] animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-[9px] font-black uppercase text-violet-600 tracking-widest flex items-center gap-2">
+                  <Lightbulb size={14} className="text-amber-500" />
+                  Подсказка ИИ
+                </span>
+                <span className="text-[8px] font-bold text-violet-400 bg-violet-100 px-2 py-0.5 rounded-lg">
+                  использовано
+                </span>
               </div>
-            )}
-          </div>
-        )}
+              <div className="prose prose-slate prose-sm text-violet-900/80 max-w-none font-medium leading-relaxed">
+<MathHintPreview 
+  text={hintData[currentTask?.id]} 
+  title="💡 AI-ПОДСКАЗКА"
+/>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="space-y-4">
           <div className="flex items-center gap-3 ml-2">
