@@ -452,405 +452,197 @@ export default function StudentDashboard() {
       <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
         
         {/* ==================== ВКЛАДКА: ТЕСТЫ ==================== */}
-        {activeTab === 'tests' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            
-            {/* ВЕРХНЯЯ ПАНЕЛЬ */}
-            <div className="bg-white rounded-[3rem] p-4 md:p-8 shadow-sm border border-slate-100 mb-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
-                    Доступные тесты
-                  </h2>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                    {testTypeFilter === 'all' 
-                      ? `${allTestsCount} тестов доступно`
-                      : testTypeFilter === 'static'
-                        ? `${publicStaticCount} общих тестов (автосборка)`
-                        : testTypeFilter === 'custom'
-                          ? `${teacherTestsCount} тестов от учителя`
-                          : `${aiTestsCount} AI тестов`
-                    }
-                  </p>
-                </div>
-                
-                <button
-                  onClick={() => setShowAiModal(true)}
-                  className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase hover:shadow-xl hover:shadow-purple-200 transition-all"
-                >
-                  <Sparkles size={16} />
-                  <span>AI тест</span>
-                </button>
-              </div>
+{/* ==================== ВКЛАДКА: ТЕСТЫ ==================== */}
+{activeTab === 'tests' && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
 
-              {/* ВКЛАДКИ ТИПОВ */}
-              <div className="flex gap-2 bg-slate-50 p-1.5 rounded-[2rem]">
-                {[
-                  { id: 'all', label: 'Все тесты', icon: LayoutGrid, color: 'slate' },
-                  { id: 'static', label: 'Общие', icon: BookOpen, color: 'blue' },
-                  { id: 'custom', label: 'От учителя', icon: Users, color: 'emerald' },
-                  { id: 'ai', label: 'AI', icon: Bot, color: 'purple' }
-                ].map(filter => {
-                  const Icon = filter.icon;
-                  const isActive = testTypeFilter === filter.id;
-                  
-                  return (
-                    <button
-                      key={filter.id}
-                      onClick={() => {
-                        setTestTypeFilter(filter.id);
-                        setSelectedClass(null);
-                        setSelectedSubject('Все');
-                        setTestSearch('');
-                      }}
-                      className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-6 py-2.5 md:py-3 rounded-[1.5rem] font-black text-[9px] md:text-[10px] uppercase transition-all flex-1 ${
-                        isActive
-                          ? `bg-${filter.color}-600 text-white shadow-lg scale-[0.98] md:scale-105`
-                          : 'text-slate-400 hover:text-slate-700 hover:bg-white'
-                      }`}
-                    >
-                      <Icon size={14} className="md:w-4 md:h-4" />
-                      <span className="hidden sm:inline">{filter.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+    {/* --- 1. ВЕРХНЯЯ ПАНЕЛЬ --- */}
+    <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+            Доступные тесты
+          </h2>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+            {testTypeFilter === 'all' 
+              ? `${allTestsCount} тестов доступно`
+              : testTypeFilter === 'static'
+                ? `${publicStaticCount} общих тестов (автосборка)`
+                : testTypeFilter === 'custom'
+                  ? `${teacherTestsCount} тестов от учителя`
+                  : `${aiTestsCount} AI тестов`
+            }
+          </p>
+        </div>
 
-            {/* ОСНОВНОЙ КОНТЕНТ */}
-            <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
-              
-              {/* ЛЕВАЯ ПАНЕЛЬ */}
-              <aside className="w-full md:w-72 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-6 flex flex-col gap-4">
-                <div>
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">
-                    <Filter size={12} className="inline mr-1" />
-                    Класс
-                  </h3>
-                  
-                  <div className="relative mb-4">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input 
-                      type="text"
-                      placeholder="Поиск класса..."
-                      value={classSearch}
-                      onChange={(e) => setClassSearch(e.target.value)}
-                      className="w-full bg-white border border-slate-200 py-2.5 pl-10 pr-4 rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-400 transition-all"
-                    />
-                  </div>
-
-                  <div className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 max-h-[40vh] md:max-h-[50vh] overflow-y-auto">
-                    {uniqueClasses.length > 0 ? (
-                      uniqueClasses.map(cls => {
-                        const count = typeFilteredTests.filter(t => (t.target_class || "Общие") === cls).length;
-                        const isActive = selectedClass === cls;
-                        
-                        return (
-                          <button 
-                            key={cls} 
-                            onClick={() => { 
-                              setSelectedClass(cls); 
-                              setSelectedSubject('Все');
-                              setTestSearch('');
-                            }} 
-                            className={`shrink-0 flex items-center justify-between p-3 md:p-4 rounded-2xl text-left transition-all ${
-                              isActive 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' 
-                                : 'bg-white text-slate-500 border border-slate-100 hover:border-blue-200 hover:translate-x-1'
-                            }`}
-                          >
-                            <span className="font-black text-xs uppercase">{cls}</span>
-                            <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${
-                              isActive ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'
-                            }`}>
-                              {count}
-                            </span>
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <div className="text-[9px] font-bold text-slate-400 uppercase text-center py-8 italic">
-                        {classSearch ? 'Классы не найдены' : 'Нет доступных классов'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {selectedClass && subjects.length > 1 && (
-                  <div className="border-t border-slate-200 pt-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">
-                      <Hash size={12} className="inline mr-1" />
-                      Предмет / Тема
-                    </h3>
-                    <div className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 max-h-[30vh] overflow-y-auto">
-                      {subjects.map(subject => {
-                        const count = classTests.filter(t => 
-                          subject === 'Все' ? true : (t.subject || t.target_topic || "Общее") === subject
-                        ).length;
-                        const isActive = selectedSubject === subject;
-                        
-                        return (
-                          <button
-                            key={subject}
-                            onClick={() => setSelectedSubject(subject)}
-                            className={`shrink-0 p-2.5 rounded-xl font-black text-[9px] uppercase transition-all truncate ${
-                              isActive 
-                                ? 'bg-slate-800 text-white' 
-                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                            }`}
-                          >
-                            {subject === 'Все' ? '📚 Все' : subject}
-                            <span className="ml-2 opacity-60">({count})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Инфо-блок */}
-                <div className="mt-auto pt-4 border-t border-slate-200">
-                  <div className={`p-4 rounded-2xl ${
-                    testTypeFilter === 'static' ? 'bg-blue-50 border border-blue-100' :
-                    testTypeFilter === 'custom' ? 'bg-emerald-50 border border-emerald-100' :
-                    testTypeFilter === 'ai' ? 'bg-purple-50 border border-purple-100' :
-                    'bg-slate-100'
-                  }`}>
-                    {testTypeFilter === 'static' && (
-                      <>
-                        <BookOpen size={18} className="text-blue-600 mb-2" />
-                        <p className="text-[9px] font-black text-blue-600 uppercase">Общие тесты</p>
-                        <p className="text-[8px] text-blue-400 mt-1">Автосборка по темам</p>
-                      </>
-                    )}
-                    {testTypeFilter === 'custom' && (
-                      <>
-                        <Users size={18} className="text-emerald-600 mb-2" />
-                        <p className="text-[9px] font-black text-emerald-600 uppercase">От учителя</p>
-                        <p className="text-[8px] text-emerald-400 mt-1">Назначенные + ручная сборка</p>
-                      </>
-                    )}
-                    {testTypeFilter === 'ai' && (
-                      <>
-                        <Bot size={18} className="text-purple-600 mb-2" />
-                        <p className="text-[9px] font-black text-purple-600 uppercase">AI тесты</p>
-                        <p className="text-[8px] text-purple-400 mt-1">Сгенерированы ИИ</p>
-                      </>
-                    )}
-                    {testTypeFilter === 'all' && (
-                      <>
-                        <LayoutGrid size={18} className="text-slate-600 mb-2" />
-                        <p className="text-[9px] font-black text-slate-600 uppercase">Все типы</p>
-                        <p className="text-[8px] text-slate-400 mt-1">Общие + учитель + AI</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </aside>
-
-              {/* ПРАВАЯ ЧАСТЬ */}
-              <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-white">
-                {!selectedClass ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center space-y-6 py-20">
-                    <div className={`w-24 h-24 rounded-[2rem] flex items-center justify-center ${
-                      testTypeFilter === 'static' ? 'bg-blue-50' :
-                      testTypeFilter === 'custom' ? 'bg-emerald-50' :
-                      testTypeFilter === 'ai' ? 'bg-purple-50' :
-                      'bg-slate-50'
-                    }`}>
-                      {testTypeFilter === 'static' && <BookOpen size={48} className="text-blue-300" />}
-                      {testTypeFilter === 'custom' && <Users size={48} className="text-emerald-300" />}
-                      {testTypeFilter === 'ai' && <Bot size={48} className="text-purple-300" />}
-                      {testTypeFilter === 'all' && <GraduationCap size={48} className="text-slate-300" />}
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-black uppercase italic text-slate-400">
-                        Выберите класс
-                      </h3>
-                      <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
-                        чтобы увидеть список доступных тестов
-                      </p>
-                      {typeFilteredTests.length === 0 && (
-                        <p className="text-[9px] text-amber-500 font-bold mt-4">
-                          В этой категории пока нет тестов
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                    
-                    {/* Заголовок и поиск */}
-<div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-4 pb-6 border-b border-slate-100">
-  <div className="text-center md:text-left w-full md:w-auto">
-    <div className="flex items-center justify-center md:justify-start gap-2 mb-1 flex-wrap">
-      <button
-        onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }}
-        className="text-slate-400 hover:text-slate-600 transition-colors"
-      >
-        <ChevronRight size={16} className="rotate-180" />
-      </button>
-      
-      <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${
-        testTypeFilter === 'static' ? 'bg-blue-100 text-blue-600' :
-        testTypeFilter === 'custom' ? 'bg-emerald-100 text-emerald-600' :
-        testTypeFilter === 'ai' ? 'bg-purple-100 text-purple-600' :
-        'bg-slate-100 text-slate-500'
-      }`}>
-        {testTypeFilter === 'static' ? 'Общие' :
-         testTypeFilter === 'custom' ? 'Учитель' :
-         testTypeFilter === 'ai' ? 'AI' : 'Все'}
-      </span>
-      
-      <ChevronRight size={12} className="text-slate-300" />
-      <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-xl uppercase">
-        {selectedClass}
-      </span>
-      
-      {selectedSubject !== 'Все' && (
-        <>
-          <ChevronRight size={12} className="text-slate-300" />
-          <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-xl uppercase">
-            {selectedSubject}
-          </span>
-        </>
-      )}
+        <button
+          onClick={() => setShowAiModal(true)}
+          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase hover:shadow-xl hover:shadow-purple-200 transition-all"
+        >
+          <Sparkles size={16} />
+          <span>AI тест</span>
+        </button>
+      </div>
     </div>
-    <h3 className="text-xl md:text-2xl font-black text-slate-800 uppercase mt-2">
-      {selectedSubject === 'Все' ? 'Все тесты' : selectedSubject}
-    </h3>
-    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-      {searchedTests.length} тестов
-    </p>
-  </div>
-  
-  <div className="relative w-full md:w-72">
-    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-    <input
-      type="text"
-      placeholder="Поиск теста..."
-      value={testSearch}
-      onChange={(e) => setTestSearch(e.target.value)}
-      className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-400 transition-all"
-    />
-    {testSearch && (
-      <button
-        onClick={() => setTestSearch('')}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-      >
-        <XCircle size={14} />
-      </button>
-    )}
-  </div>
-</div>
 
-                    {/* Сетка тестов */}
-                    {searchedTests.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-                        {searchedTests.map(test => (
-                          <TestCard
-                            key={`${test.type}-${test.id}`}
-                            test={test}
-                            type={test.type}
-                            onStart={handleStartTest}
-                            disabled={test.is_completed}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-20">
-                        <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
-                          <Search size={40} className="text-slate-200" />
-                        </div>
-                        <h3 className="text-lg font-black text-slate-400 uppercase">
-                          {testSearch ? 'Ничего не найдено' : 'Нет тестов'}
-                        </h3>
-                        <p className="text-[10px] font-bold text-slate-300 uppercase mt-2">
-                          {testSearch 
-                            ? 'Попробуйте изменить поисковый запрос' 
-                            : 'В этой категории пока нет доступных тестов'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </main>
+    {/* --- 3. ОСНОВНОЙ БЛОК --- */}
+    <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
+      
+      {/* Левая панель — Разделы */}
+      <aside className="w-full md:w-64 bg-slate-50/50 border-b md:border-b-0 md:border-r border-slate-100 p-5 flex flex-col gap-4">
+        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+          <Filter size={14} /> Раздел
+        </h3>
+        
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input 
+            type="text"
+            placeholder="Поиск раздела..."
+            value={classSearch}
+            onChange={(e) => setClassSearch(e.target.value)}
+            className="w-full bg-white border border-slate-200 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-blue-400"
+          />
+        </div>
+
+        <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto max-h-[40vh] md:max-h-[60vh]">
+          {uniqueClasses.length > 0 ? uniqueClasses.map(cls => {
+            const count = typeFilteredTests.filter(t => (t.target_class || "Общие") === cls).length;
+            const isActive = selectedClass === cls;
+            return (
+              <button 
+                key={cls} 
+                onClick={() => { setSelectedClass(cls); setSelectedSubject('Все'); setTestSearch(''); }}
+                className={`shrink-0 flex items-center justify-between p-3 rounded-xl text-left transition-all ${
+                  isActive 
+                    ? 'bg-slate-800 text-white shadow-md' 
+                    : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <span className="font-bold text-xs uppercase">{cls}</span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
+                  isActive ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'
+                }`}>{count}</span>
+              </button>
+            );
+          }) : (
+            <p className="text-[10px] font-bold text-slate-400 text-center py-10 italic">
+              {classSearch ? 'Ничего не найдено' : 'Нет разделов'}
+            </p>
+          )}
+        </div>
+      </aside>
+
+      {/* Правая часть — контент */}
+      <main className="flex-1 p-5 md:p-8 bg-white overflow-y-auto">
+        {!selectedClass ? (
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-16">
+            <div className="w-20 h-20 rounded-[2rem] bg-slate-50 flex items-center justify-center">
+              {testTypeFilter === 'static' && <BookOpen size={40} className="text-blue-200" />}
+              {testTypeFilter === 'custom' && <Users size={40} className="text-emerald-200" />}
+              {testTypeFilter === 'ai' && <Bot size={40} className="text-purple-200" />}
+              {testTypeFilter === 'all' && <GraduationCap size={40} className="text-slate-200" />}
             </div>
-
-            {/* СТАТИСТИЧЕСКИЕ КАРТОЧКИ */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-              {/* Общие (автосборка) */}
-              <div 
-                onClick={() => setTestTypeFilter('static')}
-                className={`bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-[2rem] p-5 border cursor-pointer transition-all hover:shadow-lg ${
-                  testTypeFilter === 'static' ? 'border-blue-400 shadow-lg ring-2 ring-blue-200' : 'border-blue-100'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <BookOpen size={22} className="text-blue-600" />
-                  <span className="text-[8px] font-black text-blue-600 bg-blue-100 px-2 py-1 rounded-lg uppercase">
-                    Общие
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-blue-900">{publicStaticCount}</div>
-                <p className="text-[9px] font-bold text-blue-400 uppercase mt-1">автосборка</p>
-              </div>
-
-              {/* От учителя (назначенные + ручная сборка) */}
-              <div 
-                onClick={() => setTestTypeFilter('custom')}
-                className={`bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-[2rem] p-5 border cursor-pointer transition-all hover:shadow-lg ${
-                  testTypeFilter === 'custom' ? 'border-emerald-400 shadow-lg ring-2 ring-emerald-200' : 'border-emerald-100'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <Users size={22} className="text-emerald-600" />
-                  <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 px-2 py-1 rounded-lg uppercase">
-                    Учитель
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-emerald-900">{teacherTestsCount}</div>
-                <p className="text-[9px] font-bold text-emerald-400 uppercase mt-1">
-                  {teacherTests.filter(t => !t.is_completed).length} ожидают
-                </p>
-                {teacherTests.filter(t => t.due_date && !t.is_completed).length > 0 && (
-                  <div className="flex items-center gap-1 mt-2 text-[8px] font-bold text-amber-500">
-                    <AlertCircle size={10} />
-                    Есть дедлайны
-                  </div>
-                )}
-              </div>
-
-              {/* AI */}
-              <div 
-                onClick={() => setTestTypeFilter('ai')}
-                className={`bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-[2rem] p-5 border cursor-pointer transition-all hover:shadow-lg ${
-                  testTypeFilter === 'ai' ? 'border-purple-400 shadow-lg ring-2 ring-purple-200' : 'border-purple-100'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <Bot size={22} className="text-purple-600" />
-                  <span className="text-[8px] font-black text-purple-600 bg-purple-100 px-2 py-1 rounded-lg uppercase">
-                    AI
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-purple-900">{aiTestsCount}</div>
-                <p className="text-[9px] font-bold text-purple-400 uppercase mt-1">сгенерировано</p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowAiModal(true);
-                  }}
-                  className="mt-2 text-[8px] font-black text-purple-500 hover:text-purple-700 uppercase flex items-center gap-1"
-                >
-                  <Zap size={10} />
-                  Создать ещё
+            <h3 className="text-lg font-black uppercase text-slate-300">Выберите раздел</h3>
+            <p className="text-xs font-bold text-slate-300 max-w-xs">
+              Слева отображаются разделы с доступными тестами
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Хлебные крошки + поиск */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2 flex-wrap text-xs font-black uppercase text-slate-500">
+                <button onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }}>
+                  <ChevronRight size={14} className="rotate-180 text-slate-300 hover:text-slate-600" />
                 </button>
+                <span className={`px-2 py-1 rounded-lg ${
+                  testTypeFilter === 'static' ? 'bg-blue-50 text-blue-600' :
+                  testTypeFilter === 'custom' ? 'bg-emerald-50 text-emerald-600' :
+                  testTypeFilter === 'ai' ? 'bg-purple-50 text-purple-600' :
+                  'bg-slate-100 text-slate-500'
+                }`}>
+                  {testTypeFilter === 'static' ? 'Общие' : testTypeFilter === 'custom' ? 'Учитель' : testTypeFilter === 'ai' ? 'AI' : 'Все'}
+                </span>
+                <ChevronRight size={12} />
+                <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">{selectedClass}</span>
+                {selectedSubject !== 'Все' && (
+                  <>
+                    <ChevronRight size={12} />
+                    <span className="bg-slate-50 px-2 py-1 rounded-lg">{selectedSubject}</span>
+                  </>
+                )}
+              </div>
+              
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Поиск теста..."
+                  value={testSearch}
+                  onChange={(e) => setTestSearch(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold uppercase outline-none focus:border-blue-400"
+                />
+                {testSearch && (
+                  <button onClick={() => setTestSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <XCircle size={14} />
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Темы */}
+            {selectedClass && subjects.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {subjects.map(subject => (
+                  <button
+                    key={subject}
+                    onClick={() => setSelectedSubject(subject)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap transition-all ${
+                      selectedSubject === subject 
+                        ? 'bg-slate-800 text-white' 
+                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    {subject === 'Все' ? '📚 Все' : subject}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Сетка тестов */}
+            {searchedTests.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {searchedTests.map(test => (
+                  <TestCard
+                    key={`${test.type}-${test.id}`}
+                    test={test}
+                    type={test.type}
+                    onStart={handleStartTest}
+                    disabled={test.is_completed}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16 space-y-3">
+                <div className="w-16 h-16 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto">
+                  <Search size={32} className="text-slate-200" />
+                </div>
+                <p className="font-black text-slate-400 uppercase">
+                  {testSearch ? 'Ничего не найдено' : 'Нет тестов'}
+                </p>
+                <p className="text-[10px] font-bold text-slate-300 uppercase">
+                  {testSearch ? 'Попробуйте другой запрос' : 'В этой категории пока пусто'}
+                </p>
+              </div>
+            )}
           </div>
         )}
+      </main>
+    </div>
 
+  </div>
+)}
         {/* ==================== ВКЛАДКА: ИСТОРИЯ ==================== */}
         {activeTab === 'history' && (
           <div className="bg-white rounded-[3rem] border border-slate-100 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
