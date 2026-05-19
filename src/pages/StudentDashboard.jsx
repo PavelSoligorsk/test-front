@@ -681,68 +681,68 @@ export default function StudentDashboard() {
                   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                     
                     {/* Заголовок и поиск */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-slate-100">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <button
-                            onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }}
-                            className="text-slate-400 hover:text-slate-600 transition-colors"
-                          >
-                            <ChevronRight size={16} className="rotate-180" />
-                          </button>
-                          
-                          <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${
-                            testTypeFilter === 'static' ? 'bg-blue-100 text-blue-600' :
-                            testTypeFilter === 'custom' ? 'bg-emerald-100 text-emerald-600' :
-                            testTypeFilter === 'ai' ? 'bg-purple-100 text-purple-600' :
-                            'bg-slate-100 text-slate-500'
-                          }`}>
-                            {testTypeFilter === 'static' ? 'Общие' :
-                             testTypeFilter === 'custom' ? 'Учитель' :
-                             testTypeFilter === 'ai' ? 'AI' : 'Все'}
-                          </span>
-                          
-                          <ChevronRight size={12} className="text-slate-300" />
-                          <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-xl uppercase">
-                            {selectedClass}
-                          </span>
-                          
-                          {selectedSubject !== 'Все' && (
-                            <>
-                              <ChevronRight size={12} className="text-slate-300" />
-                              <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-xl uppercase">
-                                {selectedSubject}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        <h3 className="text-xl md:text-2xl font-black text-slate-800 uppercase mt-2">
-                          {selectedSubject === 'Все' ? 'Все тесты' : selectedSubject}
-                        </h3>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
-                          {searchedTests.length} тестов
-                        </p>
-                      </div>
-                      
-                      <div className="relative w-full md:w-72">
-                        <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="Поиск теста..."
-                          value={testSearch}
-                          onChange={(e) => setTestSearch(e.target.value)}
-                          className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-400 transition-all"
-                        />
-                        {testSearch && (
-                          <button
-                            onClick={() => setTestSearch('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                          >
-                            <XCircle size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+<div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-4 pb-6 border-b border-slate-100">
+  <div className="text-center md:text-left w-full md:w-auto">
+    <div className="flex items-center justify-center md:justify-start gap-2 mb-1 flex-wrap">
+      <button
+        onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }}
+        className="text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <ChevronRight size={16} className="rotate-180" />
+      </button>
+      
+      <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${
+        testTypeFilter === 'static' ? 'bg-blue-100 text-blue-600' :
+        testTypeFilter === 'custom' ? 'bg-emerald-100 text-emerald-600' :
+        testTypeFilter === 'ai' ? 'bg-purple-100 text-purple-600' :
+        'bg-slate-100 text-slate-500'
+      }`}>
+        {testTypeFilter === 'static' ? 'Общие' :
+         testTypeFilter === 'custom' ? 'Учитель' :
+         testTypeFilter === 'ai' ? 'AI' : 'Все'}
+      </span>
+      
+      <ChevronRight size={12} className="text-slate-300" />
+      <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-xl uppercase">
+        {selectedClass}
+      </span>
+      
+      {selectedSubject !== 'Все' && (
+        <>
+          <ChevronRight size={12} className="text-slate-300" />
+          <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-xl uppercase">
+            {selectedSubject}
+          </span>
+        </>
+      )}
+    </div>
+    <h3 className="text-xl md:text-2xl font-black text-slate-800 uppercase mt-2">
+      {selectedSubject === 'Все' ? 'Все тесты' : selectedSubject}
+    </h3>
+    <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">
+      {searchedTests.length} тестов
+    </p>
+  </div>
+  
+  <div className="relative w-full md:w-72">
+    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+    <input
+      type="text"
+      placeholder="Поиск теста..."
+      value={testSearch}
+      onChange={(e) => setTestSearch(e.target.value)}
+      className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-400 transition-all"
+    />
+    {testSearch && (
+      <button
+        onClick={() => setTestSearch('')}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+      >
+        <XCircle size={14} />
+      </button>
+    )}
+  </div>
+</div>
 
                     {/* Сетка тестов */}
                     {searchedTests.length > 0 ? (
