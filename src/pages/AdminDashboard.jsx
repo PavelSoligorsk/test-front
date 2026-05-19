@@ -468,41 +468,52 @@ const availableClasses = useMemo(() => {
     });
   };
 
-  const handleTaskSubmit = async (e) => {
+  // Измените handleTaskSubmit
+const handleTaskSubmit = async (e) => {
     e.preventDefault();
     const finalTask = {
-      ...taskData,
-      task_class: String(taskData.task_class),
-      topic_number: String(taskData.topic_number),
-      options: taskData.is_open_answer ? null : (typeof taskData.options === 'string' ? taskData.options.split(';').map(s => s.trim()) : taskData.options)
+        ...taskData,
+        task_class: String(taskData.task_class),
+        topic_number: String(taskData.topic_number),
+        options: taskData.is_open_answer ? null : (typeof taskData.options === 'string' ? taskData.options.split(';').map(s => s.trim()) : taskData.options)
     };
 
     try {
-      if (taskData.id) {
-        await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskData.id}`, finalTask);
-        alert("Задание обновлено!");
-        
-        if (returnContext.bankTopic && returnContext.bankSection) {
-          setBankFilter({ topic: returnContext.bankTopic, section: returnContext.bankSection });
-          setActiveTab('bank');
-          
-          setTimeout(() => {
-            window.scrollTo(0, returnContext.scrollPosition);
-          }, 100);
-          
-          setReturnContext({ bankTopic: null, bankSection: null, scrollPosition: 0 });
-          setTaskData(initialTaskState);
+        if (taskData.id) {
+            await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskData.id}`, finalTask);
+            alert("Задание обновлено!");
+            
+            if (returnContext.bankTopic && returnContext.bankSection) {
+                setBankFilter({ topic: returnContext.bankTopic, section: returnContext.bankSection });
+                setActiveTab('bank');
+                
+                setTimeout(() => {
+                    window.scrollTo(0, returnContext.scrollPosition);
+                }, 100);
+                
+                setReturnContext({ bankTopic: null, bankSection: null, scrollPosition: 0 });
+                setTaskData(initialTaskState);
+            }
+        } else {
+            await axios.post('https://tests-production-46d5.up.railway.app/admin/tasks', finalTask);
+            alert("Задание создано!");
+            
+            // Сохраняем класс и тему, сбрасываем остальное
+            setTaskData({
+                ...initialTaskState,
+                task_class: taskData.task_class,  // Сохраняем класс
+                topic: taskData.topic,              // Сохраняем тему
+                section: taskData.section,          // Сохраняем раздел
+                topic_number: taskData.topic_number, // Сохраняем номер темы
+                difficulty: taskData.difficulty,     // Сохраняем сложность
+                is_open_answer: taskData.is_open_answer // Сохраняем тип ответа
+            });
         }
-      } else {
-        await axios.post('https://tests-production-46d5.up.railway.app/admin/tasks', finalTask);
-        alert("Задание создано!");
-        setTaskData(initialTaskState);
-      }
-      fetchTasks();
+        fetchTasks();
     } catch (e) {
-      alert("Ошибка при сохранении");
+        alert("Ошибка при сохранении");
     }
-  };
+};
 
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm(`Удалить задание #${taskId}?`)) return;
