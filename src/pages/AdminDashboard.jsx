@@ -1320,15 +1320,15 @@ const handleTaskSubmit = async (e) => {
       </main>
 
       {/* ==================== КАРТА ЗАДАНИЙ ==================== */}
-      {activeTab === 'bank' && bankFilter.topic && filteredBankTasks.length > 0 && (
-        <TaskMap 
-          tasks={filteredBankTasks} 
-          onScroll={(taskId) => {
-            const el = document.querySelector(`[data-task-id="${taskId}"]`);
-            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }} 
-        />
-      )}
+{activeTab === 'bank' && bankTopic && groupedTasks[bankClass]?.[bankTopic]?.length > 0 && (
+  <TaskMap 
+    tasks={groupedTasks[bankClass][bankTopic]} 
+    onScroll={(taskId) => {
+      const el = document.querySelector(`[data-task-id="${taskId}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }} 
+  />
+)}
     </div>
   );
 }
