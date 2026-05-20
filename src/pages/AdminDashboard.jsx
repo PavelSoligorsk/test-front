@@ -377,10 +377,12 @@ const [bankTopic, setBankTopic] = useState(null);
   const [taskData, setTaskData] = useState(initialTaskState);
 
   const [returnContext, setReturnContext] = useState({
-    bankTopic: null,
-    bankSection: null,
-    scrollPosition: 0
-  });
+    sourceTab: null,        // 'bank', 'tasks', 'tests' - откуда пришли
+    bankClass: null,        // класс в банке заданий
+    bankTopic: null,        // тема в банке заданий
+    bankSection: null,      // раздел в банке заданий
+    scrollPosition: 0       // позиция скролла
+});
 
   useEffect(() => {
     fetchUsers();
@@ -468,7 +470,6 @@ const availableClasses = useMemo(() => {
     });
   };
 
-  // Измените handleTaskSubmit
 const handleTaskSubmit = async (e) => {
     e.preventDefault();
     const finalTask = {
@@ -483,30 +484,51 @@ const handleTaskSubmit = async (e) => {
             await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskData.id}`, finalTask);
             alert("Задание обновлено!");
             
-            if (returnContext.bankTopic && returnContext.bankSection) {
-                setBankFilter({ topic: returnContext.bankTopic, section: returnContext.bankSection });
+            // 🔍 ОТЛАДКА
+            console.log('returnContext:', returnContext);
+            console.log('sourceTab:', returnContext.sourceTab);
+            console.log('bankClass:', returnContext.bankClass);
+            console.log('bankTopic:', returnContext.bankTopic);
+            console.log('scrollPosition:', returnContext.scrollPosition);
+            
+            if (returnContext.sourceTab === 'bank' && returnContext.bankTopic && returnContext.bankClass) {
+                console.log('✅ Переключаем в bank');
+                setBankClass(returnContext.bankClass);
+                setBankTopic(returnContext.bankTopic);
                 setActiveTab('bank');
                 
                 setTimeout(() => {
-                    window.scrollTo(0, returnContext.scrollPosition);
-                }, 100);
-                
-                setReturnContext({ bankTopic: null, bankSection: null, scrollPosition: 0 });
-                setTaskData(initialTaskState);
+                    console.log('📜 Скроллим на:', returnContext.scrollPosition);
+                    window.scrollTo({
+                        top: returnContext.scrollPosition,
+                        behavior: 'smooth'
+                    });
+                }, 500);
+            } else {
+                console.log('❌ Условие не выполнено');
             }
+            
+            setReturnContext({
+                sourceTab: null,
+                bankClass: null,
+                bankTopic: null,
+                bankSection: null,
+                scrollPosition: 0
+            });
+            setTaskData(initialTaskState);
+            
         } else {
             await axios.post('https://tests-production-46d5.up.railway.app/admin/tasks', finalTask);
             alert("Задание создано!");
             
-            // Сохраняем класс и тему, сбрасываем остальное
             setTaskData({
                 ...initialTaskState,
-                task_class: taskData.task_class,  // Сохраняем класс
-                topic: taskData.topic,              // Сохраняем тему
-                section: taskData.section,          // Сохраняем раздел
-                topic_number: taskData.topic_number, // Сохраняем номер темы
-                difficulty: taskData.difficulty,     // Сохраняем сложность
-                is_open_answer: taskData.is_open_answer // Сохраняем тип ответа
+                task_class: taskData.task_class,
+                topic: taskData.topic,
+                section: taskData.section,
+                topic_number: taskData.topic_number,
+                difficulty: taskData.difficulty,
+                is_open_answer: taskData.is_open_answer
             });
         }
         fetchTasks();
@@ -514,7 +536,6 @@ const handleTaskSubmit = async (e) => {
         alert("Ошибка при сохранении");
     }
 };
-
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm(`Удалить задание #${taskId}?`)) return;
     try {
@@ -797,23 +818,38 @@ const handleTaskSubmit = async (e) => {
                     />
                   </div>
 
-                  <button className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3">
+                  {/* КНОПКА ОТПРАВКИ */}
+                  <button 
+                    type="submit"
+                    className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3"
+                  >
                     <Send size={20} /> {taskData.id ? 'ОБНОВИТЬ' : 'ОПУБЛИКОВАТЬ'}
                   </button>
 
+                  {/* КНОПКА ОТМЕНЫ (только при редактировании) */}
                   {taskData.id && (
                     <button
                       type="button"
                       onClick={() => {
-                        if (returnContext.bankTopic && returnContext.bankSection) {
-                          setBankFilter({ topic: returnContext.bankTopic, section: returnContext.bankSection });
+                        if (returnContext.sourceTab === 'bank' && returnContext.bankTopic && returnContext.bankClass) {
+                          setBankClass(returnContext.bankClass);
+                          setBankTopic(returnContext.bankTopic);
                           setActiveTab('bank');
                           
                           setTimeout(() => {
-                            window.scrollTo(0, returnContext.scrollPosition);
-                          }, 100);
+                            window.scrollTo({
+                              top: returnContext.scrollPosition,
+                              behavior: 'smooth'
+                            });
+                          }, 300);
                           
-                          setReturnContext({ bankTopic: null, bankSection: null, scrollPosition: 0 });
+                          setReturnContext({
+                            sourceTab: null,
+                            bankClass: null,
+                            bankTopic: null,
+                            bankSection: null,
+                            scrollPosition: 0
+                          });
                           setTaskData(initialTaskState);
                         } else {
                           setTaskData(initialTaskState);
@@ -821,7 +857,7 @@ const handleTaskSubmit = async (e) => {
                       }}
                       className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"
                     >
-                      {returnContext.bankSection ? '← Отменить и вернуться в банк' : 'Отменить редактирование'}
+                      {returnContext.sourceTab === 'bank' ? '← Отменить и вернуться в банк' : 'Отменить редактирование'}
                     </button>
                   )}
                 </form>
@@ -856,10 +892,10 @@ const handleTaskSubmit = async (e) => {
           </div>
         )}
 
-        {/* ВКЛАДКА: БАНК ЗАДАНИЙ */}
+{/* ВКЛАДКА: БАНК ЗАДАНИЙ */}
 {activeTab === 'bank' && (
   <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
-    {/* Боковая панель - как было */}
+    {/* Боковая панель */}
     <aside className="w-full md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-8 flex flex-col gap-6 md:gap-8">
       <div>
         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 md:mb-4 italic">Раздел</h3>
@@ -911,14 +947,18 @@ const handleTaskSubmit = async (e) => {
 
           {groupedTasks[bankClass][bankTopic]
             .slice()
-            .sort((a, b) => {
-              if (a.id !== b.id) return a.id - b.id;
-              return (a.difficulty || 0) - (b.difficulty || 0);
-            })
-            .sort((a, b) => {
-              if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-              return (a.difficulty || 0) - (b.difficulty || 0);
-            })
+.sort((a, b) => {
+  // Сначала сортируем по ID (по возрастанию)
+  if (a.id !== b.id) return a.id - b.id;
+  // При одинаковых ID - по сложности
+  return (a.difficulty || 0) - (b.difficulty || 0);
+})
+.sort((a, b) => {
+  // Затем группируем: открытые ответы после тестов
+  if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+  // Внутри группы - по сложности
+  return (a.difficulty || 0) - (b.difficulty || 0);
+})
             .map((t, index) => {
               const isSolOpen = openSolutions[t.id];
               const isHintOpen = openHints[t.id];
@@ -932,27 +972,84 @@ const handleTaskSubmit = async (e) => {
                         <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-2 md:px-3 py-1 rounded-lg">№ {index + 1}</span>
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-200 pl-2 md:pl-4">ID: {t.id}</span>
                         
-                        {/* НОВОЕ: тема и раздел */}
-                        {t.topic && MAIN_TOPICS[t.topic] && (
-                          <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg border border-purple-100">
-                            {MAIN_TOPICS[t.topic]}
-                          </span>
-                        )}
-                        {t.section && (
-                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg truncate max-w-[200px]">
-                            {t.section}
-                          </span>
-                        )}
+                        {/* РЕДАКТИРУЕМАЯ ТЕМА */}
+                        <select
+                          value={t.topic || ''}
+                          onChange={async (e) => {
+                            const newTopic = e.target.value;
+                            try {
+                              await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${t.id}`, {
+                                ...t,
+                                topic: newTopic,
+                                section: '' // сбрасываем раздел при смене темы
+                              });
+                              fetchTasks();
+                            } catch (err) {
+                              alert('Ошибка при обновлении темы');
+                            }
+                          }}
+                          className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors outline-none"
+                        >
+                          <option value="">Без темы</option>
+                          {Object.entries(MAIN_TOPICS).map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                        </select>
                         
+                        {/* РЕДАКТИРУЕМЫЙ РАЗДЕЛ */}
+                        <select
+                          value={t.section || ''}
+                          onChange={async (e) => {
+                            const newSection = e.target.value;
+                            try {
+                              await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${t.id}`, {
+                                ...t,
+                                section: newSection
+                              });
+                              fetchTasks();
+                            } catch (err) {
+                              alert('Ошибка при обновлении раздела');
+                            }
+                          }}
+                          disabled={!t.topic}
+                          className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg truncate max-w-[200px] cursor-pointer hover:bg-slate-200 transition-colors outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">Без раздела</option>
+                          {t.topic && SECTIONS_BY_TOPIC[t.topic]?.map(section => (
+                            <option key={section} value={section}>{section}</option>
+                          ))}
+                        </select>
+                        
+                        {/* РЕДАКТИРУЕМАЯ СЛОЖНОСТЬ */}
                         <div className={`flex items-center gap-2 px-2 md:px-3 py-1 rounded-xl border ${getDifficultyColor(t.difficulty)}`}>
                           <span className="text-[9px] font-black uppercase tracking-tight">LVL</span>
-                          <span className="text-sm font-black italic leading-none">{t.difficulty}</span>
+                          <select
+                            value={t.difficulty || 1}
+                            onChange={async (e) => {
+                              const newDiff = parseInt(e.target.value);
+                              try {
+                                await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${t.id}`, {
+                                  ...t,
+                                  difficulty: newDiff
+                                });
+                                fetchTasks();
+                              } catch (err) {
+                                alert('Ошибка при обновлении сложности');
+                              }
+                            }}
+                            className="text-sm font-black italic leading-none bg-transparent border-none outline-none cursor-pointer"
+                          >
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
                           <div className="hidden sm:flex gap-0.5 ml-1">
                             {[1, 2, 3, 4, 5].map(step => (
-                              <div key={step} className={`w-1 h-2 rounded-full ${step <= t.difficulty ? 'bg-current' : 'opacity-20 bg-slate-400'}`} />
+                              <div key={step} className={`w-1 h-2 rounded-full ${step <= (t.difficulty || 1) ? 'bg-current' : 'opacity-20 bg-slate-400'}`} />
                             ))}
                           </div>
                         </div>
+                        
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.1em]">
                           {t.is_open_answer ? '• Открытый ответ' : '• Выбор варианта'}
                         </span>
@@ -985,7 +1082,7 @@ const handleTaskSubmit = async (e) => {
                         {t.hint && (
                           <button onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))} 
                             className={`px-3 md:px-5 py-2 md:py-3 rounded-2xl border flex items-center gap-1 md:gap-2 transition-all ${isHintOpen ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-100' : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'}`}>
-                            <PlusCircle size={12} className="md:w-[14px] md:h-[14px]" className={isHintOpen ? 'rotate-0' : 'rotate-45 transition-transform'} />
+                            <PlusCircle size={12} className={`md:w-[14px] md:h-[14px] ${isHintOpen ? 'rotate-0' : 'rotate-45 transition-transform'}`} />
                             <span className="text-[10px] font-black uppercase">Подсказка</span>
                           </button>
                         )}
@@ -1012,6 +1109,7 @@ const handleTaskSubmit = async (e) => {
                         className="flex-1 md:flex-none p-3 md:p-4 bg-white text-slate-400 hover:text-blue-600 rounded-2xl shadow-sm border border-slate-100 active:scale-90 hover:shadow-md transition-all"
                         onClick={() => {
                           setReturnContext({
+                            sourceTab: 'bank',
                             bankClass: bankClass,
                             bankTopic: bankTopic,
                             scrollPosition: window.scrollY
@@ -1043,7 +1141,6 @@ const handleTaskSubmit = async (e) => {
     </main>
   </div>
 )}
-
         {/* ==================== ВКЛАДКА: ПОЛЬЗОВАТЕЛИ ==================== */}
         {activeTab === 'users' && (
           <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
