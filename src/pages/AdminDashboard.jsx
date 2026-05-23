@@ -10,10 +10,11 @@ import {
   Search, Send, Eye, UserX, Image as ImageIcon, 
   ChevronRight, Layers, Trash2, Edit3, CheckCircle2,
   ChevronDown, ChevronUp, MailCheck, ShieldCheck, XCircle,
-  Upload, Loader2, MapPin 
+  Upload, Loader2, MapPin, BookOpen, Library
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
-
+// Выходим из pages, заходим в components
+import { TheoryViewer } from "../components/Theory";
 // ==================== КОНСТАНТЫ ТЕМ И РАЗДЕЛОВ ====================
 const MAIN_TOPICS = {
   'numbers': 'Числа и вычисления',
@@ -39,10 +40,8 @@ const SECTIONS_BY_TOPIC = {
     'Одночлены и многочлены',
     'Рациональная дробь',
     'Дробно-рациональные выражения',
-    'Тригонометрия',
-    'Степенная функция',
-    'Показательная функция',
-    'Логарифмическая функция'
+    'Тригонометрические выражения',
+    'Выражения с рациональными степенями'
   ],
   'equations': [
     'Линейные уравнения и неравенства',
@@ -50,6 +49,7 @@ const SECTIONS_BY_TOPIC = {
     'Системы и совокупности линейных неравенств',
     'Квадратные уравнения',
     'Квадратичные неравенства',
+    'Системы квадратичных неравенств',
     'Дробно-рациональные уравнения',
     'Дробно-рациональные неравенства',
     'Системы нелинейных уравнений',
@@ -57,20 +57,20 @@ const SECTIONS_BY_TOPIC = {
     'Показательные неравенства',
     'Логарифмические уравнения',
     'Логарифмические неравенства',
-    'Текстовые задачи',
-    'ЦЭ 2023',
-    'РЦЭ 2026',
-    'ДРТ 2023',
-    'РТ 1/1',
-    'РТ 1/2',
-    'Комплексный тест 1'
+    'Текстовые задачи'
   ],
   'functions': [
     'Линейные функции',
-    'Функции (8 класс)',
+    'Функции (y = k/x, y = |x|, y = x², y = ∛x)',
     'Квадратичная функция',
-    'Функции (9 класс)',
-    'Производная'
+    'Функции',
+    'Производная',
+    'Показательная функция',
+    'Логарифмическая функция',
+    'Степенная функция',
+    'Тригонометрические функции',
+    'Степенные функции',
+    'Отрезок. Окружность'
   ],
   'geometry': [
     'Основные понятия геометрии',
@@ -78,7 +78,6 @@ const SECTIONS_BY_TOPIC = {
     'Многоугольники. Правильные многоугольники',
     'Четырехугольники: квадрат, прямоугольник, параллелограмм, ромб, трапеция',
     'Круг и окружность',
-    'Отрезок. Окружность',
     'Основы стереометрии',
     'Пространственные фигуры: Призма, Пирамида',
     'Фигуры вращения',
@@ -613,6 +612,98 @@ const handleTaskSubmit = async (e) => {
     return colors[topic] || 'text-slate-500 bg-slate-50 border-slate-100';
   };
 
+    // Состояния для теории
+  const [theoryList, setTheoryList] = useState([]);
+  const [theoryData, setTheoryData] = useState({
+    id: null,
+    topic: '',
+    section: '',
+    content: ''
+  });
+  const [theorySearch, setTheorySearch] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [selectedSection, setSelectedSection] = useState(null);
+  
+  // Fetch теорий
+  const fetchTheory = async () => {
+    try {
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token;
+      const res = await axios.get('https://tests-production-46d5.up.railway.app/admin/theory/getall', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTheoryList(res.data);
+    } catch (e) {
+      console.error("Ошибка загрузки теорий:", e);
+    }
+  };
+  
+  useEffect(() => {
+    fetchTheory();
+  }, []);
+  
+  // Группировка теорий по темам и разделам
+  const groupedTheory = useMemo(() => {
+    return theoryList.reduce((acc, theory) => {
+      if (!acc[theory.topic]) acc[theory.topic] = {};
+      if (!acc[theory.topic][theory.section]) acc[theory.topic][theory.section] = [];
+      acc[theory.topic][theory.section].push(theory);
+      return acc;
+    }, {});
+  }, [theoryList]);
+  
+  const handleTheorySubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token;
+      
+      if (theoryData.id) {
+        await axios.put(`https://tests-production-46d5.up.railway.app/admin/theory/${theoryData.id}`, 
+          { topic: theoryData.topic, section: theoryData.section, content: theoryData.content },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        alert("Теория обновлена!");
+      } else {
+        await axios.post('https://tests-production-46d5.up.railway.app/admin/theory', 
+          { topic: theoryData.topic, section: theoryData.section, content: theoryData.content },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        alert("Теория создана!");
+      }
+      
+      setTheoryData({ id: null, topic: '', section: '', content: '' });
+      fetchTheory();
+    } catch (e) {
+      alert(e.response?.data?.detail || "Ошибка при сохранении");
+    }
+  };
+  
+  const handleDeleteTheory = async (theoryId) => {
+    if (!confirm("Удалить теоретический материал?")) return;
+    try {
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token;
+      await axios.delete(`https://tests-production-46d5.up.railway.app/admin/theory/${theoryId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchTheory();
+    } catch (e) {
+      alert("Ошибка при удалении");
+    }
+  };
+  
+  const filteredTheory = useMemo(() => {
+    if (!selectedTopic) return [];
+    if (!selectedSection) {
+      return Object.keys(groupedTheory[selectedTopic] || {}).map(section => ({
+        section,
+        theories: groupedTheory[selectedTopic][section]
+      }));
+    }
+    return groupedTheory[selectedTopic]?.[selectedSection] || [];
+  }, [groupedTheory, selectedTopic, selectedSection]);
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
       {/* HEADER */}
@@ -636,6 +727,8 @@ const handleTaskSubmit = async (e) => {
             {[
               { id: 'create', icon: PlusCircle, label: 'Создать' },
               { id: 'bank', icon: Database, label: 'Банк' },
+              { id: 'theoryConstructor', icon: BookOpen, label: 'Теория+' },
+              { id: 'theoryBank', icon: Library, label: 'Библиотека' },
               { id: 'users', icon: Users, label: 'Юзеры' },
               { id: 'access', icon: ShieldCheck, label: 'Доступ' }
             ].map(tab => (
@@ -1141,6 +1234,240 @@ const handleTaskSubmit = async (e) => {
     </main>
   </div>
 )}
+
+{/* ==================== КОНСТРУКТОР ТЕОРИИ ==================== */}
+      {activeTab === 'theoryConstructor' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-black text-slate-800 uppercase italic">
+                {theoryData.id ? `Редактор теории #${theoryData.id}` : 'Конструктор теории'}
+              </h2>
+            </div>
+            
+            <form onSubmit={handleTheorySubmit} className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block space-y-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Тема</span>
+                  <select
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm"
+                    value={theoryData.topic}
+                    onChange={e => setTheoryData({ ...theoryData, topic: e.target.value, section: '' })}
+                    required
+                  >
+                    <option value="">— Выберите тему —</option>
+                    {Object.entries(MAIN_TOPICS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                
+                <label className="block space-y-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Раздел</span>
+                  <select
+                    className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm"
+                    value={theoryData.section}
+                    onChange={e => setTheoryData({ ...theoryData, section: e.target.value })}
+                    disabled={!theoryData.topic}
+                    required
+                  >
+                    <option value="">— Выберите раздел —</option>
+                    {theoryData.topic && SECTIONS_BY_TOPIC[theoryData.topic]?.map(section => (
+                      <option key={section} value={section}>{section}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              
+              <label className="block space-y-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Содержание (Markdown + MDX компоненты)</span>
+                <ImageAwareTextarea
+                  value={theoryData.content}
+                  onChange={(value) => setTheoryData({ ...theoryData, content: value })}
+                  placeholder={`# Заголовок
+
+<LessonSection title="Основные понятия">
+  
+  <Definition>
+    Здесь будет определение...
+  </Definition>
+  
+  <Example>
+    Пример использования...
+  </Example>
+  
+  <Explanation>
+    Пояснение к материалу...
+  </Explanation>
+
+</LessonSection>`}
+                  className="w-full p-6 bg-slate-50 border-none rounded-[2rem] min-h-[400px] font-mono text-sm resize-y"
+                  rows={15}
+                />
+              </label>
+              
+              <button 
+                type="submit"
+                className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3"
+              >
+                <Send size={20} /> {theoryData.id ? 'ОБНОВИТЬ ТЕОРИЮ' : 'СОЗДАТЬ ТЕОРИЮ'}
+              </button>
+            </form>
+          </div>
+          
+          <div className="space-y-6 sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">ПРЕДПРОСМОТР ТЕОРИИ</h3>
+              <TheoryViewer content={theoryData.content} />
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* ==================== БИБЛИОТЕКА ТЕОРИИ (БАНК) ==================== */}
+      {activeTab === 'theoryBank' && (
+        <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
+          <aside className="w-full md:w-80 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-8 flex flex-col gap-6 md:gap-8">
+            <div>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 md:mb-4 italic">Темы</h3>
+              <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
+                {Object.entries(MAIN_TOPICS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => { setSelectedTopic(key); setSelectedSection(null); }}
+                    className={`shrink-0 md:shrink p-3 md:p-4 rounded-2xl text-left font-black text-xs transition-all ${
+                      selectedTopic === key ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-500 border border-slate-100'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {selectedTopic && groupedTheory[selectedTopic] && (
+              <div>
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 md:mb-4 italic">Разделы</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.keys(groupedTheory[selectedTopic]).map(section => (
+                    <button
+                      key={section}
+                      onClick={() => setSelectedSection(selectedSection === section ? null : section)}
+                      className={`p-3 rounded-xl font-black text-[10px] transition-all text-left ${
+                        selectedSection === section ? 'bg-slate-800 text-white' : 'bg-slate-200/50 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      {section}
+                      <span className="ml-2 text-[8px] opacity-70">
+                        ({groupedTheory[selectedTopic][section].length})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </aside>
+          
+          <main className="flex-1 p-4 md:p-10 overflow-y-auto">
+            {!selectedTopic ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300 italic font-black text-xs tracking-widest gap-4 py-20">
+                <BookOpen size={48} className="opacity-10" /> Выберите тему
+              </div>
+            ) : !selectedSection ? (
+              <div className="space-y-6">
+                {filteredTheory.map(({ section, theories }) => (
+                  <div key={section} className="border-b border-slate-100 pb-6">
+                    <h3 className="text-xl font-black text-slate-800 mb-4">{section}</h3>
+                    <div className="grid gap-4">
+                      {theories.map(theory => (
+                        <div key={theory.id} className="p-6 bg-slate-50 rounded-2xl hover:shadow-lg transition-all">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex gap-2">
+                              <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                                ID: {theory.id}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setTheoryData(theory);
+                                  setActiveTab('theoryConstructor');
+                                }}
+                                className="p-2 bg-white rounded-xl text-slate-400 hover:text-blue-600 transition-all"
+                              >
+                                <Edit3 size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTheory(theory.id)}
+                                className="p-2 bg-white rounded-xl text-slate-400 hover:text-red-500 transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="[&_.max-w-3xl]:max-w-full [&_.max-w-3xl]:w-full [&_.mx-auto]:ml-0 [&_.mx-auto]:mr-0">
+  <TheoryViewer content={theory.content} />
+</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-black text-slate-800 uppercase italic">
+                    {selectedSection}
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setTheoryData({ id: null, topic: selectedTopic, section: selectedSection, content: '' });
+                      setActiveTab('theoryConstructor');
+                    }}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase hover:bg-blue-700 transition-all flex items-center gap-2"
+                  >
+                    <PlusCircle size={16} /> Добавить теорию
+                  </button>
+                </div>
+                
+                {filteredTheory.map(theory => (
+                  <div key={theory.id} className="p-8 bg-slate-50 rounded-[2rem] hover:shadow-xl transition-all">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex gap-2">
+                        <span className="text-[10px] font-black text-blue-600 bg-blue-100 px-3 py-1.5 rounded-full">
+                          Версия {theory.id}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setTheoryData(theory);
+                            setActiveTab('theoryConstructor');
+                          }}
+                          className="p-3 bg-white rounded-xl text-slate-400 hover:text-blue-600 transition-all shadow-sm"
+                        >
+                          <Edit3 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTheory(theory.id)}
+                          className="p-3 bg-white rounded-xl text-slate-400 hover:text-red-500 transition-all shadow-sm"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="[&_.max-w-3xl]:max-w-full [&_.max-w-3xl]:w-full [&_.mx-auto]:ml-0 [&_.mx-auto]:mr-0">
+  <TheoryViewer content={theory.content} />
+</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+        </div>
+      )}
+      
         {/* ==================== ВКЛАДКА: ПОЛЬЗОВАТЕЛИ ==================== */}
         {activeTab === 'users' && (
           <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">

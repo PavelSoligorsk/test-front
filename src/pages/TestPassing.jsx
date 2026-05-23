@@ -257,15 +257,38 @@ export default function TestPassing() {
 
         if (!isMounted) return;
 
+          // Логируем ДО
+  console.log('=== ДО СОРТИРОВКИ ===');
+  console.log(res.data.tasks.map((t, i) => ({
+    position: i,
+    id: t.id,
+    is_open_answer: t.is_open_answer,
+    difficulty: t.difficulty
+  })));
+
+   
+
         if (res.data && res.data.tasks) {
           res.data.tasks.sort((a, b) => {
-            if (a.id !== b.id) return a.id - b.id;
-            const aTypeWeight = a.options ? 0 : 1;
-            const bTypeWeight = b.options ? 0 : 1;
-            if (aTypeWeight !== bTypeWeight) return aTypeWeight - bTypeWeight;
-            return (a.difficulty || 0) - (b.difficulty || 0);
-          });
+  // Сначала группируем: открытые ответы после тестов
+  if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+  
+  // Внутри группы (сначала задачи с вариантами, потом открытые) - по ID
+  if (a.id !== b.id) return a.id - b.id;
+  
+  // При одинаковых ID - по сложности
+  return (a.difficulty || 0) - (b.difficulty || 0);
+});
         }
+
+         // Логируем ПОСЛЕ
+  console.log('=== ПОСЛЕ СОРТИРОВКИ ===');
+  console.log(res.data.tasks.map((t, i) => ({
+    position: i,
+    id: t.id,
+    is_open_answer: t.is_open_answer,
+    difficulty: t.difficulty
+  })));
 
         setTest(res.data);
 

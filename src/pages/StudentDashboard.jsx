@@ -24,9 +24,10 @@ import {
   XCircle,
   Filter,
   ChevronRight,
-  Hash
+  Hash, Library, BookOpen as BookIcon
 } from 'lucide-react';
 import axios from 'axios';
+import { TheoryViewer } from '../components/Theory'; // путь к вашему TheoryViewer
 
 // ==================== КОМПОНЕНТ: КАРТОЧКА ТЕСТА ====================
 const TestCard = ({ test, type, onStart, disabled }) => {
@@ -167,6 +168,50 @@ const TestCard = ({ test, type, onStart, disabled }) => {
   );
 };
 
+// ==================== КОМПОНЕНТ: КАРТОЧКА ТЕМЫ ====================
+const TopicCard = ({ topic, onClick }) => {
+  const getTopicStyles = (topicKey) => {
+    const styles = {
+      'numbers': { gradient: 'from-orange-500 to-red-500', icon: '🔢', label: 'Числа и вычисления' },
+      'expressions': { gradient: 'from-purple-500 to-pink-500', icon: '📝', label: 'Выражения' },
+      'equations': { gradient: 'from-blue-500 to-cyan-500', icon: '⚖️', label: 'Уравнения' },
+      'functions': { gradient: 'from-emerald-500 to-teal-500', icon: '📈', label: 'Функции' },
+      'geometry': { gradient: 'from-rose-500 to-orange-500', icon: '📐', label: 'Геометрия' }
+    };
+    return styles[topicKey] || { gradient: 'from-slate-500 to-slate-600', icon: '📚', label: topic.label };
+  };
+
+  const styles = getTopicStyles(topic.topic);
+
+  return (
+    <button
+      onClick={() => onClick(topic)}
+      className="group relative bg-white rounded-[2rem] border-2 border-slate-100 hover:border-slate-200 hover:shadow-xl transition-all overflow-hidden text-left w-full"
+    >
+      <div className={`h-1.5 bg-gradient-to-r ${styles.gradient}`} />
+      <div className="p-6">
+        <div className="flex items-center gap-4 mb-4">
+          <div className={`w-12 h-12 bg-gradient-to-br ${styles.gradient} rounded-xl flex items-center justify-center text-white shadow-lg text-2xl`}>
+            {styles.icon}
+          </div>
+          <div className="flex-1">
+            <h3 className="font-black text-slate-800 text-sm uppercase">
+              {topic.label}
+            </h3>
+            <p className="text-[9px] font-bold text-slate-400 mt-1">
+              {topic.sections_count} разделов
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+          <span className="text-[9px] font-black uppercase text-slate-400">Изучить</span>
+          <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+        </div>
+      </div>
+    </button>
+  );
+};
+
 // ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -180,6 +225,14 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('tests');
   const [testTypeFilter, setTestTypeFilter] = useState('all');
+  // После существующих состояний
+const [theoryTopics, setTheoryTopics] = useState([]);
+const [selectedTopic, setSelectedTopic] = useState(null);
+const [selectedSection, setSelectedSection] = useState(null);
+const [theoryContent, setTheoryContent] = useState(null);
+const [theoryLoading, setTheoryLoading] = useState(false);
+const [showSectionModal, setShowSectionModal] = useState(false);
+const [sectionsForModal, setSectionsForModal] = useState([]);
   
   // Иерархия: класс → тема
   const [selectedClass, setSelectedClass] = useState(null);
@@ -329,6 +382,75 @@ export default function StudentDashboard() {
     }
   };
 
+  // После существующих функций
+
+const fetchTheoryTopics = async () => {
+  try {
+    const { token } = JSON.parse(localStorage.getItem('edu_session'));
+    const res = await axios.get('https://tests-production-46d5.up.railway.app/student/theory/topics', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setTheoryTopics(res.data);
+  } catch (err) {
+    console.error('Ошибка загрузки тем:', err);
+  }
+};
+
+const fetchTheorySections = async (topic) => {
+  try {
+    const { token } = JSON.parse(localStorage.getItem('edu_session'));
+    const res = await axios.get(`https://tests-production-46d5.up.railway.app/student/theory/sections/${topic}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return res.data;
+  } catch (err) {
+    console.error('Ошибка загрузки разделов:', err);
+    return [];
+  }
+};
+
+const fetchTheoryByTopicSection = async (topic, section) => {
+  setTheoryLoading(true);
+  try {
+    const { token } = JSON.parse(localStorage.getItem('edu_session'));
+    const res = await axios.get(`https://tests-production-46d5.up.railway.app/student/theory/by-topic/${topic}/section/${section}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setTheoryContent(res.data);
+    setSelectedTopic(topic);
+    setSelectedSection(section);
+  } catch (err) {
+    console.error('Ошибка загрузки теории:', err);
+    setTheoryContent(null);
+  } finally {
+    setTheoryLoading(false);
+  }
+};
+
+const handleTopicClick = async (topic) => {
+  const sections = await fetchTheorySections(topic.topic);
+  if (sections.length === 1) {
+    fetchTheoryByTopicSection(topic.topic, sections[0].section);
+  } else if (sections.length > 1) {
+    setSectionsForModal(sections);
+    setSelectedTopic(topic);
+    setShowSectionModal(true);
+  }
+};
+
+const handleBackToTopics = () => {
+  setSelectedSection(null);
+  setTheoryContent(null);
+  setSelectedTopic(null);
+};
+
+// Добавьте в существующий useEffect или создайте новый
+useEffect(() => {
+  if (activeTab === 'theory') {
+    fetchTheoryTopics();
+  }
+}, [activeTab]);
+
   // ==================== ЛОГИКА ИЕРАРХИИ ====================
   
   // 1. Общие тесты = только autocompile (is_autocompile !== false)
@@ -427,24 +549,24 @@ export default function StudentDashboard() {
           </div>
           
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100">
-            {['tests', 'history', 'profile'].map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`relative px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
-                  activeTab === tab 
-                    ? 'text-white' 
-                    : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'
-                }`}
-              >
-                {activeTab === tab && (
-                  <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300"></div>
-                )}
-                <span className="relative z-10 whitespace-nowrap">
-                  {tab === 'tests' ? 'Тесты' : tab === 'history' ? 'История' : 'Профиль'}
-                </span>
-              </button>
-            ))}
+            {['theory', 'tests', 'history', 'profile'].map((tab) => (
+  <button 
+    key={tab}
+    onClick={() => setActiveTab(tab)}
+    className={`relative px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+      activeTab === tab 
+        ? 'text-white' 
+        : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'
+    }`}
+  >
+    {activeTab === tab && (
+      <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300"></div>
+    )}
+    <span className="relative z-10 whitespace-nowrap">
+      {tab === 'theory' ? 'Теория' : tab === 'tests' ? 'Тесты' : tab === 'history' ? 'История' : 'Профиль'}
+    </span>
+  </button>
+))}
           </div>
         </div>
       </nav>
@@ -666,7 +788,7 @@ export default function StudentDashboard() {
                 <thead>
                   <tr className="bg-slate-50/50">
                     <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Тест</th>
-                    <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Балл %</th>
+                    <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Балл</th>
                     <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Дата</th>
                   </tr>
                 </thead>
@@ -681,7 +803,7 @@ export default function StudentDashboard() {
                         {res.test_title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}
                       </td>
                       <td className="px-6 md:px-8 py-5 text-center font-black italic text-lg text-blue-600">
-                        {res.total_points}%
+                        {res.total_points}
                       </td>
                       <td className="px-6 md:px-8 py-5 text-[10px] font-bold text-slate-400 uppercase">
                         <div className="flex items-center gap-2">
@@ -811,6 +933,135 @@ export default function StudentDashboard() {
           </div>
         )}
 
+{/* ==================== ВКЛАДКА: ТЕОРИЯ ==================== */}
+{activeTab === 'theory' && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+    
+    {/* Верхняя панель */}
+    <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+          <Library size={20} className="text-white" />
+        </div>
+        <div>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+            Теоретический материал
+          </h2>
+        </div>
+      </div>
+    </div>
+
+    {/* Если выбран раздел - показываем контент */}
+    {selectedSection && theoryContent ? (
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-4 md:p-6">
+          {theoryLoading ? (
+            <div className="flex justify-center py-20">
+              <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+            </div>
+          ) : (
+            <TheoryViewer content={theoryContent.content} isFullWidth={false} />
+          )}
+        </div>
+      </div>
+    ) : (
+      <>
+        {/* 5 кнопок: 3 сверху, 2 снизу */}
+        {theoryTopics.length > 0 && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {theoryTopics.slice(0, 3).map((topic) => (
+                <TopicCard
+                  key={topic.topic}
+                  topic={topic}
+                  onClick={handleTopicClick}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {theoryTopics.slice(3, 5).map((topic) => (
+                <TopicCard
+                  key={topic.topic}
+                  topic={topic}
+                  onClick={handleTopicClick}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Если нет тем */}
+        {theoryTopics.length === 0 && !theoryLoading && (
+          <div className="bg-white rounded-[2.5rem] p-12 text-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
+              <Library size={40} className="text-slate-300" />
+            </div>
+            <p className="font-black text-slate-400 uppercase">Теория пока не добавлена</p>
+          </div>
+        )}
+      </>
+    )}
+
+    {/* Модальное окно выбора раздела */}
+    {showSectionModal && selectedTopic && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-black uppercase">Выберите раздел</h3>
+              </div>
+              <button 
+                onClick={() => setShowSectionModal(false)}
+                className="p-2 hover:bg-white/10 rounded-xl transition-all"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+          </div>
+          <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+            {sectionsForModal.map((section) => (
+              <button
+                key={section.section}
+                onClick={() => {
+                  fetchTheoryByTopicSection(selectedTopic.topic, section.section);
+                  setShowSectionModal(false);
+                }}
+                className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all font-bold text-slate-700"
+              >
+                {section.section}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+{/* ========== ПЛАВАЮЩАЯ КНОПКА "НАЗАД" (снизу слева) ========== */}
+{selectedSection && theoryContent && (
+  <button
+    onClick={handleBackToTopics}
+    className="fixed bottom-6 left-6 z-50 w-12 h-12 md:w-14 md:h-14 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-slate-800 transition-all active:scale-95 group"
+    title="Назад"
+  >
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+      className="group-hover:-translate-x-0.5 transition-transform"
+    >
+      <path d="m15 18-6-6 6-6"/>
+    </svg>
+  </button>
+)}
       </main>
 
       {/* ==================== МОДАЛЬНОЕ ОКНО AI ГЕНЕРАЦИИ ==================== */}
@@ -920,6 +1171,8 @@ export default function StudentDashboard() {
           </div>
         </div>
       )}
+
+
     </div>
   );
 }

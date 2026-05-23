@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>GeoGebra 3D Test</title>
+    <script src="https://www.geogebra.org/apps/deployggb.js"></script>
+</head>
+<body>
+
+    <div id="ggb3d" style="width:800px; height:600px;"></div>
+    
+    <div style="margin-top:10px;">
+        <button onclick="addCube()">Куб</button>
+        <button onclick="addPyramid()">Пирамида</button>
+        <button onclick="addCylinder()">Цилиндр</button>
+        <button onclick="addCone()">Конус</button>
+        <button onclick="addSphere()">Сфера</button>
+        <button onclick="addTetrahedron()">Тетраэдр</button>
+        <button onclick="addCrossSection()">Сечение</button>
+        <button onclick="animateRotation()">Вращать</button>
+        <button onclick="stopRotation()">Стоп</button>
+        <button onclick="explodeView()">Развертка</button>
+        <button onclick="resetAll()">Сброс</button>
+    </div>
+
+    <div id="info" style="margin-top:10px; font-family:monospace;"></div>
+
+    <script>
+        let api;
+        let animationRunning = false;
+
+        const params = {
+            "appName": "3d",
+            "width": 800,
+            "height": 600,
+            "showToolBar": true,
+            "showAlgebraInput": true,
+            "showMenuBar": true,
+            "appletOnLoad": function(ggbApi) {
+                api = ggbApi;
+                log("API загружен, можно работать");
+            }
+        };
+
+        const ggbApplet = new GGBApplet(params);
+        ggbApplet.inject('ggb3d');
+
+        function log(msg) {
+            document.getElementById('info').innerHTML += msg + "<br>";
+        }
+
+        function addCube() {
+            api.evalCommand("Cube((0,0,0), (2,0,0), (2,2,0))");
+            log("Куб создан");
+        }
+
+        function addPyramid() {
+            api.evalCommand("Pyramid((0,0,0), (3,0,0), (3,3,0), (1.5,1.5,4))");
+            log("Пирамида создана");
+        }
+
+        function addCylinder() {
+            api.evalCommand("Cylinder((0,0,0), (0,0,4), 2)");
+            log("Цилиндр создан");
+        }
+
+        function addCone() {
+            api.evalCommand("Cone((0,0,0), (0,0,5), 2)");
+            log("Конус создан");
+        }
+
+        function addSphere() {
+            api.evalCommand("Sphere((0,0,2), 2)");
+            log("Сфера создана");
+        }
+
+        function addTetrahedron() {
+            api.evalCommand("Tetrahedron((0,0,0), (2,0,0), (1,2,0), (1,0.5,3))");
+            log("Тетраэдр создан");
+        }
+
+        function addCrossSection() {
+            // Создаем куб и секущую плоскость
+            api.evalCommand("Cube(A, B, C)");
+            api.evalCommand("D = (0.5, 0.5, 0)");
+            api.evalCommand("E = (1.5, 1.5, 2)");
+            api.evalCommand("Plane(D, E, (0,1,1))");
+            log("Сечение куба создано");
+        }
+
+        function animateRotation() {
+            if (!animationRunning) {
+                // Вращаем вид
+                api.evalCommand("Slider(alpha, 0, 360, 1)");
+                api.setAnimating('alpha', true);
+                api.startAnimation();
+                animationRunning = true;
+                log("Вращение запущено");
+            }
+        }
+
+        function stopRotation() {
+            api.stopAnimation();
+            animationRunning = false;
+            log("Вращение остановлено");
+        }
+
+        function explodeView() {
+            // Раздвигаем все объекты
+            api.evalCommand('Execute(Sequence("Translate(" + ObjectName + ", Vector((RandomBetween(-2,2), RandomBetween(-2,2), RandomBetween(-2,2))))", "ObjectName", GetAllObjects()))');
+            log("Объекты раздвинуты");
+        }
+
+        function resetAll() {
+            api.newConstruction();
+            api.setCoordSystem(-5, 5, -5, 5, -5, 5);
+            log("Сцена сброшена");
+        }
+    </script>
+
+</body>
+</html>
