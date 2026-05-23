@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { TheoryViewer } from '../components/Theory'; // путь к вашему TheoryViewer
+import TheoryAIChat from '../components/TheoryAIChat';
 
 // ==================== КОМПОНЕНТ: КАРТОЧКА ТЕСТА ====================
 const TestCard = ({ test, type, onStart, disabled }) => {
@@ -1036,6 +1037,17 @@ useEffect(() => {
         </div>
       </div>
     )}
+
+    {/* AI Чат (показываем только когда выбран раздел) */}
+    {selectedSection && theoryContent && (
+      <TheoryAIChat 
+        theoryContent={theoryContent.content}
+        topic={selectedTopic?.label || selectedTopic?.topic}
+        section={selectedSection}
+        theoryId={theoryContent?.id}
+      />
+    )}
+
   </div>
 )}
 

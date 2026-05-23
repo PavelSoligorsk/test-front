@@ -119,7 +119,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
 
-  // Парсинг MDX структуры
+ // Парсинг MDX структуры
 useEffect(() => {
   const parseContent = () => {
     const sections = [];
@@ -129,13 +129,6 @@ useEffect(() => {
     while ((match = sectionRegex.exec(content)) !== null) {
       const [, id, title, sectionContent] = match;
       const isHard = match[0].includes('isHard');
-      
-      // Парсим содержимое секции, разбивая на части
-      const defs = [];
-      const exs = [];
-      const explanations = [];
-      let lastIndex = 0;
-      let currentPosition = 0;
       
       // Ищем все теги в порядке их появления
       const allTags = [];
@@ -179,8 +172,8 @@ useEffect(() => {
       // Сортируем по индексу появления
       allTags.sort((a, b) => a.index - b.index);
       
-      // Собираем rawText (текст между тегами)
-      let rawTextParts = [];
+      // Собираем текст между тегами и формируем orderedBlocks
+      const orderedBlocks = [];
       let pointer = 0;
       
       for (const tag of allTags) {
@@ -188,9 +181,13 @@ useEffect(() => {
         if (tag.index > pointer) {
           const betweenText = sectionContent.substring(pointer, tag.index).trim();
           if (betweenText) {
-            rawTextParts.push(betweenText);
+            orderedBlocks.push({ type: 'text', content: betweenText });
           }
         }
+        
+        // Сам тег
+        orderedBlocks.push(tag);
+        
         pointer = tag.endIndex;
       }
       
@@ -198,22 +195,29 @@ useEffect(() => {
       if (pointer < sectionContent.length) {
         const afterText = sectionContent.substring(pointer).trim();
         if (afterText) {
-          rawTextParts.push(afterText);
+          orderedBlocks.push({ type: 'text', content: afterText });
+        }
+      }
+      
+      // Раскладываем по старым массивам для обратной совместимости
+      const defs = [];
+      const exs = [];
+      const explanations = [];
+      const rawTextParts = [];
+      
+      for (const block of orderedBlocks) {
+        if (block.type === 'text') {
+          rawTextParts.push(block.content);
+        } else if (block.type === 'def') {
+          defs.push({ title: block.title, content: block.content });
+        } else if (block.type === 'ex') {
+          exs.push({ title: block.title, content: block.content, isHard: block.isHard });
+        } else if (block.type === 'explanation') {
+          explanations.push(block.content);
         }
       }
       
       const rawContent = rawTextParts.join('\n\n');
-      
-      // Сортируем блоки по типу
-      for (const tag of allTags) {
-        if (tag.type === 'def') {
-          defs.push({ title: tag.title, content: tag.content });
-        } else if (tag.type === 'ex') {
-          exs.push({ title: tag.title, content: tag.content, isHard: tag.isHard });
-        } else if (tag.type === 'explanation') {
-          explanations.push(tag.content);
-        }
-      }
       
       sections.push({ 
         id, 
@@ -222,7 +226,8 @@ useEffect(() => {
         defs, 
         exs, 
         explanations, 
-        rawContent  // теперь это только текст ВНЕ тегов
+        rawContent,
+        orderedBlocks  // ← новый ключ с правильным порядком
       });
     }
     setComponents(sections);
@@ -289,47 +294,83 @@ useEffect(() => {
          {components.map((section, idx) => (
   <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
     
-    {/* Сначала рендерим rawContent (изображения и текст между блоками) */}
-    {section.rawContent && (
-      <ReactMarkdown 
-        remarkPlugins={[remarkMath, remarkGfm]} 
-        rehypePlugins={[rehypeKatex]} 
-        components={markdownComponents}
-      >
-        {section.rawContent}
-      </ReactMarkdown>
+    {/* Если есть orderedBlocks — рендерим по порядку */}
+    {section.orderedBlocks ? (
+      section.orderedBlocks.map((block, bidx) => {
+        if (block.type === 'text') {
+          return (
+            <ReactMarkdown 
+              key={bidx}
+              remarkPlugins={[remarkMath, remarkGfm]} 
+              rehypePlugins={[rehypeKatex]} 
+              components={markdownComponents}
+            >
+              {block.content}
+            </ReactMarkdown>
+          );
+        }
+        if (block.type === 'def') {
+          return (
+            <Def key={bidx} title={block.title}>
+              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                {block.content}
+              </ReactMarkdown>
+            </Def>
+          );
+        }
+        if (block.type === 'ex') {
+          return (
+            <Ex key={bidx} title={block.title} isHard={block.isHard}>
+              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                {block.content}
+              </ReactMarkdown>
+            </Ex>
+          );
+        }
+        if (block.type === 'explanation') {
+          return (
+            <Explanation key={bidx}>
+              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                {block.content}
+              </ReactMarkdown>
+            </Explanation>
+          );
+        }
+        return null;
+      })
+    ) : (
+      // Фолбэк — старый порядок
+      <>
+        {section.rawContent && (
+          <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+            {section.rawContent}
+          </ReactMarkdown>
+        )}
+        {section.defs.map((def, didx) => (
+          <Def key={didx} title={def.title}>
+            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+              {def.content}
+            </ReactMarkdown>
+          </Def>
+        ))}
+        {section.exs.map((ex, eidx) => (
+          <Ex key={eidx} title={ex.title} isHard={ex.isHard}>
+            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+              {ex.content}
+            </ReactMarkdown>
+          </Ex>
+        ))}
+        {section.explanations.map((exp, xidx) => (
+          <Explanation key={xidx}>
+            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+              {exp}
+            </ReactMarkdown>
+          </Explanation>
+        ))}
+      </>
     )}
-    
-    {/* Потом определения */}
-    {section.defs.map((def, didx) => (
-      <Def key={didx} title={def.title}>
-        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-          {def.content}
-        </ReactMarkdown>
-      </Def>
-    ))}
-    
-    {/* Потом примеры */}
-    {section.exs.map((ex, eidx) => (
-      <Ex key={eidx} title={ex.title} isHard={ex.isHard}>
-        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-          {ex.content}
-        </ReactMarkdown>
-      </Ex>
-    ))}
-    
-    {/* Потом пояснения */}
-    {section.explanations.map((exp, xidx) => (
-      <Explanation key={xidx}>
-        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-          {exp}
-        </ReactMarkdown>
-      </Explanation>
-    ))}
-    
   </SectionBlock>
-))}
-          
+))} 
           {components.length === 0 && (
             <div className="dynamic-markdown">
               <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
