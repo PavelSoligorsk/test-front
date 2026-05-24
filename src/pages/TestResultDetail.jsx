@@ -310,6 +310,7 @@ const AISolutionPreview = ({ data, isLoading = false, error = null, onClose = nu
     </div>
   );
 };
+
 // Компонент для рендеринга Markdown
 const MarkdownRenderer = ({ children, className = "" }) => {
   return (

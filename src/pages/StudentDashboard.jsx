@@ -356,33 +356,37 @@ const [sectionsForModal, setSectionsForModal] = useState([]);
   };
 
   const handleGenerateAiTest = async () => {
-    if (!aiPrompt.trim()) return;
+  if (!aiPrompt.trim()) return;
+  
+  setAiGenerating(true);
+  try {
+    const { token } = JSON.parse(localStorage.getItem('edu_session'));
+    const res = await axios.post(
+      'https://tests-production-46d5.up.railway.app/student/generate-test',
+      { 
+        prompt: aiPrompt,
+        task_count: parseInt(aiTaskCount),
+        difficulty: aiDifficulty,
+        target_class: selectedClass !== 'Все' ? selectedClass : null
+      },
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
     
-    setAiGenerating(true);
-    try {
-      const { token } = JSON.parse(localStorage.getItem('edu_session'));
-      const res = await axios.post(
-        'https://tests-production-46d5.up.railway.app/student/generate-test',
-        { 
-          prompt: aiPrompt,
-          task_count: parseInt(aiTaskCount),
-          difficulty: aiDifficulty
-        },
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      
-      setAiTests(prev => [res.data, ...prev]);
-      setShowAiModal(false);
-      setAiPrompt('');
-      alert('AI тест сгенерирован!');
-    } catch (err) {
-      console.error('Ошибка генерации:', err);
-      alert('Не удалось сгенерировать тест. Попробуйте позже.');
-    } finally {
-      setAiGenerating(false);
-    }
-  };
-
+    // Закрываем модалку
+    setShowAiModal(false);
+    setAiPrompt('');
+    
+    // Редиректим на тест
+    const newTest = res.data;
+    navigate(`/test/${newTest.id}?type=ai`);
+    
+  } catch (err) {
+    console.error('Ошибка генерации:', err);
+    alert('Не удалось сгенерировать тест. Попробуйте другой запрос.');
+  } finally {
+    setAiGenerating(false);
+  }
+};
   // После существующих функций
 
 const fetchTheoryTopics = async () => {
