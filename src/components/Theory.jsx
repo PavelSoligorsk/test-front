@@ -97,7 +97,7 @@ const markdownComponents = {
   <img 
     src={src} 
     alt={alt} 
-    className="max-w-full lg:w-3/4 h-auto my-6 block rounded-lg border border-slate-100 mx-auto shadow-sm" 
+    className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-100 mx-auto shadow-sm" 
   />
 ),
   table: ({ children }) => (
