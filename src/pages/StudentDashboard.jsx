@@ -965,34 +965,23 @@ useEffect(() => {
               <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
             </div>
           ) : (
-            <TheoryViewer content={theoryContent.content} isFullWidth={false} />
+            <TheoryViewer content={theoryContent.content} />
           )}
         </div>
       </div>
     ) : (
       <>
-        {/* 5 кнопок: 3 сверху, 2 снизу */}
+        {/* Сетка 3 колонки, сколько строк получится */}
         {theoryTopics.length > 0 && (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {theoryTopics.slice(0, 3).map((topic) => (
-                <TopicCard
-                  key={topic.topic}
-                  topic={topic}
-                  onClick={handleTopicClick}
-                />
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {theoryTopics.slice(3, 5).map((topic) => (
-                <TopicCard
-                  key={topic.topic}
-                  topic={topic}
-                  onClick={handleTopicClick}
-                />
-              ))}
-            </div>
-          </>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {theoryTopics.map((topic) => (
+              <TopicCard
+                key={topic.topic}
+                topic={topic}
+                onClick={handleTopicClick}
+              />
+            ))}
+          </div>
         )}
 
         {/* Если нет тем */}
@@ -1005,41 +994,6 @@ useEffect(() => {
           </div>
         )}
       </>
-    )}
-
-    {/* Модальное окно выбора раздела */}
-    {showSectionModal && selectedTopic && (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-xl font-black uppercase">Выберите раздел</h3>
-              </div>
-              <button 
-                onClick={() => setShowSectionModal(false)}
-                className="p-2 hover:bg-white/10 rounded-xl transition-all"
-              >
-                <XCircle size={20} />
-              </button>
-            </div>
-          </div>
-          <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
-            {sectionsForModal.map((section) => (
-              <button
-                key={section.section}
-                onClick={() => {
-                  fetchTheoryByTopicSection(selectedTopic.topic, section.section);
-                  setShowSectionModal(false);
-                }}
-                className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all font-bold text-slate-700"
-              >
-                {section.section}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
     )}
 
     {/* AI Чат (показываем только когда выбран раздел) */}
@@ -1188,6 +1142,44 @@ useEffect(() => {
             </>
           )}
         </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Модальное окно для выбора раздела (подтемы) - ДОБАВИТЬ СЮДА */}
+{showSectionModal && selectedTopic && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-xl font-black uppercase">Выберите раздел</h3>
+            <p className="text-blue-100 text-[10px] font-bold uppercase mt-1">
+              {selectedTopic.label}
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowSectionModal(false)}
+            className="p-2 hover:bg-white/10 rounded-xl transition-all"
+          >
+            <XCircle size={20} />
+          </button>
+        </div>
+      </div>
+      <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+        {sectionsForModal.map((section) => (
+          <button
+            key={section.section}
+            onClick={() => {
+              fetchTheoryByTopicSection(selectedTopic.topic, section.section);
+              setShowSectionModal(false);
+            }}
+            className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all font-bold text-slate-700"
+          >
+            {section.section}
+          </button>
+        ))}
       </div>
     </div>
   </div>
