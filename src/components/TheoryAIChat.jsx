@@ -26,7 +26,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 
-// ==================== Markdown Renderer ====================
+// ==================== Markdown Renderer (обновленный) ====================
 const MarkdownBlock = ({ children }) => {
   if (!children) return null;
   
@@ -34,15 +34,14 @@ const MarkdownBlock = ({ children }) => {
   const processContent = (content) => {
     if (typeof content !== 'string') return content;
     
-    // Исправляем двойные доллары, которые могли быть экранированы
     let processed = content
-      .replace(/\\\\\\$\\$/g, '$$')  // Исправляем тройное экранирование
-      .replace(/\\\\\$/g, '$')        // Исправляем двойное экранирование
-      .replace(/\\\$/g, '$')          // Исправляем одиночное экранирование
-      .replace(/\\\[/g, '$$')         // Заменяем \[ на $$
-      .replace(/\\\]/g, '$$')         // Заменяем \] на $$
-      .replace(/\\\(/g, '$')          // Заменяем \( на $
-      .replace(/\\\)/g, '$');         // Заменяем \) на $
+      .replace(/\\\\\\$\\$/g, '$$')
+      .replace(/\\\\\$/g, '$')
+      .replace(/\\\$/g, '$')
+      .replace(/\\\[/g, '$$')
+      .replace(/\\\]/g, '$$')
+      .replace(/\\\(/g, '$')
+      .replace(/\\\)/g, '$');
     
     return processed;
   };
@@ -51,90 +50,442 @@ const MarkdownBlock = ({ children }) => {
     ? processContent(children) 
     : children;
 
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkMath, remarkGfm]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        p: ({ children, ...props }) => (
-          <p className="mb-3 last:mb-0 text-left whitespace-normal break-words" {...props}>
-            {children}
-          </p>
-        ),
-        strong: ({ children, ...props }) => (
-          <strong className="font-bold text-slate-900" {...props}>{children}</strong>
-        ),
-        em: ({ children, ...props }) => (
-          <em className="italic" {...props}>{children}</em>
-        ),
-        img: ({ src, alt, ...props }) => (
-          <div className="my-4 overflow-hidden rounded-2xl bg-slate-100">
-            <img 
-              src={src} 
-              alt={alt || ''} 
-              className="w-full h-auto object-contain max-h-[300px]" 
-              loading="lazy" 
-              {...props}
-            />
-          </div>
-        ),
-        code: ({ inline, className, children, ...props }) => {
-          if (inline) {
+  // Парсим GeoGebra блоки из текста
+  const parseContent = (content) => {
+    if (typeof content !== 'string') return content;
+    
+    // Ищем GeoGebra блоки: <GeoGebra setup={`...`} /> или <GeoGebra id="..." setup={`...`} height="..." />
+    const geoRegex = /<GeoGebra\s+([^>]*?)\s*\/>/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = geoRegex.exec(content)) !== null) {
+      // Текст до GeoGebra
+      if (match.index > lastIndex) {
+        parts.push({
+          type: 'text',
+          content: content.substring(lastIndex, match.index)
+        });
+      }
+
+      // Парсим атрибуты GeoGebra
+      const attrsStr = match[1];
+      const idMatch = attrsStr.match(/id="([^"]+)"/);
+      const heightMatch = attrsStr.match(/height="([^"]+)"/);
+      const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
+
+      parts.push({
+        type: 'geogebra',
+        id: idMatch ? idMatch[1] : null,
+        height: heightMatch ? heightMatch[1] : "400",
+        setup: setupMatch ? setupMatch[1] : null
+      });
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Оставшийся текст
+    if (lastIndex < content.length) {
+      parts.push({
+        type: 'text',
+        content: content.substring(lastIndex)
+      });
+    }
+
+    return parts.length > 0 ? parts : content;
+  };
+
+  const parsedParts = parseContent(processedChildren);
+
+  // Если нет GeoGebra блоков — рендерим как обычно
+  if (typeof parsedParts === 'string' || !Array.isArray(parsedParts)) {
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          p: ({ children, ...props }) => (
+            <p className="mb-3 last:mb-0 text-left whitespace-normal break-words" {...props}>
+              {children}
+            </p>
+          ),
+          strong: ({ children, ...props }) => (
+            <strong className="font-bold text-slate-900" {...props}>{children}</strong>
+          ),
+          em: ({ children, ...props }) => (
+            <em className="italic" {...props}>{children}</em>
+          ),
+          img: ({ src, alt, ...props }) => (
+            <div className="my-4 overflow-hidden rounded-2xl bg-slate-100">
+              <img 
+                src={src} 
+                alt={alt || ''} 
+                className="w-full h-auto object-contain max-h-[300px]" 
+                loading="lazy" 
+                {...props}
+              />
+            </div>
+          ),
+          code: ({ inline, className, children, ...props }) => {
+            if (inline) {
+              return (
+                <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded-md text-sm font-mono break-words" {...props}>
+                  {children}
+                </code>
+              );
+            }
+            
+            const isMath = className?.includes('language-math');
+            
             return (
-              <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded-md text-sm font-mono break-words" {...props}>
+              <code 
+                className={`${className || ''} ${isMath ? 'math-display' : ''} block bg-slate-800 text-white p-3 rounded-xl overflow-x-auto text-sm my-2 whitespace-pre-wrap break-words font-mono`}
+                {...props}
+              >
                 {children}
               </code>
             );
-          }
-          
-          // Проверяем, является ли это математическим блоком
-          const isMath = className?.includes('language-math');
-          
-          return (
-            <code 
-              className={`${className || ''} ${isMath ? 'math-display' : ''} block bg-slate-800 text-white p-3 rounded-xl overflow-x-auto text-sm my-2 whitespace-pre-wrap break-words font-mono`}
-              {...props}
-            >
+          },
+          a: ({ children, ...props }) => (
+            <a className="text-blue-600 hover:text-blue-800 underline transition-colors break-all" target="_blank" rel="noopener noreferrer" {...props}>
               {children}
-            </code>
-          );
-        },
-        a: ({ children, ...props }) => (
-          <a className="text-blue-600 hover:text-blue-800 underline transition-colors break-all" target="_blank" rel="noopener noreferrer" {...props}>
-            {children}
-          </a>
-        ),
-        table: ({ children, ...props }) => (
-          <div className="overflow-x-auto my-4">
-            <table className="min-w-full border-collapse border border-slate-200 text-sm" {...props}>
+            </a>
+          ),
+          table: ({ children, ...props }) => (
+            <div className="overflow-x-auto my-4">
+              <table className="min-w-full border-collapse border border-slate-200 text-sm" {...props}>
+                {children}
+              </table>
+            </div>
+          ),
+          th: ({ children, ...props }) => (
+            <th className="border border-slate-200 bg-slate-50 px-4 py-2 text-left font-bold" {...props}>
               {children}
-            </table>
-          </div>
-        ),
-        th: ({ children, ...props }) => (
-          <th className="border border-slate-200 bg-slate-50 px-4 py-2 text-left font-bold" {...props}>
-            {children}
-          </th>
-        ),
-        td: ({ children, ...props }) => (
-          <td className="border border-slate-200 px-4 py-2" {...props}>
-            {children}
-          </td>
-        ),
-        // Добавляем обработку математических блоков
-        math: ({ value }) => {
-          return (
+            </th>
+          ),
+          td: ({ children, ...props }) => (
+            <td className="border border-slate-200 px-4 py-2" {...props}>
+              {children}
+            </td>
+          ),
+          math: ({ value }) => (
             <span className="math-inline">
               {value}
             </span>
+          ),
+        }}
+      >
+        {processedChildren}
+      </ReactMarkdown>
+    );
+  }
+
+  // Рендерим части с GeoGebra
+  return (
+    <div>
+      {parsedParts.map((part, index) => {
+        if (part.type === 'text' && part.content.trim()) {
+          return (
+            <ReactMarkdown
+              key={index}
+              remarkPlugins={[remarkMath, remarkGfm]}
+              rehypePlugins={[rehypeKatex]}
+              components={{
+                // ... те же компоненты что и выше
+                p: ({ children, ...props }) => (
+                  <p className="mb-3 last:mb-0 text-left whitespace-normal break-words" {...props}>
+                    {children}
+                  </p>
+                ),
+                code: ({ inline, className, children, ...props }) => {
+                  if (inline) {
+                    return (
+                      <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded-md text-sm font-mono break-words" {...props}>
+                        {children}
+                      </code>
+                    );
+                  }
+                  return (
+                    <code 
+                      className={`${className || ''} block bg-slate-800 text-white p-3 rounded-xl overflow-x-auto text-sm my-2 whitespace-pre-wrap break-words font-mono`}
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+              }}
+            >
+              {part.content}
+            </ReactMarkdown>
           );
-        },
-      }}
-    >
-      {processedChildren}
-    </ReactMarkdown>
+        }
+        if (part.type === 'geogebra') {
+          return (
+            <div key={index} className="my-4">
+              <GeoGebra
+                id={part.id}
+                setup={part.setup}
+                height={part.height}
+              />
+            </div>
+          );
+        }
+        return null;
+      })}
+    </div>
   );
 };
+
+const GeoGebra = ({ id, setup, height = "400" }) => {
+  const containerRef = useRef(null);
+  const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
+
+  useEffect(() => {
+    const initApplet = () => {
+      if (!containerRef.current) return;
+
+      const parameters = {
+        "id": appletId.current,
+        "width": containerRef.current.clientWidth || 600,
+        "height": parseInt(height, 10),
+        "showToolBar": false,
+        "showMenuBar": false,
+        "showAlgebraInput": false,
+        "enableLabelDrags": false,
+        "enableShiftDragZoom": true,
+        "language": "ru",
+        "useBrowserForJS": false,
+        ...(id ? { "material_id": id } : {}),
+        "appletOnLoad": (api) => {
+          // Базовые настройки если нет готового материала
+          if (!id) {
+            api.evalCommand('ShowAxes(true)');
+            api.evalCommand('ShowGrid(true)');
+          }
+
+          // Обработка setup команд
+          if (setup) {
+            // Разбиваем на строки и обрабатываем каждую
+            const commands = setup
+              .split('\n')
+              .map(cmd => cmd.trim())
+              .filter(cmd => cmd.length > 0 && !cmd.startsWith('//') && !cmd.startsWith('#'));
+
+            // Группируем команды по типу
+            let viewCommands = [];
+            let perspectiveCommand = null;
+            let evalCommands = [];
+            let delayedCommands = []; // Команды, зависящие от созданных объектов
+
+            commands.forEach(cmd => {
+              // Пропускаем пустые строки
+              if (!cmd) return;
+
+              if (cmd.startsWith('view:')) {
+                // Настройки вида: view: -5,5,-5,5 или view: -5,5,-5,5,grid,axes
+                const parts = cmd.substring(5).split(',').map(s => s.trim());
+                viewCommands.push(parts);
+              }
+              else if (cmd.startsWith('perspective:')) {
+                // Перспектива: perspective: 3D Graphics
+                perspectiveCommand = cmd.substring(12).trim();
+              }
+              else if (cmd.startsWith('color:')) {
+                // Цвет объекта: color: A, #ff0000
+                const match = cmd.match(/color:\s*(\w+)\s*,\s*([\w#]+)/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'color',
+                    obj: match[1],
+                    color: match[2]
+                  });
+                }
+              }
+              else if (cmd.startsWith('size:')) {
+                // Размер точки: size: A, 5
+                const match = cmd.match(/size:\s*(\w+)\s*,\s*(\d+)/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'size',
+                    obj: match[1],
+                    size: match[2]
+                  });
+                }
+              }
+              else if (cmd.startsWith('label:')) {
+                // Метка: label: A, "Точка A"
+                const match = cmd.match(/label:\s*(\w+)\s*,\s*"([^"]+)"/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'label',
+                    obj: match[1],
+                    label: match[2]
+                  });
+                }
+              }
+              else if (cmd.startsWith('show:')) {
+                // Показать объекты: show: A, B, grid
+                const items = cmd.substring(5).split(',').map(s => s.trim());
+                delayedCommands.push({
+                  type: 'show',
+                  items: items
+                });
+              }
+              else if (cmd.startsWith('hide:')) {
+                // Скрыть объекты: hide: A, B, grid
+                const items = cmd.substring(5).split(',').map(s => s.trim());
+                delayedCommands.push({
+                  type: 'hide',
+                  items: items
+                });
+              }
+              else if (cmd.startsWith('animate:')) {
+                // Анимация: animate: A, true, 5
+                const match = cmd.match(/animate:\s*(\w+)\s*,\s*(\w+)\s*,?\s*(\d+)?/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'animate',
+                    obj: match[1],
+                    animate: match[2] === 'true',
+                    speed: match[3] || null
+                  });
+                }
+              }
+              else if (cmd.includes('=') || cmd.includes(':=')) {
+                // Команды создания объектов
+                evalCommands.push(cmd);
+              }
+              else {
+                // Обычные команды
+                evalCommands.push(cmd);
+              }
+            });
+
+            // Выполняем настройки вида
+            viewCommands.forEach(parts => {
+              if (parts.length >= 4) {
+                const xMin = parseFloat(parts[0]) || -10;
+                const xMax = parseFloat(parts[1]) || 10;
+                const yMin = parseFloat(parts[2]) || -10;
+                const yMax = parseFloat(parts[3]) || 10;
+                
+                if (parts.length >= 6) {
+                  // 3D вид
+                  const zMin = parseFloat(parts[4]) || -10;
+                  const zMax = parseFloat(parts[5]) || 10;
+                  api.setCoordSystem(xMin, xMax, yMin, yMax, zMin, zMax);
+                } else {
+                  // 2D вид
+                  api.setCoordSystem(xMin, xMax, yMin, yMax);
+                }
+                
+                // Дополнительные флаги
+                if (parts.includes('grid')) {
+                  api.setGridVisible(true);
+                }
+                if (parts.includes('axes')) {
+                  api.setAxesVisible(true, true);
+                }
+              }
+            });
+
+            // Устанавливаем перспективу
+            if (perspectiveCommand) {
+              api.setPerspective(perspectiveCommand);
+            }
+
+            // Выполняем команды создания объектов
+            evalCommands.forEach(cmd => {
+              try {
+                api.evalCommand(cmd);
+              } catch (err) {
+                console.error(`Ошибка выполнения команды "${cmd}":`, err);
+              }
+            });
+
+            // Выполняем отложенные команды с задержкой
+            if (delayedCommands.length > 0) {
+              setTimeout(() => {
+                delayedCommands.forEach(dCmd => {
+                  try {
+                    switch (dCmd.type) {
+                      case 'color':
+                        api.setColor(dCmd.obj, ...hexToRgb(dCmd.color));
+                        break;
+                      case 'size':
+                        api.setPointSize(dCmd.obj, parseInt(dCmd.size));
+                        break;
+                      case 'label':
+                        api.setCaption(dCmd.obj, dCmd.label);
+                        break;
+                      case 'show':
+                        dCmd.items.forEach(item => {
+                          if (item === 'grid') api.setGridVisible(true);
+                          else if (item === 'axes') api.setAxesVisible(true, true);
+                          else api.setVisible(item, true);
+                        });
+                        break;
+                      case 'hide':
+                        dCmd.items.forEach(item => {
+                          if (item === 'grid') api.setGridVisible(false);
+                          else if (item === 'axes') api.setAxesVisible(false, false);
+                          else api.setVisible(item, false);
+                        });
+                        break;
+                      case 'animate':
+                        api.setAnimating(dCmd.obj, dCmd.animate);
+                        if (dCmd.animate) {
+                          api.startAnimation();
+                        } else {
+                          api.stopAnimation();
+                        }
+                        if (dCmd.speed) {
+                          api.setAnimationSpeed(dCmd.obj, parseFloat(dCmd.speed));
+                        }
+                        break;
+                    }
+                  } catch (err) {
+                    console.error(`Ошибка отложенной команды:`, dCmd, err);
+                  }
+                });
+              }, 200);
+            }
+          }
+        }
+      };
+
+      const applet = new window.GGBApplet(parameters, true);
+      applet.inject(containerRef.current);
+    };
+
+    // Загрузка скрипта GeoGebra
+    if (!window.GGBApplet) {
+      const script = document.createElement('script');
+      script.src = 'https://www.geogebra.org/apps/deployggb.js';
+      script.id = 'ggb-api-script';
+      script.onload = initApplet;
+      document.head.appendChild(script);
+    } else {
+      initApplet();
+    }
+
+    return () => {
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+    };
+  }, [id, setup, height]);
+
+  return (
+    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative">
+      <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/80 z-10"></div>
+      <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }}></div>
+    </div>
+  );
+};
+
 
 // ==================== Компонент сообщения ====================
 const ChatMessage = ({ message, onCopy }) => {

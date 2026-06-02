@@ -1,20 +1,15 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
-import { useNavigate } from 'react-router-dom';
 import { 
-  PlusCircle, Database, Users, LayoutDashboard, 
-  Search, Send, Eye, UserX, Image as ImageIcon, 
-  ChevronRight, Layers, Trash2, Edit3, CheckCircle2,
-  ChevronDown, ChevronUp, MailCheck, ShieldCheck, XCircle,
-  Upload, Loader2, MapPin, BookOpen, Library, Menu, X
+  ChevronDown, ChevronUp, CheckCircle2, Menu, X 
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
-// Модуль секции — теперь это плоский, открытый и чистый блок контента
+// ========== СЕКЦИИ И БЛОКИ ТЕОРИИ ==========
+
 const SectionBlock = ({ id, title, children, isHard }) => {
   const [isOpen, setIsOpen] = useState(true);
   
@@ -50,7 +45,6 @@ const SectionBlock = ({ id, title, children, isHard }) => {
   );
 };
 
-// Блоки теории (Кастомизированный контрастный минимализм)
 const Def = ({ title = "Определение", children }) => (
   <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-indigo-500 bg-indigo-50/40 text-left">
     <div className="mb-2">
@@ -91,15 +85,286 @@ const Explanation = ({ children }) => (
   </div>
 );
 
-// Элементы Markdown
+// ========== ИНТЕРАКТИВНЫЙ БЛОК GEOGEBRA ==========
+
+// ========== ИНТЕРАКТИВНЫЙ БЛОК GEOGEBRA (исправленный) ==========
+
+const GeoGebra = ({ id, setup, height = "400" }) => {
+  const containerRef = useRef(null);
+  const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
+
+  useEffect(() => {
+    const initApplet = () => {
+      if (!containerRef.current) return;
+
+      const parameters = {
+        "id": appletId.current,
+        "width": containerRef.current.clientWidth || 600,
+        "height": parseInt(height, 10),
+        "showToolBar": false,
+        "showMenuBar": false,
+        "showAlgebraInput": false,
+        "enableLabelDrags": false,
+        "enableShiftDragZoom": true,
+        "language": "ru",
+        "useBrowserForJS": false,
+        ...(id ? { "material_id": id } : {}),
+        "appletOnLoad": (api) => {
+          // Базовые настройки если нет готового материала
+          if (!id) {
+            api.evalCommand('ShowAxes(true)');
+            api.evalCommand('ShowGrid(true)');
+          }
+
+          // Обработка setup команд
+          if (setup) {
+            // Разбиваем на строки и обрабатываем каждую
+            const commands = setup
+              .split('\n')
+              .map(cmd => cmd.trim())
+              .filter(cmd => cmd.length > 0 && !cmd.startsWith('//') && !cmd.startsWith('#'));
+
+            // Группируем команды по типу
+            let viewCommands = [];
+            let perspectiveCommand = null;
+            let evalCommands = [];
+            let delayedCommands = []; // Команды, зависящие от созданных объектов
+
+            commands.forEach(cmd => {
+              // Пропускаем пустые строки
+              if (!cmd) return;
+
+              if (cmd.startsWith('view:')) {
+                // Настройки вида: view: -5,5,-5,5 или view: -5,5,-5,5,grid,axes
+                const parts = cmd.substring(5).split(',').map(s => s.trim());
+                viewCommands.push(parts);
+              }
+              else if (cmd.startsWith('perspective:')) {
+                // Перспектива: perspective: 3D Graphics
+                perspectiveCommand = cmd.substring(12).trim();
+              }
+              else if (cmd.startsWith('color:')) {
+                // Цвет объекта: color: A, #ff0000
+                const match = cmd.match(/color:\s*(\w+)\s*,\s*([\w#]+)/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'color',
+                    obj: match[1],
+                    color: match[2]
+                  });
+                }
+              }
+              else if (cmd.startsWith('size:')) {
+                // Размер точки: size: A, 5
+                const match = cmd.match(/size:\s*(\w+)\s*,\s*(\d+)/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'size',
+                    obj: match[1],
+                    size: match[2]
+                  });
+                }
+              }
+              else if (cmd.startsWith('label:')) {
+                // Метка: label: A, "Точка A"
+                const match = cmd.match(/label:\s*(\w+)\s*,\s*"([^"]+)"/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'label',
+                    obj: match[1],
+                    label: match[2]
+                  });
+                }
+              }
+              else if (cmd.startsWith('show:')) {
+                // Показать объекты: show: A, B, grid
+                const items = cmd.substring(5).split(',').map(s => s.trim());
+                delayedCommands.push({
+                  type: 'show',
+                  items: items
+                });
+              }
+              else if (cmd.startsWith('hide:')) {
+                // Скрыть объекты: hide: A, B, grid
+                const items = cmd.substring(5).split(',').map(s => s.trim());
+                delayedCommands.push({
+                  type: 'hide',
+                  items: items
+                });
+              }
+              else if (cmd.startsWith('animate:')) {
+                // Анимация: animate: A, true, 5
+                const match = cmd.match(/animate:\s*(\w+)\s*,\s*(\w+)\s*,?\s*(\d+)?/);
+                if (match) {
+                  delayedCommands.push({
+                    type: 'animate',
+                    obj: match[1],
+                    animate: match[2] === 'true',
+                    speed: match[3] || null
+                  });
+                }
+              }
+              else if (cmd.includes('=') || cmd.includes(':=')) {
+                // Команды создания объектов
+                evalCommands.push(cmd);
+              }
+              else {
+                // Обычные команды
+                evalCommands.push(cmd);
+              }
+            });
+
+            // Выполняем настройки вида
+            viewCommands.forEach(parts => {
+              if (parts.length >= 4) {
+                const xMin = parseFloat(parts[0]) || -10;
+                const xMax = parseFloat(parts[1]) || 10;
+                const yMin = parseFloat(parts[2]) || -10;
+                const yMax = parseFloat(parts[3]) || 10;
+                
+                if (parts.length >= 6) {
+                  // 3D вид
+                  const zMin = parseFloat(parts[4]) || -10;
+                  const zMax = parseFloat(parts[5]) || 10;
+                  api.setCoordSystem(xMin, xMax, yMin, yMax, zMin, zMax);
+                } else {
+                  // 2D вид
+                  api.setCoordSystem(xMin, xMax, yMin, yMax);
+                }
+                
+                // Дополнительные флаги
+                if (parts.includes('grid')) {
+                  api.setGridVisible(true);
+                }
+                if (parts.includes('axes')) {
+                  api.setAxesVisible(true, true);
+                }
+              }
+            });
+
+            // Устанавливаем перспективу
+            if (perspectiveCommand) {
+              api.setPerspective(perspectiveCommand);
+            }
+
+            // Выполняем команды создания объектов
+            evalCommands.forEach(cmd => {
+              try {
+                api.evalCommand(cmd);
+              } catch (err) {
+                console.error(`Ошибка выполнения команды "${cmd}":`, err);
+              }
+            });
+
+            // Выполняем отложенные команды с задержкой
+            if (delayedCommands.length > 0) {
+              setTimeout(() => {
+                delayedCommands.forEach(dCmd => {
+                  try {
+                    switch (dCmd.type) {
+                      case 'color':
+                        api.setColor(dCmd.obj, ...hexToRgb(dCmd.color));
+                        break;
+                      case 'size':
+                        api.setPointSize(dCmd.obj, parseInt(dCmd.size));
+                        break;
+                      case 'label':
+                        api.setCaption(dCmd.obj, dCmd.label);
+                        break;
+                      case 'show':
+                        dCmd.items.forEach(item => {
+                          if (item === 'grid') api.setGridVisible(true);
+                          else if (item === 'axes') api.setAxesVisible(true, true);
+                          else api.setVisible(item, true);
+                        });
+                        break;
+                      case 'hide':
+                        dCmd.items.forEach(item => {
+                          if (item === 'grid') api.setGridVisible(false);
+                          else if (item === 'axes') api.setAxesVisible(false, false);
+                          else api.setVisible(item, false);
+                        });
+                        break;
+                      case 'animate':
+                        api.setAnimating(dCmd.obj, dCmd.animate);
+                        if (dCmd.animate) {
+                          api.startAnimation();
+                        } else {
+                          api.stopAnimation();
+                        }
+                        if (dCmd.speed) {
+                          api.setAnimationSpeed(dCmd.obj, parseFloat(dCmd.speed));
+                        }
+                        break;
+                    }
+                  } catch (err) {
+                    console.error(`Ошибка отложенной команды:`, dCmd, err);
+                  }
+                });
+              }, 200);
+            }
+          }
+        }
+      };
+
+      const applet = new window.GGBApplet(parameters, true);
+      applet.inject(containerRef.current);
+    };
+
+    // Загрузка скрипта GeoGebra
+    if (!window.GGBApplet) {
+      const script = document.createElement('script');
+      script.src = 'https://www.geogebra.org/apps/deployggb.js';
+      script.id = 'ggb-api-script';
+      script.onload = initApplet;
+      document.head.appendChild(script);
+    } else {
+      initApplet();
+    }
+
+    return () => {
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+    };
+  }, [id, setup, height]);
+
+  return (
+    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative">
+      <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/80 z-10"></div>
+      <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }}></div>
+    </div>
+  );
+};
+
+
+// Вспомогательная функция для конвертации HEX в RGB
+function hexToRgb(hex) {
+  // Убираем # если есть
+  hex = hex.replace('#', '');
+  
+  // Поддерживаем короткий формат #RGB
+  if (hex.length === 3) {
+    hex = hex.split('').map(c => c + c).join('');
+  }
+  
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  
+  return [r, g, b];
+}
+
+// ========== ЭЛЕМЕНТЫ MARKDOWN ==========
+
 const markdownComponents = {
   img: ({ src, alt }) => (
-  <img 
-    src={src} 
-    alt={alt} 
-    className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-100 mx-auto shadow-sm" 
-  />
-),
+    <img 
+      src={src} 
+      alt={alt} 
+      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-100 mx-auto shadow-sm" 
+    />
+  ),
   table: ({ children }) => (
     <div className="overflow-x-auto my-6 rounded-lg border border-slate-200">
       <table className="min-w-full text-left text-sm">{children}</table>
@@ -114,128 +379,118 @@ const markdownComponents = {
     </code>
   ),
 };
+
+// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
+
 export const TheoryViewer = ({ content, isFullWidth = false }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
 
- // Парсинг MDX структуры
-useEffect(() => {
-  const parseContent = () => {
-    const sections = [];
-    const sectionRegex = /<Section\s+id="([^"]+)"\s+title="([^"]+)"(?:\s+isHard)?>([\s\S]*?)<\/Section>/g;
-    let match;
-    
-    while ((match = sectionRegex.exec(content)) !== null) {
-      const [, id, title, sectionContent] = match;
-      const isHard = match[0].includes('isHard');
+  // Парсинг MDX структуры
+  useEffect(() => {
+    const parseContent = () => {
+      const sections = [];
+      const sectionRegex = /<Section\s+id="([^"]+)"\s+title="([^"]+)"(?:\s+isHard)?>([\s\S]*?)<\/Section>/g;
+      let match;
       
-      // Ищем все теги в порядке их появления
-      const allTags = [];
-      const defRegex = /<Def(?:\s+title="([^"]+)")?>([\s\S]*?)<\/Def>/g;
-      const exRegex = /<Ex(?:\s+title="([^"]+)")?(?:\s+isHard)?>([\s\S]*?)<\/Ex>/g;
-      const expRegex = /<Explanation>([\s\S]*?)<\/Explanation>/g;
-      
-      let defMatch;
-      while ((defMatch = defRegex.exec(sectionContent)) !== null) {
-        allTags.push({
-          type: 'def',
-          title: defMatch[1] || 'Определение',
-          content: defMatch[2],
-          index: defMatch.index,
-          endIndex: defMatch.index + defMatch[0].length
-        });
-      }
-      
-      let exMatch;
-      while ((exMatch = exRegex.exec(sectionContent)) !== null) {
-        allTags.push({
-          type: 'ex',
-          title: exMatch[1] || 'Пример',
-          content: exMatch[2],
-          isHard: exMatch[0].includes('isHard'),
-          index: exMatch.index,
-          endIndex: exMatch.index + exMatch[0].length
-        });
-      }
-      
-      let expMatch;
-      while ((expMatch = expRegex.exec(sectionContent)) !== null) {
-        allTags.push({
-          type: 'explanation',
-          content: expMatch[1],
-          index: expMatch.index,
-          endIndex: expMatch.index + expMatch[0].length
-        });
-      }
-      
-      // Сортируем по индексу появления
-      allTags.sort((a, b) => a.index - b.index);
-      
-      // Собираем текст между тегами и формируем orderedBlocks
-      const orderedBlocks = [];
-      let pointer = 0;
-      
-      for (const tag of allTags) {
-        // Текст перед тегом
-        if (tag.index > pointer) {
-          const betweenText = sectionContent.substring(pointer, tag.index).trim();
-          if (betweenText) {
-            orderedBlocks.push({ type: 'text', content: betweenText });
+      while ((match = sectionRegex.exec(content)) !== null) {
+        const [, id, title, sectionContent] = match;
+        const isHard = match[0].includes('isHard');
+        
+        const allTags = [];
+        const defRegex = /<Def(?:\s+title="([^"]+)")?>([\s\S]*?)<\/Def>/g;
+        const exRegex = /<Ex(?:\s+title="([^"]+)")?(?:\s+isHard)?>([\s\S]*?)<\/Ex>/g;
+        const expRegex = /<Explanation>([\s\S]*?)<\/Explanation>/g;
+        const geoRegex = /<GeoGebra([\s\S]*?)\/>/g;
+        
+        let defMatch;
+        while ((defMatch = defRegex.exec(sectionContent)) !== null) {
+          allTags.push({
+            type: 'def',
+            title: defMatch[1] || 'Определение',
+            content: defMatch[2],
+            index: defMatch.index,
+            endIndex: defMatch.index + defMatch[0].length
+          });
+        }
+        
+        let exMatch;
+        while ((exMatch = exRegex.exec(sectionContent)) !== null) {
+          allTags.push({
+            type: 'ex',
+            title: exMatch[1] || 'Пример',
+            content: exMatch[2],
+            isHard: exMatch[0].includes('isHard'),
+            index: exMatch.index,
+            endIndex: exMatch.index + exMatch[0].length
+          });
+        }
+        
+        let expMatch;
+        while ((expMatch = expRegex.exec(sectionContent)) !== null) {
+          allTags.push({
+            type: 'explanation',
+            content: expMatch[1],
+            index: expMatch.index,
+            endIndex: expMatch.index + expMatch[0].length
+          });
+        }
+
+        let geoMatch;
+        while ((geoMatch = geoRegex.exec(sectionContent)) !== null) {
+          const attrsStr = geoMatch[1];
+          const idMatch = attrsStr.match(/id="([^"]+)"/);
+          const heightMatch = attrsStr.match(/height="([^"]+)"/);
+          // Поддержка как setup={`...`} так и setup="..."
+          const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
+
+          allTags.push({
+            type: 'geogebra',
+            id: idMatch ? idMatch[1] : null,
+            height: heightMatch ? heightMatch[1] : "400",
+            setup: setupMatch ? setupMatch[1] : null,
+            index: geoMatch.index,
+            endIndex: geoMatch.index + geoMatch[0].length
+          });
+        }
+        
+        allTags.sort((a, b) => a.index - b.index);
+        
+        const orderedBlocks = [];
+        let pointer = 0;
+        
+        for (const tag of allTags) {
+          if (tag.index > pointer) {
+            const betweenText = sectionContent.substring(pointer, tag.index).trim();
+            if (betweenText) {
+              orderedBlocks.push({ type: 'text', content: betweenText });
+            }
+          }
+          orderedBlocks.push(tag);
+          pointer = tag.endIndex;
+        }
+        
+        if (pointer < sectionContent.length) {
+          const afterText = sectionContent.substring(pointer).trim();
+          if (afterText) {
+            orderedBlocks.push({ type: 'text', content: afterText });
           }
         }
         
-        // Сам тег
-        orderedBlocks.push(tag);
-        
-        pointer = tag.endIndex;
+        sections.push({ 
+          id, 
+          title, 
+          isHard, 
+          orderedBlocks
+        });
       }
-      
-      // Текст после последнего тега
-      if (pointer < sectionContent.length) {
-        const afterText = sectionContent.substring(pointer).trim();
-        if (afterText) {
-          orderedBlocks.push({ type: 'text', content: afterText });
-        }
-      }
-      
-      // Раскладываем по старым массивам для обратной совместимости
-      const defs = [];
-      const exs = [];
-      const explanations = [];
-      const rawTextParts = [];
-      
-      for (const block of orderedBlocks) {
-        if (block.type === 'text') {
-          rawTextParts.push(block.content);
-        } else if (block.type === 'def') {
-          defs.push({ title: block.title, content: block.content });
-        } else if (block.type === 'ex') {
-          exs.push({ title: block.title, content: block.content, isHard: block.isHard });
-        } else if (block.type === 'explanation') {
-          explanations.push(block.content);
-        }
-      }
-      
-      const rawContent = rawTextParts.join('\n\n');
-      
-      sections.push({ 
-        id, 
-        title, 
-        isHard, 
-        defs, 
-        exs, 
-        explanations, 
-        rawContent,
-        orderedBlocks  // ← новый ключ с правильным порядком
-      });
-    }
-    setComponents(sections);
-    if (sections.length > 0) setActiveId(sections[0].id);
-  };
-  
-  parseContent();
-}, [content]);
+      setComponents(sections);
+      if (sections.length > 0) setActiveId(sections[0].id);
+    };
+    
+    parseContent();
+  }, [content]);
 
   // Подсветка активной секции при скролле
   useEffect(() => {
@@ -289,88 +544,63 @@ useEffect(() => {
 
       {/* ========== ОСНОВНОЙ КОНТЕНТ ========== */}
       <main>
-        {/* Если fullWidth - убираем max-w-3xl и py-12 */}
         <div className={`${isFullWidth ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth ? 'py-0' : 'py-12'} px-4`}>
-         {components.map((section, idx) => (
-  <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
-    
-    {/* Если есть orderedBlocks — рендерим по порядку */}
-    {section.orderedBlocks ? (
-      section.orderedBlocks.map((block, bidx) => {
-        if (block.type === 'text') {
-          return (
-            <ReactMarkdown 
-              key={bidx}
-              remarkPlugins={[remarkMath, remarkGfm]} 
-              rehypePlugins={[rehypeKatex]} 
-              components={markdownComponents}
-            >
-              {block.content}
-            </ReactMarkdown>
-          );
-        }
-        if (block.type === 'def') {
-          return (
-            <Def key={bidx} title={block.title}>
-              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {block.content}
-              </ReactMarkdown>
-            </Def>
-          );
-        }
-        if (block.type === 'ex') {
-          return (
-            <Ex key={bidx} title={block.title} isHard={block.isHard}>
-              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {block.content}
-              </ReactMarkdown>
-            </Ex>
-          );
-        }
-        if (block.type === 'explanation') {
-          return (
-            <Explanation key={bidx}>
-              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {block.content}
-              </ReactMarkdown>
-            </Explanation>
-          );
-        }
-        return null;
-      })
-    ) : (
-      // Фолбэк — старый порядок
-      <>
-        {section.rawContent && (
-          <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-            {section.rawContent}
-          </ReactMarkdown>
-        )}
-        {section.defs.map((def, didx) => (
-          <Def key={didx} title={def.title}>
-            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-              {def.content}
-            </ReactMarkdown>
-          </Def>
-        ))}
-        {section.exs.map((ex, eidx) => (
-          <Ex key={eidx} title={ex.title} isHard={ex.isHard}>
-            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-              {ex.content}
-            </ReactMarkdown>
-          </Ex>
-        ))}
-        {section.explanations.map((exp, xidx) => (
-          <Explanation key={xidx}>
-            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-              {exp}
-            </ReactMarkdown>
-          </Explanation>
-        ))}
-      </>
-    )}
-  </SectionBlock>
-))} 
+          {components.map((section, idx) => (
+            <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
+              {section.orderedBlocks && section.orderedBlocks.map((block, bidx) => {
+                if (block.type === 'text') {
+                  return (
+                    <ReactMarkdown 
+                      key={bidx}
+                      remarkPlugins={[remarkMath, remarkGfm]} 
+                      rehypePlugins={[rehypeKatex]} 
+                      components={markdownComponents}
+                    >
+                      {block.content}
+                    </ReactMarkdown>
+                  );
+                }
+                if (block.type === 'def') {
+                  return (
+                    <Def key={bidx} title={block.title}>
+                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                        {block.content}
+                      </ReactMarkdown>
+                    </Def>
+                  );
+                }
+                if (block.type === 'ex') {
+                  return (
+                    <Ex key={bidx} title={block.title} isHard={block.isHard}>
+                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                        {block.content}
+                      </ReactMarkdown>
+                    </Ex>
+                  );
+                }
+                if (block.type === 'explanation') {
+                  return (
+                    <Explanation key={bidx}>
+                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                        {block.content}
+                      </ReactMarkdown>
+                    </Explanation>
+                  );
+                }
+                if (block.type === 'geogebra') {
+                  return (
+                    <GeoGebra 
+                      key={bidx} 
+                      id={block.id} 
+                      height={block.height} 
+                      setup={block.setup} 
+                    />
+                  );
+                }
+                return null;
+              })}
+            </SectionBlock>
+          ))} 
           {components.length === 0 && (
             <div className="dynamic-markdown">
               <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
@@ -381,10 +611,9 @@ useEffect(() => {
         </div>
       </main>
 
-      {/* ========== ПЛАВАЮЩАЯ КНОПКА НАВИГАЦИИ (только если не fullWidth) ========== */}
+      {/* ========== ПЛАВАЮЩАЯ КНОПКА НАВИГАЦИИ ========== */}
       {!isFullWidth && components.length > 0 && (
         <div className="fixed bottom-6 right-6 z-50">
-          {/* Кнопка-триггер */}
           <button
             onClick={() => setIsNavOpen(!isNavOpen)}
             className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 transition-all active:scale-95"
@@ -392,7 +621,6 @@ useEffect(() => {
             {isNavOpen ? <X size={18} className="md:w-4 md:h-4" /> : <Menu size={18} className="md:w-4 md:h-4" />}
           </button>
 
-          {/* Выпадающий список */}
           {isNavOpen && (
             <>
               <div 
