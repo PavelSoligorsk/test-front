@@ -256,6 +256,7 @@ const GeoGebra = ({ id, setup, height = "400" }) => {
         "enableLabelDrags": false,
         "enableShiftDragZoom": true,
         "language": "ru",
+        "errorDialogsActive": false, // 1. Глобально отключаем окна ошибок в параметрах
         "useBrowserForJS": false,
         ...(id ? { "material_id": id } : {}),
         "appletOnLoad": (api) => {
