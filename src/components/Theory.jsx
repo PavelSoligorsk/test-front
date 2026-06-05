@@ -419,35 +419,15 @@ const renderBlocks = (blocks) => {
       );
     }
     if (block.type === 'geogebra') {
-      // Блокировка скролла (только один раз)
-      if (typeof window !== 'undefined' && !window._geogebraScrollLocked) {
-        window._geogebraScrollLocked = true;
-        
-        const scrollY = window.scrollY;
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${scrollY}px`;
-        document.body.style.width = '100%';
-        
-        setTimeout(() => {
-          const currentScrollY = document.body.style.top;
-          document.body.style.position = '';
-          document.body.style.top = '';
-          document.body.style.width = '';
-          if (currentScrollY) {
-            window.scrollTo(0, parseInt(currentScrollY || '0', 10) * -1);
-          }
-        }, 750);
-      }
-      
-      return (
-        <GeoGebra 
-          key={idx}
-          id={block.id} 
-          height={block.height} 
-          setup={block.setup} 
-        />
-      );
-    }
+  return (
+    <GeoGebra 
+      key={idx}
+      id={block.id} 
+      height={block.height} 
+      setup={block.setup} 
+    />
+  );
+}
     return null;
   });
 };
@@ -461,7 +441,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
 
   // Парсинг MDX структуры
@@ -534,11 +514,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       const idMatch = attrsStr.match(/id="([^"]+)"/);
       const heightMatch = attrsStr.match(/height="([^"]+)"/);
       const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
-      
-       // 2. Блокируем скролл
-  document.body.style.position = 'fixed';
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.width = '100%';
+
 
       allTags.push({
         type: 'geogebra',
@@ -549,10 +525,6 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         endIndex: match.index + match[0].length
       });
 
-      const currentScrollY = document.body.style.top;
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
     }
     
     // Сортируем по индексу
@@ -637,7 +609,7 @@ const triggerLoading = () => {
     
     // Скрываем оверлей
     setIsLoading(false);
-  }, 1500);
+  }, 1500); // ← изменил с 1500 на 750
 };
 
   triggerLoading();
