@@ -380,116 +380,240 @@ const markdownComponents = {
   ),
 };
 
+// Добавь эту функцию ДО return в компоненте TheoryViewer
+const renderBlocks = (blocks) => {
+  if (!blocks) return null;
+  
+  return blocks.map((block, idx) => {
+    if (block.type === 'text') {
+      return (
+        <ReactMarkdown 
+          key={idx}
+          remarkPlugins={[remarkMath, remarkGfm]} 
+          rehypePlugins={[rehypeKatex]} 
+          components={markdownComponents}
+        >
+          {block.content}
+        </ReactMarkdown>
+      );
+    }
+    if (block.type === 'def') {
+      return (
+        <Def key={idx} title={block.title}>
+          {renderBlocks(block.blocks)} {/* Рекурсия - рендерим вложенное */}
+        </Def>
+      );
+    }
+    if (block.type === 'ex') {
+      return (
+        <Ex key={idx} title={block.title} isHard={block.isHard}>
+          {renderBlocks(block.blocks)} {/* Рекурсия - рендерим вложенное */}
+        </Ex>
+      );
+    }
+    if (block.type === 'explanation') {
+      return (
+        <Explanation key={idx}>
+          {renderBlocks(block.blocks)} {/* Рекурсия - рендерим вложенное */}
+        </Explanation>
+      );
+    }
+    if (block.type === 'geogebra') {
+      // Блокировка скролла (только один раз)
+      if (typeof window !== 'undefined' && !window._geogebraScrollLocked) {
+        window._geogebraScrollLocked = true;
+        
+        const scrollY = window.scrollY;
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.width = '100%';
+        
+        setTimeout(() => {
+          const currentScrollY = document.body.style.top;
+          document.body.style.position = '';
+          document.body.style.top = '';
+          document.body.style.width = '';
+          if (currentScrollY) {
+            window.scrollTo(0, parseInt(currentScrollY || '0', 10) * -1);
+          }
+        }, 750);
+      }
+      
+      return (
+        <GeoGebra 
+          key={idx}
+          id={block.id} 
+          height={block.height} 
+          setup={block.setup} 
+        />
+      );
+    }
+    return null;
+  });
+};
+
+// И в JSX замени существующий map на:
+
+
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
 export const TheoryViewer = ({ content, isFullWidth = false }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+
 
   // Парсинг MDX структуры
   useEffect(() => {
-    const parseContent = () => {
-      const sections = [];
-      const sectionRegex = /<Section\s+id="([^"]+)"\s+title="([^"]+)"(?:\s+isHard)?>([\s\S]*?)<\/Section>/g;
-      let match;
-      
-      while ((match = sectionRegex.exec(content)) !== null) {
-        const [, id, title, sectionContent] = match;
-        const isHard = match[0].includes('isHard');
-        
-        const allTags = [];
-        const defRegex = /<Def(?:\s+title="([^"]+)")?>([\s\S]*?)<\/Def>/g;
-        const exRegex = /<Ex(?:\s+title="([^"]+)")?(?:\s+isHard)?>([\s\S]*?)<\/Ex>/g;
-        const expRegex = /<Explanation>([\s\S]*?)<\/Explanation>/g;
-        const geoRegex = /<GeoGebra([\s\S]*?)\/>/g;
-        
-        let defMatch;
-        while ((defMatch = defRegex.exec(sectionContent)) !== null) {
-          allTags.push({
-            type: 'def',
-            title: defMatch[1] || 'Определение',
-            content: defMatch[2],
-            index: defMatch.index,
-            endIndex: defMatch.index + defMatch[0].length
-          });
-        }
-        
-        let exMatch;
-        while ((exMatch = exRegex.exec(sectionContent)) !== null) {
-          allTags.push({
-            type: 'ex',
-            title: exMatch[1] || 'Пример',
-            content: exMatch[2],
-            isHard: exMatch[0].includes('isHard'),
-            index: exMatch.index,
-            endIndex: exMatch.index + exMatch[0].length
-          });
-        }
-        
-        let expMatch;
-        while ((expMatch = expRegex.exec(sectionContent)) !== null) {
-          allTags.push({
-            type: 'explanation',
-            content: expMatch[1],
-            index: expMatch.index,
-            endIndex: expMatch.index + expMatch[0].length
-          });
-        }
-
-        let geoMatch;
-        while ((geoMatch = geoRegex.exec(sectionContent)) !== null) {
-          const attrsStr = geoMatch[1];
-          const idMatch = attrsStr.match(/id="([^"]+)"/);
-          const heightMatch = attrsStr.match(/height="([^"]+)"/);
-          // Поддержка как setup={`...`} так и setup="..."
-          const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
-
-          allTags.push({
-            type: 'geogebra',
-            id: idMatch ? idMatch[1] : null,
-            height: heightMatch ? heightMatch[1] : "400",
-            setup: setupMatch ? setupMatch[1] : null,
-            index: geoMatch.index,
-            endIndex: geoMatch.index + geoMatch[0].length
-          });
-        }
-        
-        allTags.sort((a, b) => a.index - b.index);
-        
-        const orderedBlocks = [];
-        let pointer = 0;
-        
-        for (const tag of allTags) {
-          if (tag.index > pointer) {
-            const betweenText = sectionContent.substring(pointer, tag.index).trim();
-            if (betweenText) {
-              orderedBlocks.push({ type: 'text', content: betweenText });
-            }
-          }
-          orderedBlocks.push(tag);
-          pointer = tag.endIndex;
-        }
-        
-        if (pointer < sectionContent.length) {
-          const afterText = sectionContent.substring(pointer).trim();
-          if (afterText) {
-            orderedBlocks.push({ type: 'text', content: afterText });
-          }
-        }
-        
-        sections.push({ 
-          id, 
-          title, 
-          isHard, 
-          orderedBlocks
-        });
-      }
-      setComponents(sections);
-      if (sections.length > 0) setActiveId(sections[0].id);
-    };
+  const parseContent = () => {
+  const sections = [];
+  const sectionRegex = /<Section\s+id="([^"]+)"\s+title="([^"]+)"(?:\s+isHard)?>([\s\S]*?)<\/Section>/g;
+  let match;
+  
+  // Рекурсивная функция для парсинга вложенных блоков
+  const parseBlocks = (content) => {
+    const allTags = [];
     
+    // Регулярки для всех типов блоков
+    const defRegex = /<Def(?:\s+title="([^"]+)")?>([\s\S]*?)<\/Def>/g;
+    const exRegex = /<Ex(?:\s+title="([^"]+)")?(?:\s+isHard)?>([\s\S]*?)<\/Ex>/g;
+    const expRegex = /<Explanation>([\s\S]*?)<\/Explanation>/g;
+    const geoRegex = /<GeoGebra([\s\S]*?)\/>/g;
+    
+    let match;
+    
+    // Находим все Def
+    while ((match = defRegex.exec(content)) !== null) {
+      const innerContent = match[2];
+      const innerBlocks = parseBlocks(innerContent); // Рекурсивно парсим внутренности Def
+      
+      allTags.push({
+        type: 'def',
+        title: match[1] || 'Определение',
+        content: innerContent,
+        innerBlocks: innerBlocks, // Сохраняем вложенные блоки
+        index: match.index,
+        endIndex: match.index + match[0].length
+      });
+    }
+    
+    // Находим все Ex
+    while ((match = exRegex.exec(content)) !== null) {
+      const innerContent = match[2];
+      const innerBlocks = parseBlocks(innerContent); // Рекурсивно парсим внутренности Ex
+      
+      allTags.push({
+        type: 'ex',
+        title: match[1] || 'Пример',
+        content: innerContent,
+        isHard: match[0].includes('isHard'),
+        innerBlocks: innerBlocks,
+        index: match.index,
+        endIndex: match.index + match[0].length
+      });
+    }
+    
+    // Находим все Explanation
+    while ((match = expRegex.exec(content)) !== null) {
+      const innerContent = match[1];
+      const innerBlocks = parseBlocks(innerContent); // Рекурсивно парсим внутренности Explanation
+      
+      allTags.push({
+        type: 'explanation',
+        content: innerContent,
+        innerBlocks: innerBlocks,
+        index: match.index,
+        endIndex: match.index + match[0].length
+      });
+    }
+    
+    // Находим все GeoGebra
+    while ((match = geoRegex.exec(content)) !== null) {
+      const attrsStr = match[1];
+      const idMatch = attrsStr.match(/id="([^"]+)"/);
+      const heightMatch = attrsStr.match(/height="([^"]+)"/);
+      const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
+      
+      allTags.push({
+        type: 'geogebra',
+        id: idMatch ? idMatch[1] : null,
+        height: heightMatch ? heightMatch[1] : "400",
+        setup: setupMatch ? setupMatch[1] : null,
+        index: match.index,
+        endIndex: match.index + match[0].length
+      });
+    }
+    
+    // Сортируем по индексу
+    allTags.sort((a, b) => a.index - b.index);
+    
+    // Собираем результат
+    const blocks = [];
+    let pointer = 0;
+    
+    for (const tag of allTags) {
+      if (tag.index > pointer) {
+        const betweenText = content.substring(pointer, tag.index).trim();
+        if (betweenText) {
+          blocks.push({ type: 'text', content: betweenText });
+        }
+      }
+      
+      // Для блоков с innerBlocks, добавляем их в блок
+      if (tag.type === 'def' || tag.type === 'ex' || tag.type === 'explanation') {
+        blocks.push({
+          ...tag,
+          blocks: tag.innerBlocks // Переименовываем для единообразия
+        });
+        delete tag.innerBlocks;
+      } else {
+        blocks.push(tag);
+      }
+      
+      pointer = tag.endIndex;
+    }
+    
+    if (pointer < content.length) {
+      const afterText = content.substring(pointer).trim();
+      if (afterText) {
+        blocks.push({ type: 'text', content: afterText });
+      }
+    }
+    
+    return blocks;
+  };
+  
+  while ((match = sectionRegex.exec(content)) !== null) {
+    const [, id, title, sectionContent] = match;
+    const isHard = match[0].includes('isHard');
+    
+    const orderedBlocks = parseBlocks(sectionContent);
+    
+    sections.push({ 
+      id, 
+      title, 
+      isHard, 
+      orderedBlocks
+    });
+  }
+  
+  setComponents(sections);
+
+
+// Функция для запуска загрузки на 750ms
+const triggerLoading = () => {
+  setIsLoading(true);
+  setTimeout(() => {
+    setIsLoading(false);
+  }, 750);
+};
+  triggerLoading();
+  if (sections.length > 0) setActiveId(sections[0].id);
+};
+
     parseContent();
+    
   }, [content]);
 
   // Подсветка активной секции при скролле
@@ -543,73 +667,32 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       `}</style>
 
       {/* ========== ОСНОВНОЙ КОНТЕНТ ========== */}
-      <main>
-        <div className={`${isFullWidth ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth ? 'py-0' : 'py-12'} px-4`}>
-          {components.map((section, idx) => (
-            <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
-              {section.orderedBlocks && section.orderedBlocks.map((block, bidx) => {
-                if (block.type === 'text') {
-                  return (
-                    <ReactMarkdown 
-                      key={bidx}
-                      remarkPlugins={[remarkMath, remarkGfm]} 
-                      rehypePlugins={[rehypeKatex]} 
-                      components={markdownComponents}
-                    >
-                      {block.content}
-                    </ReactMarkdown>
-                  );
-                }
-                if (block.type === 'def') {
-                  return (
-                    <Def key={bidx} title={block.title}>
-                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                        {block.content}
-                      </ReactMarkdown>
-                    </Def>
-                  );
-                }
-                if (block.type === 'ex') {
-                  return (
-                    <Ex key={bidx} title={block.title} isHard={block.isHard}>
-                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                        {block.content}
-                      </ReactMarkdown>
-                    </Ex>
-                  );
-                }
-                if (block.type === 'explanation') {
-                  return (
-                    <Explanation key={bidx}>
-                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                        {block.content}
-                      </ReactMarkdown>
-                    </Explanation>
-                  );
-                }
-                if (block.type === 'geogebra') {
-                  return (
-                    <GeoGebra 
-                      key={bidx} 
-                      id={block.id} 
-                      height={block.height} 
-                      setup={block.setup} 
-                    />
-                  );
-                }
-                return null;
-              })}
-            </SectionBlock>
-          ))} 
-          {components.length === 0 && (
-            <div className="dynamic-markdown">
-              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {content}
-              </ReactMarkdown>
-            </div>
-          )}
-        </div>
-      </main>
+<main>
+  {/* Оверлей загрузки */}
+  {isLoading && (
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        <p className="text-gray-600">Загрузка...</p>
+      </div>
+    </div>
+  )}
+  
+  <div className={`${isFullWidth ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth ? 'py-0' : 'py-12'} px-4 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+    {components.map((section, idx) => (
+      <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
+        {renderBlocks(section.orderedBlocks)}  
+      </SectionBlock>
+    ))} 
+    {components.length === 0 && (
+      <div className="dynamic-markdown">
+        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+          {content}
+        </ReactMarkdown>
+      </div>
+    )}
+  </div>
+</main>
 
       {/* ========== ПЛАВАЮЩАЯ КНОПКА НАВИГАЦИИ ========== */}
       {!isFullWidth && components.length > 0 && (
