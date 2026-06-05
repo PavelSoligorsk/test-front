@@ -627,7 +627,7 @@ const triggerLoading = () => {
     
     // Скрываем оверлей
     setIsLoading(false);
-  }, 750);
+  }, 1500);
 };
 
   triggerLoading();
