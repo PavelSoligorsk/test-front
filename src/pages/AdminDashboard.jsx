@@ -436,10 +436,42 @@ const [bankTopic, setBankTopic] = useState(null);
 });
 
   useEffect(() => {
-    fetchUsers();
-    fetchTasks();
-    fetchAllowedEmails();
-  }, []);
+  const loadEditTask = async () => {
+    const editTaskId = sessionStorage.getItem('editTaskId');
+    if (editTaskId) {
+      sessionStorage.removeItem('editTaskId');
+      
+      try {
+        // Делаем прямой запрос к API за конкретной задачей
+        const res = await axios.get(`https://tests-production-46d5.up.railway.app/admin/${editTaskId}`);
+        const task = res.data;
+        
+        setTaskData({ 
+          ...task, 
+          options: task.options ? (Array.isArray(task.options) ? task.options.join('; ') : task.options) : '' 
+        });
+        setActiveTab('create');
+      } catch (err) {
+        console.error('Ошибка загрузки задачи:', err);
+        alert('Задача не найдена');
+      }
+    }
+  };
+
+  fetchUsers();
+  fetchTasks();
+  fetchAllowedEmails();
+  
+  // Восстановление контекста возврата
+  const savedContext = sessionStorage.getItem('adminReturnContext');
+  if (savedContext) {
+    setReturnContext(JSON.parse(savedContext));
+    sessionStorage.removeItem('adminReturnContext');
+  }
+  
+  // Загружаем задачу для редактирования
+  loadEditTask();
+}, []);
 
   const fetchAllowedEmails = async () => {
     try {
@@ -535,28 +567,46 @@ const handleTaskSubmit = async (e) => {
             await axios.put(`https://tests-production-46d5.up.railway.app/admin/tasks/${taskData.id}`, finalTask);
             alert("Задание обновлено!");
             
-            // 🔍 ОТЛАДКА
-            console.log('returnContext:', returnContext);
-            console.log('sourceTab:', returnContext.sourceTab);
-            console.log('bankClass:', returnContext.bankClass);
-            console.log('bankTopic:', returnContext.bankTopic);
-            console.log('scrollPosition:', returnContext.scrollPosition);
+            // Проверяем returnContext из sessionStorage
+            if (returnContext.sourceTab === 'result' && returnContext.resultId) {
+                const taskId = taskData.id;
+                
+                setReturnContext({
+                    sourceTab: null,
+                    bankClass: null,
+                    bankTopic: null,
+                    bankSection: null,
+                    scrollPosition: 0
+                });
+                setTaskData(initialTaskState);
+                
+                // Переходим на страницу результата и скроллим к заданию
+                navigate(`/admin/results/${returnContext.resultId}`);
+                setTimeout(() => {
+                    const el = document.querySelector(`[data-task-id="${taskId}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 500);
+                return;
+            }
             
             if (returnContext.sourceTab === 'bank' && returnContext.bankTopic && returnContext.bankClass) {
-                console.log('✅ Переключаем в bank');
                 setBankClass(returnContext.bankClass);
                 setBankTopic(returnContext.bankTopic);
                 setActiveTab('bank');
                 
                 setTimeout(() => {
-                    console.log('📜 Скроллим на:', returnContext.scrollPosition);
-                    window.scrollTo({
-                        top: returnContext.scrollPosition,
-                        behavior: 'smooth'
-                    });
+                    const el = document.querySelector(`[data-task-id="${taskData.id}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else {
+                        window.scrollTo({
+                            top: returnContext.scrollPosition,
+                            behavior: 'smooth'
+                        });
+                    }
                 }, 500);
-            } else {
-                console.log('❌ Условие не выполнено');
             }
             
             setReturnContext({
@@ -587,6 +637,7 @@ const handleTaskSubmit = async (e) => {
         alert("Ошибка при сохранении");
     }
 };
+
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm(`Удалить задание #${taskId}?`)) return;
     try {

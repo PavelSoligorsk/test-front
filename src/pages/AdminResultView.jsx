@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3, MapPin  } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3, MapPin, Edit3  } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -176,6 +176,20 @@ export default function AdminResultView() {
     setOpenSolutions(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const handleEditTask = (taskId) => {
+  // Сохраняем контекст для возврата
+  sessionStorage.setItem('adminReturnContext', JSON.stringify({
+    sourceTab: 'result',
+    resultId: resultId,
+    scrollPosition: window.scrollY
+  }));
+  
+  // Сразу сохраняем ID задачи для редактирования
+  sessionStorage.setItem('editTaskId', taskId);
+  
+  navigate('/admin');
+};
+
   useEffect(() => {
     const fetchResult = async () => {
       try {
@@ -279,39 +293,51 @@ export default function AdminResultView() {
               }`}>
                 <div className="p-8">
                   <div className="flex justify-between items-start mb-8">
-                    <div className="flex gap-8">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Вопрос №{idx + 1}</span>
-                        <span className="text-[9px] font-bold text-blue-500 uppercase mt-0.5">
-                          Начислено: {item.points_earned || 0} / {item.max_task_points || 0} б.
-                        </span>
-                      </div>
+  <div className="flex gap-8">
+    <div className="flex flex-col">
+      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Вопрос №{idx + 1}</span>
+      <span className="text-[9px] font-bold text-blue-500 uppercase mt-0.5">
+        Начислено: {item.points_earned || 0} / {item.max_task_points || 0} б.
+      </span>
+    </div>
 
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1.5 opacity-50">Сложность</span>
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((step) => (
-                            <div 
-                              key={step}
-                              className={`w-1 h-3 rounded-full transition-all duration-300 ${
-                                step <= diff 
-                                  ? (diff >= 4 ? 'bg-red-500' : diff >= 3 ? 'bg-amber-400' : 'bg-emerald-400')
-                                  : 'bg-slate-100'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+    <div className="flex flex-col">
+      <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1.5 opacity-50">Сложность</span>
+      <div className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((step) => (
+          <div 
+            key={step}
+            className={`w-1 h-3 rounded-full transition-all duration-300 ${
+              step <= diff 
+                ? (diff >= 4 ? 'bg-red-500' : diff >= 3 ? 'bg-amber-400' : 'bg-emerald-400')
+                : 'bg-slate-100'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  </div>
 
-                    <div className={`flex items-center gap-2 font-black uppercase text-[10px] px-5 py-2 rounded-full tracking-wider ${
-                      hasNoAnswer ? 'bg-slate-100 text-slate-500' :
-                      item.is_correct ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
-                    }`}>
-                      {hasNoAnswer ? <AlertCircle size={12}/> : item.is_correct ? <CheckCircle2 size={12}/> : <XCircle size={12}/>}
-                      {hasNoAnswer ? 'Пропущено' : item.is_correct ? 'Верно' : 'Ошибка'}
-                    </div>
-                  </div>
+  {/* ✅ НОВЫЙ БЛОК С КНОПКАМИ */}
+  <div className="flex items-center gap-3">
+    <button
+      onClick={() => handleEditTask(item.task_id)}
+      className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all border border-transparent hover:border-blue-200"
+      title="Редактировать задание"
+    >
+      <Edit3 size={14} />
+      <span className="hidden sm:inline">Ред.</span>
+    </button>
+
+    <div className={`flex items-center gap-2 font-black uppercase text-[10px] px-5 py-2 rounded-full tracking-wider ${
+      hasNoAnswer ? 'bg-slate-100 text-slate-500' :
+      item.is_correct ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+    }`}>
+      {hasNoAnswer ? <AlertCircle size={12}/> : item.is_correct ? <CheckCircle2 size={12}/> : <XCircle size={12}/>}
+      {hasNoAnswer ? 'Пропущено' : item.is_correct ? 'Верно' : 'Ошибка'}
+    </div>
+  </div>
+</div>
 
                   {/* ✅ Условие задачи */}
                   <div className="mb-10 text-slate-800 font-medium leading-relaxed">
