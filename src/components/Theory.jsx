@@ -535,6 +535,11 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       const heightMatch = attrsStr.match(/height="([^"]+)"/);
       const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
       
+       // 2. Блокируем скролл
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.width = '100%';
+
       allTags.push({
         type: 'geogebra',
         id: idMatch ? idMatch[1] : null,
@@ -543,6 +548,11 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         index: match.index,
         endIndex: match.index + match[0].length
       });
+
+      const currentScrollY = document.body.style.top;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     }
     
     // Сортируем по индексу
