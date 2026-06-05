@@ -603,11 +603,33 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
 
 // Функция для запуска загрузки на 750ms
 const triggerLoading = () => {
+  // 1. Сохраняем текущую позицию скролла
+  const scrollY = window.scrollY;
+  
+  // 2. Блокируем скролл
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.width = '100%';
+  
+  // 3. Показываем оверлей загрузки
   setIsLoading(true);
+  
+  // 4. Через 750ms восстанавливаем скролл и скрываем оверлей
   setTimeout(() => {
+    // Восстанавливаем скролл
+    const currentScrollY = document.body.style.top;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    if (currentScrollY) {
+      window.scrollTo(0, parseInt(currentScrollY || '0', 10) * -1);
+    }
+    
+    // Скрываем оверлей
     setIsLoading(false);
   }, 750);
 };
+
   triggerLoading();
   if (sections.length > 0) setActiveId(sections[0].id);
 };
