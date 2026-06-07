@@ -177,7 +177,12 @@ const TopicCard = ({ topic, onClick }) => {
       'expressions': { gradient: 'from-purple-500 to-pink-500', icon: '📝', label: 'Выражения' },
       'equations': { gradient: 'from-blue-500 to-cyan-500', icon: '⚖️', label: 'Уравнения' },
       'functions': { gradient: 'from-emerald-500 to-teal-500', icon: '📈', label: 'Функции' },
-      'geometry': { gradient: 'from-rose-500 to-orange-500', icon: '📐', label: 'Геометрия' }
+      'geometry': { gradient: 'from-rose-500 to-orange-500', icon: '📐', label: 'Геометрия' },
+      // НОВЫЕ ТЕМЫ:
+      'planim': { gradient: 'from-green-500 to-lime-500', icon: '📏', label: 'Планиметрия' },
+      'stereo': { gradient: 'from-indigo-500 to-violet-500', icon: '🧊', label: 'Стереометрия' },
+      'inequalities': { gradient: 'from-yellow-500 to-amber-500', icon: '≷', label: 'Неравенства' },
+      'text': { gradient: 'from-sky-500 to-blue-500', icon: '📖', label: 'Текстовые задачи' }
     };
     return styles[topicKey] || { gradient: 'from-slate-500 to-slate-600', icon: '📚', label: topic.label };
   };
@@ -197,7 +202,7 @@ const TopicCard = ({ topic, onClick }) => {
           </div>
           <div className="flex-1">
             <h3 className="font-black text-slate-800 text-sm uppercase">
-              {topic.label}
+              {styles.label}
             </h3>
             <p className="text-[9px] font-bold text-slate-400 mt-1">
               {topic.sections_count} разделов
