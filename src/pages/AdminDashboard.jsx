@@ -1261,6 +1261,35 @@ const handleTaskSubmit = async (e) => {
                         </span>
                       </div>
 
+                      {/* ОТДЕЛЬНАЯ КНОПКА ОТПРАВКИ В ТГ */}
+<button
+  onClick={async () => {
+    try {
+      // Зашиваем юзернейм канала или чата, куда слать задачу
+      const targetChatId = "-1003969044702"; 
+
+      // Стучимся строго на твой основной бэкенд в правильный эндпоинт!
+      await axios.post(
+        `https://tests-production-46d5.up.railway.app/admin/tasks/${t.id}/send-to-tg?chat_id=${encodeURIComponent(targetChatId)}`
+      );
+      
+      alert('Задача успешно улетела в Telegram! 🚀');
+    } catch (err) {
+      console.error(err);
+      // Если бэкенд вернет ошибку, выведем её текст для дебага
+      const errorMsg = err.response?.data?.detail || 'Ошибка при отправке в Telegram';
+      alert(`Косяк: ${errorMsg}`);
+    }
+  }}
+  className="flex items-center gap-1.5 px-3 py-1 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all duration-150 shadow-sm cursor-pointer"
+>
+  {/* SVG иконка бумажного самолетика */}
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+  </svg>
+  <span>В телегу</span>
+</button>
+
                       {/* Условие задания */}
                       <MarkdownPreview text={t.content} title="Условие задания" type="default" />
 
