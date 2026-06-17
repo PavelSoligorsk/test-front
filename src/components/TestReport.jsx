@@ -1,13 +1,9 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Download, CheckCircle2, XCircle, AlertCircle, PenTool, Image as ImageIcon, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import React, { useState } from 'react';
+import { Printer, CheckCircle2, XCircle, AlertCircle, PenTool, Image as ImageIcon, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { MarkdownRenderer as MarkdownViewer } from '../pages/AdminResultView';
 
 export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
-  const reportRef = useRef(null);
   const [expandedSolutions, setExpandedSolutions] = useState({});
-  const [isGenerating, setIsGenerating] = useState(false);
 
   // Подсчет статистики
   const stats = test?.tasks?.reduce((acc, task) => {
@@ -35,60 +31,9 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
 
   const scorePercentage = stats?.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
 
-  // Хелпер: Ждем полной загрузки всех картинок (включая чертежи), чтобы html2canvas знал их точные размеры
-  const waitForImages = async () => {
-    if (!reportRef.current) return;
-    const images = reportRef.current.querySelectorAll('img');
-    const promises = Array.from(images).map((img) => {
-      if (img.complete) return Promise.resolve();
-      return new Promise((resolve) => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      });
-    });
-    await Promise.all(promises);
-  };
-
-  // Экспорт в ОДНУ длинную страницу PDF
-  const downloadPDF = async () => {
-    if (!reportRef.current || isGenerating) return;
-    
-    setIsGenerating(true);
-    try {
-      // 1. Даем картинкам догрузиться и занять свои места в DOM
-      await waitForImages();
-      // Небольшой таймаут для стабилизации стилей перед скриншотом
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const element = reportRef.current;
-      const canvas = await html2canvas(element, { 
-        scale: 2.0,            // Увеличиваем масштаб для четкости (FullHD+ эквивалент)
-        useCORS: true,         // Берем картинки с CORS, если настроены заголовки сервера
-        allowTaint: true,      // Позволяет рендерить картинки без CORS (но может заблокировать toDataURL на iOS)
-        logging: false,
-        windowHeight: element.scrollHeight,
-        backgroundColor: '#F8FAFC' // Сохраняем оригинальный цвет фона подложки
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.92); // Качество 0.92 — оптимальный баланс веса и четкости
-      const pdfWidth = 210;    // Стандартный формат ширины (A4-пропорция в мм)
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight],
-        compress: true
-      });
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-      pdf.save(`Отчет_${test?.title || 'тест'}.pdf`);
-    } catch (err) {
-      console.error('Ошибка генерации PDF:', err);
-      alert('Не удалось создать PDF. Если картинки не отобразились, проверьте настройки CORS на сервере.');
-    } finally {
-      setIsGenerating(false);
-    }
+  // Мгновенный экспорт через нативный движок браузера
+  const handlePrint = () => {
+    window.print();
   };
 
   const toggleSolution = (taskId) => {
@@ -96,11 +41,30 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 print:bg-white print:p-0">
+      
+      {/* Стили для печати: скрываем лишнее, настраиваем разрывы страниц */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .page-break {
+            page-break-inside: avoid; /* Карточки заданий не будут рваться пополам */
+            break-inside: avoid;
+            margin-bottom: 2rem;
+          }
+        }
+      `}</style>
+
+      <div className="max-w-4xl mx-auto space-y-6 print:max-w-none print:space-y-4">
         
-        {/* Верхняя панель управления */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+        {/* Верхняя панель управления — НЕ ПЕЧАТАЕТСЯ */}
+        <div className="no-print flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
           <div>
             <h1 className="text-2xl font-black italic">
               <MarkdownViewer className="prose-h1:m-0">
@@ -114,42 +78,39 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
               Назад
             </button>
             <button 
-              onClick={downloadPDF} 
-              disabled={isGenerating}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 text-white rounded-full text-[10px] font-black uppercase transition shadow-lg ${
-                isGenerating ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
-              }`}
+              onClick={handlePrint} 
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase hover:bg-blue-700 transition shadow-lg shadow-blue-200"
             >
-              <Download size={16} /> {isGenerating ? 'Создание...' : 'Скачать PDF'}
+              <Printer size={16} /> Сохранить в PDF
             </button>
           </div>
         </div>
 
-        {/* Контейнер для экспорта в PDF */}
-        <div ref={reportRef} className="space-y-6 bg-[#F8FAFC] p-4 -m-4">
+        {/* Контейнер отчета */}
+        <div className="space-y-6">
           
-          {/* Блок статистики */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-blue-600">{scorePercentage}%</span>
+          {/* Блок статистики (при печати сохраняет структуру) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4 print:gap-2">
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 print:border-slate-300 shadow-sm flex flex-col items-center justify-center print:p-4">
+              <span className="text-3xl font-black text-blue-600 print:text-blue-700">{scorePercentage}%</span>
               <span className="text-[10px] font-black uppercase text-slate-400 mt-2 tracking-widest">Результат</span>
             </div>
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-green-500">{stats?.correct}</span>
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 print:border-slate-300 shadow-sm flex flex-col items-center justify-center print:p-4">
+              <span className="text-3xl font-black text-green-500 print:text-green-600">{stats?.correct}</span>
               <span className="text-[10px] font-black uppercase text-slate-400 mt-2 tracking-widest">Верно</span>
             </div>
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-red-500">{stats?.incorrect}</span>
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 print:border-slate-300 shadow-sm flex flex-col items-center justify-center print:p-4">
+              <span className="text-3xl font-black text-red-500 print:text-red-600">{stats?.incorrect}</span>
               <span className="text-[10px] font-black uppercase text-slate-400 mt-2 tracking-widest">Ошибок</span>
             </div>
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-slate-400">{stats?.unanswered}</span>
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 print:border-slate-300 shadow-sm flex flex-col items-center justify-center print:p-4">
+              <span className="text-3xl font-black text-slate-400 print:text-slate-500">{stats?.unanswered}</span>
               <span className="text-[10px] font-black uppercase text-slate-400 mt-2 tracking-widest">Пропущено</span>
             </div>
           </div>
 
           {/* Карточки заданий */}
-          <div className="space-y-6">
+          <div className="space-y-6 print:space-y-4">
             {test?.tasks?.map((task, idx) => {
               const answer = userAnswers[task.id];
               const drawing = drawings[task.id];
@@ -188,39 +149,39 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
               }
 
               return (
-                <div key={task.id} className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+                <div key={task.id} className="page-break bg-white border border-slate-200 print:border-slate-300 rounded-[2rem] print:rounded-2xl overflow-hidden shadow-sm print:shadow-none">
                   {/* Шапка карточки */}
                   <div className={`p-4 border-b flex items-center justify-between ${
                     isUnanswered ? 'bg-slate-50 border-slate-200' : isCorrect ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
-                  }`}>
+                  } print:bg-transparent print:border-slate-200`}>
                     <div className="flex items-center gap-3">
                       {isUnanswered ? (
                         <AlertCircle className="text-slate-400" size={20} />
                       ) : isCorrect ? (
-                        <CheckCircle2 className="text-green-500" size={20} />
+                        <CheckCircle2 className="text-green-500 print:text-green-600" size={20} />
                       ) : (
-                        <XCircle className="text-red-500" size={20} />
+                        <XCircle className="text-red-500 print:text-red-600" size={20} />
                       )}
                       <span className="text-sm font-black uppercase tracking-widest text-slate-700">Задание {idx + 1}</span>
                     </div>
                     {drawing && (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-100 px-2 py-1 rounded-lg">
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-100 print:bg-transparent px-2 py-1 rounded-lg">
                         <PenTool size={12} /> Есть чертеж
                       </span>
                     )}
                   </div>
 
-                  <div className="p-6 space-y-6">
-                    {/* Условие задачи с жестким контролем картинок внутри контента */}
-                    <div className="prose prose-sm max-w-none text-black [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_img]:object-contain [&_img]:rounded-xl [&_img]:my-4">
+                  <div className="p-6 space-y-6 print:p-4 print:space-y-4">
+                    {/* Условие задачи */}
+                    <div className="prose prose-sm max-w-none text-black [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_img]:object-contain [&_img]:rounded-xl print:[&_img]:max-h-[300px]">
                       <MarkdownViewer>
                         {task.content || '*Условие не указано*'}
                       </MarkdownViewer>
                     </div>
 
                     {/* Блок ответов */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className={`p-4 rounded-2xl border ${isUnanswered ? 'bg-slate-50 border-slate-200' : isCorrect ? 'bg-green-50 border-green-200 text-green-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4">
+                      <div className={`p-4 rounded-2xl border ${isUnanswered ? 'bg-slate-50 border-slate-200' : isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} print:bg-transparent print:border-slate-300`}>
                         <span className={`text-[9px] font-black uppercase tracking-widest block mb-2 ${isUnanswered ? 'text-slate-400' : isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                           Ваш ответ
                         </span>
@@ -229,37 +190,37 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
                         </MarkdownViewer>
                       </div>
                       
-                      <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200">
-                        <span className="text-[9px] font-black uppercase text-blue-500 tracking-widest block mb-2">Верный ответ</span>
-                        <MarkdownViewer className="prose prose-sm max-w-none text-blue-900 prose-p:my-1">
+                      <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200 print:bg-transparent print:border-slate-300">
+                        <span className="text-[9px] font-black uppercase text-blue-500 tracking-widest block mb-2 print:text-blue-600">Верный ответ</span>
+                        <MarkdownViewer className="prose prose-sm max-w-none text-blue-900 print:text-black prose-p:my-1">
                           {correctAnswerMD}
                         </MarkdownViewer>
                       </div>
                     </div>
 
-                    {/* Чертеж (Фикс размазывания: контролируем ширину контейнера и картинки) */}
+                    {/* Чертеж */}
                     {drawing && (
-                      <div className="mt-4 border-t border-slate-100 pt-6">
-                        <div className="flex items-center gap-2 mb-4">
+                      <div className="mt-4 border-t border-slate-100 print:border-slate-200 pt-6 print:pt-4">
+                        <div className="flex items-center gap-2 mb-4 no-print">
                           <ImageIcon size={16} className="text-slate-400" />
                           <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Прикрепленный черновик</span>
                         </div>
-                        <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex justify-center items-center p-4 min-h-[200px] max-h-[450px] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiNlMmU4ZjAiLz48L3N2Zz4=')]">
+                        <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex justify-center items-center p-4 min-h-[200px] max-h-[450px] print:bg-transparent print:border-none print:p-0 print:max-h-[350px]">
                           <img 
                             src={drawing} 
                             alt={`Чертеж к заданию ${idx+1}`} 
-                            className="max-w-full max-h-[400px] w-auto h-auto object-contain rounded-xl shadow-sm bg-white" 
+                            className="max-w-full max-h-[400px] w-auto h-auto object-contain rounded-xl shadow-sm bg-white print:shadow-none print:max-h-[320px]" 
                           />
                         </div>
                       </div>
                     )}
 
-                    {/* Разбор от ИИ */}
+                    {/* Разбор от ИИ — При обычной работе скрыт под спойлер, но при печати ИИ-решение разворачивается автоматически */}
                     {task.ai_solution && (
-                      <div className="border-t border-slate-100 pt-4">
+                      <div className="border-t border-slate-100 print:border-slate-200 pt-4">
                         <button 
                           onClick={() => toggleSolution(task.id)}
-                          className="flex items-center justify-between w-full p-4 bg-violet-50 hover:bg-violet-100 rounded-2xl transition-colors border border-violet-100"
+                          className="no-print flex items-center justify-between w-full p-4 bg-violet-50 hover:bg-violet-100 rounded-2xl transition-colors border border-violet-100"
                         >
                           <div className="flex items-center gap-2">
                             <Sparkles size={16} className="text-violet-500" />
@@ -268,9 +229,14 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
                           {expandedSolutions[task.id] ? <ChevronUp size={16} className="text-violet-400" /> : <ChevronDown size={16} className="text-violet-400" />}
                         </button>
                         
-                        {expandedSolutions[task.id] && (
-                          <div className="mt-2 p-5 bg-white border border-violet-100 rounded-2xl shadow-sm prose prose-sm max-w-none [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_img]:object-contain [&_img]:rounded-xl">
-                            <MarkdownViewer>
+                        {/* В UI показываем по стейту, а в PDF/печати блок выводится всегда */}
+                        {(expandedSolutions[task.id] || window.matchMedia('print').matches) && (
+                          <div className="mt-2 p-5 bg-white border border-violet-100 rounded-2xl shadow-sm print:shadow-none print:border-none print:p-0 print:mt-4">
+                            <div className="hidden print:flex items-center gap-2 mb-2">
+                              <Sparkles size={14} className="text-violet-600" />
+                              <span className="text-[10px] font-black uppercase text-violet-600 tracking-widest">Разбор от ИИ</span>
+                            </div>
+                            <MarkdownViewer className="prose prose-sm max-w-none">
                               {task.ai_solution}
                             </MarkdownViewer>
                           </div>
