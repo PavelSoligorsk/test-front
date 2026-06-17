@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
-import { Pencil, Eraser, RotateCcw, ZoomIn, ZoomOut, Undo2, Trash2 } from 'lucide-react';
+import { Pencil, Eraser, ZoomIn, ZoomOut, Undo2, Redo2, Trash2, Hand } from 'lucide-react';
 
 const DrawingPad = forwardRef(({ 
   initialData,
@@ -15,37 +15,55 @@ const DrawingPad = forwardRef(({
   const [color, setColor] = useState('#000000');
   const [lineWidth, setLineWidth] = useState(4); 
   const [scale, setScale] = useState(0.5); 
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const minScale = 0.2;
   const maxScale = 3.0;
   
   const strokesRef = useRef([]);
+  const historyRef = useRef([]);
+  const historyIndexRef = useRef(-1);
   const isDrawing = useRef(false);
+  const isPanning = useRef(false);
   const currentStrokeRef = useRef([]);
   const rafId = useRef(null);
   const backgroundImageRef = useRef(null);
-  
-  // Реф для хранения последнего сохраненного результата (защита от зацикливания)
   const lastSavedDataRef = useRef(null);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const panStartOffsetRef = useRef({ x: 0, y: 0 });
 
   const baseHeight = baseWidth / aspectRatio;
 
-  const getLogicalPos = (e) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+  // --- Функция ограничения панорамирования ---
+  const clampPanOffset = useCallback((offset) => {
+    const container = containerRef.current;
+    if (!container) return offset;
 
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    
-    const canvasX = clientX - rect.left;
-    const canvasY = clientY - rect.top;
+    // Получаем размеры контейнера
+    const containerRect = container.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
 
-    const x = (canvasX / rect.width) * baseWidth;
-    const y = (canvasY / rect.height) * baseHeight;
+    // Размер canvas в пикселях
+    const canvasWidth = baseWidth * scale;
+    const canvasHeight = baseHeight * scale;
 
-    return { x, y };
-  };
+    // Вычисляем максимальное смещение
+    // Холст должен полностью заполнять контейнер, но не выходить за его пределы
+    const maxX = Math.max(0, (canvasWidth - containerWidth) / 2);
+    const maxY = Math.max(0, (canvasHeight - containerHeight) / 2);
 
+    // Если холст меньше контейнера, центрируем его
+    if (canvasWidth <= containerWidth && canvasHeight <= containerHeight) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: Math.max(-maxX, Math.min(maxX, offset.x)),
+      y: Math.max(-maxY, Math.min(maxY, offset.y))
+    };
+  }, [scale, baseWidth, baseHeight]);
+
+  // --- render ---
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -53,8 +71,11 @@ const DrawingPad = forwardRef(({
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     
-    canvas.style.width = `${baseWidth * scale}px`;
-    canvas.style.height = `${baseHeight * scale}px`;
+    const canvasWidth = baseWidth * scale;
+    const canvasHeight = baseHeight * scale;
+    
+    canvas.style.width = `${canvasWidth}px`;
+    canvas.style.height = `${canvasHeight}px`;
 
     if (canvas.width !== baseWidth * dpr || canvas.height !== baseHeight * dpr) {
       canvas.width = baseWidth * dpr;
@@ -63,6 +84,10 @@ const DrawingPad = forwardRef(({
     
     ctx.resetTransform();
     ctx.scale(dpr, dpr);
+    
+    // Применяем ограниченное панорамирование
+    const clampedOffset = clampPanOffset(panOffset);
+    ctx.translate(clampedOffset.x, clampedOffset.y);
     
     ctx.clearRect(0, 0, baseWidth, baseHeight);
     ctx.fillStyle = '#ffffff';
@@ -85,27 +110,106 @@ const DrawingPad = forwardRef(({
       }
       ctx.stroke();
     });
-  }, [scale, baseWidth, baseHeight]);
+  }, [scale, baseWidth, baseHeight, panOffset, clampPanOffset]);
 
-  // --- Единая функция для сохранения состояния ---
+  // --- Обновленная функция установки панорамирования с ограничением ---
+  const setPanOffsetWithClamp = useCallback((newOffset) => {
+    const clamped = clampPanOffset(newOffset);
+    setPanOffset(clamped);
+  }, [clampPanOffset]);
+
+  // --- triggerSave ---
   const triggerSave = useCallback(() => {
     if (!canvasRef.current) return null;
     const dataUrl = canvasRef.current.toDataURL();
-    lastSavedDataRef.current = dataUrl; // Запоминаем, что мы отдали наружу
+    lastSavedDataRef.current = dataUrl;
     if (onSave) onSave(dataUrl);
     return dataUrl;
   }, [onSave]);
 
+  // --- pushToHistory ---
+  const pushToHistory = useCallback((strokes) => {
+    historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+    historyRef.current.push(JSON.stringify(strokes));
+    historyIndexRef.current = historyRef.current.length - 1;
+  }, []);
+
+  // --- undo / redo ---
+  const undo = useCallback(() => {
+    if (historyIndexRef.current > 0) {
+      historyIndexRef.current--;
+      const savedStrokes = JSON.parse(historyRef.current[historyIndexRef.current]);
+      strokesRef.current = savedStrokes;
+      render();
+      triggerSave();
+    }
+  }, [render, triggerSave]);
+
+  const redo = useCallback(() => {
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      historyIndexRef.current++;
+      const savedStrokes = JSON.parse(historyRef.current[historyIndexRef.current]);
+      strokesRef.current = savedStrokes;
+      render();
+      triggerSave();
+    }
+  }, [render, triggerSave]);
+
+  // --- Получение логических координат с учетом панорамирования ---
+  const getLogicalPos = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const canvasX = clientX - rect.left;
+    const canvasY = clientY - rect.top;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const scaleX = canvas.width / (dpr * rect.width);
+    const scaleY = canvas.height / (dpr * rect.height);
+    
+    const clampedOffset = clampPanOffset(panOffset);
+    const x = (canvasX * scaleX) - clampedOffset.x;
+    const y = (canvasY * scaleY) - clampedOffset.y;
+
+    return { x, y };
+  };
+
+  // --- Получение координат для панорамирования ---
+  const getPanPos = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const canvasX = clientX - rect.left;
+    const canvasY = clientY - rect.top;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const scaleX = canvas.width / (dpr * rect.width);
+    const scaleY = canvas.height / (dpr * rect.height);
+
+    return { 
+      x: canvasX * scaleX, 
+      y: canvasY * scaleY 
+    };
+  };
+
+  // --- useEffect для рендера ---
   useEffect(() => {
     render();
   }, [render]);
 
+  // --- useEffect для фона ---
   useEffect(() => {
     const source = backgroundImageSrc || initialData;
     if (!source) return;
 
-    // ЗАЩИТА: Если родитель передал обратно ту же картинку, которую мы только что сами сгенерировали,
-    // мы её игнорируем! Иначе нарисованные линии "впечатаются" в фон и их нельзя будет отменить.
     if (source === lastSavedDataRef.current) return;
 
     const img = new Image();
@@ -116,6 +220,62 @@ const DrawingPad = forwardRef(({
     img.src = source;
   }, [backgroundImageSrc, initialData, render]);
 
+  // --- Инициализация истории ---
+  useEffect(() => {
+    if (strokesRef.current.length === 0 && historyRef.current.length === 0) {
+      pushToHistory([]);
+    }
+  }, [pushToHistory]);
+
+  // --- Обработчики мыши / касаний ---
+  const handlePointerDown = (e) => {
+    if (tool === 'hand') {
+      e.preventDefault();
+      isPanning.current = true;
+      const pos = getPanPos(e);
+      panStartRef.current = pos;
+      panStartOffsetRef.current = { ...panOffset };
+    } else {
+      startDraw(e);
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    if (tool === 'hand' && isPanning.current) {
+      e.preventDefault();
+      const pos = getPanPos(e);
+      const dx = pos.x - panStartRef.current.x;
+      const dy = pos.y - panStartRef.current.y;
+      
+      const newOffset = {
+        x: panStartOffsetRef.current.x + dx,
+        y: panStartOffsetRef.current.y + dy
+      };
+      
+      setPanOffsetWithClamp(newOffset);
+    } else if (tool !== 'hand') {
+      draw(e);
+    }
+  };
+
+  const handlePointerUp = (e) => {
+    if (tool === 'hand' && isPanning.current) {
+      e.preventDefault();
+      isPanning.current = false;
+    } else if (tool !== 'hand') {
+      endDraw(e);
+    }
+  };
+
+  const handlePointerLeave = (e) => {
+    if (tool === 'hand') {
+      isPanning.current = false;
+    } else {
+      endDraw(e);
+    }
+  };
+
+  // --- Оригинальные обработчики рисования ---
   const startDraw = (e) => {
     e.preventDefault();
     isDrawing.current = true;
@@ -138,6 +298,9 @@ const DrawingPad = forwardRef(({
       ctx.save();
       ctx.resetTransform();
       ctx.scale(dpr, dpr);
+      
+      const clampedOffset = clampPanOffset(panOffset);
+      ctx.translate(clampedOffset.x, clampedOffset.y);
       
       ctx.beginPath();
       ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
@@ -173,39 +336,78 @@ const DrawingPad = forwardRef(({
         lineWidth: tool === 'eraser' ? lineWidth * 3 : lineWidth,
       };
       strokesRef.current.push(stroke);
+      pushToHistory(strokesRef.current);
     }
     currentStrokeRef.current = [];
-    render();
-    triggerSave(); // Вызываем единую функцию сохранения
-  };
-  
-
-  const undo = () => {
-    if (strokesRef.current.length > 0) {
-      strokesRef.current.pop();
-      render();
-      triggerSave();
-    }
-  };
-
-  const clearCanvas = () => {
-    strokesRef.current = [];
-    currentStrokeRef.current = [];
-    // Убрал очистку фона (backgroundImageRef.current = null). 
-    // Теперь кнопка очищает только рисунки ученика, оставляя само задание на месте!
     render();
     triggerSave();
   };
 
-  const zoomIn = () => setScale(prev => Math.min(prev + 0.1, maxScale));
-  const zoomOut = () => setScale(prev => Math.max(prev - 0.1, minScale));
+  // --- Зум только по кнопкам ---
+  const zoomIn = () => {
+    const newScale = Math.min(scale + 0.1, maxScale);
+    setScale(newScale);
+    // После изменения масштаба корректируем панорамирование
+    setTimeout(() => {
+      setPanOffsetWithClamp(panOffset);
+    }, 0);
+  };
+  
+  const zoomOut = () => {
+    const newScale = Math.max(scale - 0.1, minScale);
+    setScale(newScale);
+    setTimeout(() => {
+      setPanOffsetWithClamp(panOffset);
+    }, 0);
+  };
+  
+  const resetPan = () => setPanOffsetWithClamp({ x: 0, y: 0 });
 
   useImperativeHandle(ref, () => ({
     save: triggerSave,
     clear: clearCanvas,
     undo: undo,
+    redo: redo,
+    resetPan: resetPan,
   }));
-  
+
+  // --- Очистка ---
+  const clearCanvas = () => {
+    strokesRef.current = [];
+    currentStrokeRef.current = [];
+    pushToHistory([]);
+    render();
+    triggerSave();
+  };
+
+  // --- Обработчик горячих клавиш ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        redo();
+      }
+      if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setTool('hand');
+      }
+      if (e.key === 'p' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setTool('pen');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const canvasWidth = baseWidth * scale;
+  const canvasHeight = baseHeight * scale;
 
   return (
     <div ref={containerRef} className="w-full bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
@@ -213,7 +415,7 @@ const DrawingPad = forwardRef(({
         <button
           onClick={() => setTool('pen')}
           className={`p-2 rounded-xl transition-all ${tool === 'pen' ? 'bg-blue-100 text-blue-600' : 'text-slate-400 hover:bg-slate-200'}`}
-          title="Карандаш"
+          title="Карандаш (P)"
         >
           <Pencil size={16} />
         </button>
@@ -223,6 +425,13 @@ const DrawingPad = forwardRef(({
           title="Ластик"
         >
           <Eraser size={16} />
+        </button>
+        <button
+          onClick={() => setTool('hand')}
+          className={`p-2 rounded-xl transition-all ${tool === 'hand' ? 'bg-blue-100 text-blue-600' : 'text-slate-400 hover:bg-slate-200'}`}
+          title="Рука для перемещения (H)"
+        >
+          <Hand size={16} />
         </button>
         <div className="w-px h-6 bg-slate-200" />
         <input
@@ -259,39 +468,66 @@ const DrawingPad = forwardRef(({
         >
           <ZoomIn size={16} />
         </button>
+        <button
+          onClick={resetPan}
+          className="p-2 rounded-xl text-slate-400 hover:bg-slate-200 transition-all text-xs font-bold"
+          title="Сбросить позицию"
+        >
+          ⊞
+        </button>
         <div className="w-px h-6 bg-slate-200" />
         
         <button
           onClick={undo}
-          disabled={strokesRef.current.length === 0}
-          className="p-2 rounded-xl text-slate-400 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all ml-auto"
-          title="Шаг назад"
+          disabled={historyIndexRef.current <= 0}
+          className="p-2 rounded-xl text-slate-400 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+          title="Отменить (Ctrl+Z)"
         >
           <Undo2 size={16} />
         </button>
 
         <button
+          onClick={redo}
+          disabled={historyIndexRef.current >= historyRef.current.length - 1}
+          className="p-2 rounded-xl text-slate-400 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+          title="Вернуть (Ctrl+Y)"
+        >
+          <Redo2 size={16} />
+        </button>
+
+        <button
           onClick={clearCanvas}
-          className="p-2 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
+          className="p-2 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all ml-auto"
           title="Очистить всё"
         >
           <Trash2 size={16} />
         </button>
       </div>
       
-      <div className="w-full overflow-auto bg-slate-100 relative select-none" style={{ minHeight: '500px', maxHeight: '75vh' }}>
-        <div className="w-max h-max p-12 flex items-center justify-center mx-auto min-w-full min-h-full">
+      {/* Контейнер с ограниченным панорамированием */}
+      <div 
+        ref={containerRef}
+        className="w-full overflow-hidden bg-slate-100 relative" 
+        style={{ minHeight: '500px', maxHeight: '75vh' }}
+      >
+        <div className="absolute inset-0 flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            className="touch-none bg-white shadow-md cursor-crosshair"
-            style={{ display: 'block' }}
-            onMouseDown={startDraw}
-            onMouseMove={draw}
-            onMouseUp={endDraw}
-            onMouseLeave={endDraw}
-            onTouchStart={startDraw}
-            onTouchMove={draw}
-            onTouchEnd={endDraw}
+            className="touch-none bg-white shadow-md"
+            style={{ 
+              display: 'block',
+              width: `${canvasWidth}px`,
+              height: `${canvasHeight}px`,
+              cursor: tool === 'hand' ? 'grab' : 'crosshair',
+              flexShrink: 0,
+            }}
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerLeave}
+            onTouchStart={handlePointerDown}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerUp}
           />
         </div>
       </div>
