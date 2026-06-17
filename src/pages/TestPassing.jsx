@@ -230,8 +230,8 @@ export default function TestPassing() {
   // Сохранение рисунка при переключении задания
   const saveCurrentDrawing = useCallback(() => {
     if (currentTaskId && canvasRef.current) {
-      const dataUrl = canvasRef.current.toDataURL();
-      setDrawings(prev => ({ ...prev, [currentTaskId]: dataUrl }));
+// Стало:
+const dataUrl = canvasRef.current.save();      setDrawings(prev => ({ ...prev, [currentTaskId]: dataUrl }));
     }
   }, [currentTaskId]);
 
