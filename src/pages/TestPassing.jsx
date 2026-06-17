@@ -468,7 +468,7 @@ const dataUrl = canvasRef.current.save();      setDrawings(prev => ({ ...prev, [
 }
 
 // —————— Компонент предпросмотра (оставлен без изменений) ——————
-const MarkdownPreview = ({ text, title }) => {
+export const MarkdownPreview = ({ text, title }) => {
   return (
     <div className="p-6 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
       {title && <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">{title}</h4>}

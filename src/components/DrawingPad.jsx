@@ -178,6 +178,7 @@ const DrawingPad = forwardRef(({
     render();
     triggerSave(); // Вызываем единую функцию сохранения
   };
+  
 
   const undo = () => {
     if (strokesRef.current.length > 0) {
@@ -204,6 +205,7 @@ const DrawingPad = forwardRef(({
     clear: clearCanvas,
     undo: undo,
   }));
+  
 
   return (
     <div ref={containerRef} className="w-full bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">

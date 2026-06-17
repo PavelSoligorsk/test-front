@@ -6,15 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-
-// Вспомогательный компонент для рендера Markdown везде
-const MarkdownViewer = ({ content, className = "prose prose-slate max-w-none text-sm" }) => (
-  <div className={className}>
-    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-      {String(content || '')}
-    </ReactMarkdown>
-  </div>
-);
+import { MarkdownRenderer as MarkdownViewer } from '../pages/AdminResultView';
 
 export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
   const reportRef = useRef(null);
@@ -47,38 +39,33 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
   const scorePercentage = stats?.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
 
   // Экспорт в ОДНУ длинную страницу PDF (с оптимизацией размера)
-const downloadPDF = async () => {
-  if (!reportRef.current) return;
-  try {
-    const canvas = await html2canvas(reportRef.current, { 
-      scale: 1.5, // Снизили с 2 для уменьшения веса холста
-      useCORS: true,
-      logging: false,
-      windowHeight: reportRef.current.scrollHeight 
-    });
-    
-    // Используем JPEG вместо PNG и добавляем уровень сжатия (0.85 — баланс веса и качества)
-    const imgData = canvas.toDataURL('image/jpeg', 0.85);
-    
-    // Немного уменьшаем ширину (например, до 180мм), высота пересчитается автоматически
-    const pdfWidth = 180;
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    // Создаем PDF с кастомным форматом
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [pdfWidth, pdfHeight]
-    });
+  const downloadPDF = async () => {
+    if (!reportRef.current) return;
+    try {
+      const canvas = await html2canvas(reportRef.current, { 
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        windowHeight: reportRef.current.scrollHeight 
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const pdfWidth = 180;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight]
+      });
 
-    // Для JPEG указываем тип 'JPEG' и добавляем флаг FAST для ускорения сжатия
-    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-    pdf.save(`Отчет_${test?.title || 'тест'}.pdf`);
-  } catch (err) {
-    console.error('Ошибка генерации PDF:', err);
-    alert('Не удалось создать PDF. Попробуйте ещё раз.');
-  }
-};
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      pdf.save(`Отчет_${test?.title || 'тест'}.pdf`);
+    } catch (err) {
+      console.error('Ошибка генерации PDF:', err);
+      alert('Не удалось создать PDF. Попробуйте ещё раз.');
+    }
+  };
 
   const toggleSolution = (taskId) => {
     setExpandedSolutions(prev => ({ ...prev, [taskId]: !prev[taskId] }));
@@ -92,7 +79,9 @@ const downloadPDF = async () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
           <div>
             <h1 className="text-2xl font-black italic">
-              <MarkdownViewer content={test?.title || 'Результаты тестирования'} className="prose-h1:m-0" />
+              <MarkdownViewer className="prose-h1:m-0">
+                {test?.title || 'Результаты тестирования'}
+              </MarkdownViewer>
             </h1>
             <p className="text-sm text-slate-500 mt-1">Проверено автоматически</p>
           </div>
@@ -143,17 +132,18 @@ const downloadPDF = async () => {
                   : answer 
                     ? `**${answer}.** ${task.options?.[parseInt(answer)-1] || ''}`
                     : '*Ответ не дан*';
-// Разбиваем строку ответа по запятой и фильтруем пустые значения
-const exactAnswers = task.answer && !task.is_open_answer 
-  ? String(task.answer).split(',').map(s => s.trim()).filter(Boolean)
-  : [];
+
+              const exactAnswers = task.answer && !task.is_open_answer 
+                ? String(task.answer).split(',').map(s => s.trim()).filter(Boolean)
+                : [];
+
               const correctAnswerMD = task.is_open_answer 
-  ? task.answer || '*Нет данных*'
-  : exactAnswers.length > 1
-    ? exactAnswers.map(a => `**${a}.** ${task.options?.[parseInt(a)-1] || ''}`).join('\n\n')
-    : exactAnswers.length === 1
-      ? `**${exactAnswers[0]}.** ${task.options?.[parseInt(exactAnswers[0])-1] || ''}`
-      : '*Нет данных*';
+                ? task.answer || '*Нет данных*'
+                : exactAnswers.length > 1
+                  ? exactAnswers.map(a => `**${a}.** ${task.options?.[parseInt(a)-1] || ''}`).join('\n\n')
+                  : exactAnswers.length === 1
+                    ? `**${exactAnswers[0]}.** ${task.options?.[parseInt(exactAnswers[0])-1] || ''}`
+                    : '*Нет данных*';
 
               // Логика проверки
               let isCorrect = false;
@@ -193,8 +183,10 @@ const exactAnswers = task.answer && !task.is_open_answer
                   </div>
 
                   <div className="p-6 space-y-6">
-                    {/* Условие задачи (через MarkdownViewer) */}
-                    <MarkdownViewer content={task.content} />
+                   {/* Условие задачи */}
+<MarkdownViewer className="prose prose-sm max-w-none text-black [&_*]:text-black">
+  {task.content || '*Условие не указано*'}
+</MarkdownViewer>
 
                     {/* Блок ответов */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -203,19 +195,17 @@ const exactAnswers = task.answer && !task.is_open_answer
                         <span className={`text-[9px] font-black uppercase tracking-widest block mb-2 ${isUnanswered ? 'text-slate-400' : isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                           Ваш ответ
                         </span>
-                        <MarkdownViewer 
-                          content={userAnswerMD} 
-                          className="prose prose-sm max-w-none prose-p:my-1" 
-                        />
+                        <MarkdownViewer className="prose prose-sm max-w-none prose-p:my-1">
+                          {userAnswerMD}
+                        </MarkdownViewer>
                       </div>
                       
                       {/* Правильный ответ */}
                       <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200">
                         <span className="text-[9px] font-black uppercase text-blue-500 tracking-widest block mb-2">Верный ответ</span>
-                        <MarkdownViewer 
-                          content={correctAnswerMD} 
-                          className="prose prose-sm max-w-none text-blue-900 prose-p:my-1" 
-                        />
+                        <MarkdownViewer className="prose prose-sm max-w-none text-blue-900 prose-p:my-1">
+                          {correctAnswerMD}
+                        </MarkdownViewer>
                       </div>
                     </div>
 
@@ -250,13 +240,11 @@ const exactAnswers = task.answer && !task.is_open_answer
                           {expandedSolutions[task.id] ? <ChevronUp size={16} className="text-violet-400" /> : <ChevronDown size={16} className="text-violet-400" />}
                         </button>
                         
-                        {/* 
-                          Если нужно, чтобы решение всегда было развернуто в PDF, 
-                          можно убрать проверку expandedSolutions и всегда рендерить этот блок при печати.
-                        */}
                         {expandedSolutions[task.id] && (
                           <div className="mt-2 p-5 bg-white border border-violet-100 rounded-2xl shadow-sm">
-                            <MarkdownViewer content={task.ai_solution} />
+                            <MarkdownViewer className="prose prose-sm max-w-none">
+                              {task.ai_solution}
+                            </MarkdownViewer>
                           </div>
                         )}
                       </div>

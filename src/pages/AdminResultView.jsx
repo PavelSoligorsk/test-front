@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm';
 import 'katex/dist/katex.min.css';
 
 // ✅ Исправленный компонент — className перенесён на обёртку
-const MarkdownRenderer = ({ children, className = "" }) => {
+export const MarkdownRenderer = ({ children, className = "" }) => {
   return (
     <div className={`prose prose-slate max-w-none ${className}`}>
       <ReactMarkdown
