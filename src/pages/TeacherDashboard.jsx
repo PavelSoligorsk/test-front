@@ -26,7 +26,8 @@ const MAIN_TOPICS = {
   'geometry': 'Геометрия',
   'planim': 'Планиметрия',
   'stereo': 'Стереометрия',
-  'text': 'Текстовые задачи'
+  'text': 'Текстовые задачи',
+  'inequalities': 'Неравенства'
 };
 
 const API_BASE = 'https://tests-production-46d5.up.railway.app';
