@@ -11,9 +11,11 @@ import {
   Search, Send, Trash2, Edit3, CheckCircle2,
   XCircle, BookOpen, ClipboardList, GraduationCap,
   ChevronLeft, ArrowRight, Calendar, Trophy, Target,
-  UserPlus, Clock, AlertCircle, CheckSquare, Square
+  UserPlus, Clock, AlertCircle, CheckSquare, Square,
+  Filter, ChevronRight
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
+import { MarkdownPreview } from '../pages/AdminDashboard';
 
 // ==================== КОНСТАНТЫ ====================
 const MAIN_TOPICS = {
@@ -21,31 +23,450 @@ const MAIN_TOPICS = {
   'expressions': 'Выражения и их преобразования',
   'equations': 'Уравнения и неравенства',
   'functions': 'Координаты и функции',
-  'geometry': 'Геометрия'
+  'geometry': 'Геометрия',
+  'planim': 'Планиметрия',
+  'stereo': 'Стереометрия',
+  'text': 'Текстовые задачи'
 };
 
 const API_BASE = 'https://tests-production-46d5.up.railway.app';
 
-// ==================== КОМПОНЕНТ ПРЕДПРОСМОТРА ====================
-const MarkdownPreview = ({ text, title, type }) => (
-  <div className={`p-6 rounded-[2rem] border shadow-sm ${
-    type === 'hint' ? 'bg-amber-50/40 border-amber-100' : 
-    type === 'solution' ? 'bg-emerald-50/40 border-emerald-100' : 'bg-white border-slate-200'
-  }`}>
-    <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${
-      type === 'hint' ? 'text-amber-500' : type === 'solution' ? 'text-emerald-500' : 'text-slate-400'
-    }`}>{title}</h4>
-    
-    <div className="prose prose-slate max-w-none text-sm text-slate-800 text-left
-                    [&_img]:rounded-2xl [&_img]:shadow-xl [&_img]:my-6 [&_img]:block [&_img]:max-h-64
-                    [&_.katex-display]:my-6 [&_.katex-display]:text-center [&_.katex-display]:w-full">
-      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-        {text || "*Пусто...*"}
-      </ReactMarkdown>
-    </div>
-  </div>
-);
+// ==================== КОМПОНЕНТ: ТЕОРЕТИЧЕСКИЙ БАНК (ДИНАМИЧЕСКИЙ) ====================
+const TheoryBank = ({ tasks, onTaskToggle, selectedTasks, openSolutions, openHints, onToggleSolution, onToggleHint }) => {
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [activeSection, setActiveSection] = useState(null);
+  const [topicSearch, setTopicSearch] = useState('');
+  const [sectionSearch, setSectionSearch] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
 
+  // Все задания (плоский массив)
+  const allTasks = useMemo(() => {
+    if (!tasks) return [];
+    // Если tasks приходит как объект с полем all - берём его
+    if (tasks.all) return tasks.all;
+    // Если tasks приходит как объект с группировкой по классам
+    if (tasks.grouped) {
+      const flat = [];
+      Object.values(tasks.grouped).forEach(classTopics => {
+        Object.values(classTopics).forEach(topicTasks => {
+          flat.push(...topicTasks);
+        });
+      });
+      return flat;
+    }
+    return [];
+  }, [tasks]);
+
+  // Динамически собираем все топики из заданий
+  const availableTopics = useMemo(() => {
+    const topicsMap = {};
+    allTasks.forEach(task => {
+      if (!task.topic) return;
+      
+      if (!topicsMap[task.topic]) {
+        topicsMap[task.topic] = {
+          key: task.topic,
+          label: MAIN_TOPICS[task.topic] || task.topic,
+          sections: new Set()
+        };
+      }
+      if (task.section) {
+        topicsMap[task.topic].sections.add(task.section);
+      }
+    });
+    return topicsMap;
+  }, [allTasks]);
+
+  // Фильтрация топиков по поиску
+  const filteredTopics = Object.values(availableTopics).filter(topic => 
+    topic.label.toLowerCase().includes(topicSearch.toLowerCase()) ||
+    topic.key.toLowerCase().includes(topicSearch.toLowerCase())
+  );
+
+  // Секции выбранного топика
+  const sections = useMemo(() => {
+    if (!activeTopic || !availableTopics[activeTopic]) return [];
+    return Array.from(availableTopics[activeTopic].sections).sort();
+  }, [activeTopic, availableTopics]);
+
+  const filteredSections = sections.filter(section => 
+    section.toLowerCase().includes(sectionSearch.toLowerCase())
+  );
+
+  // Задания выбранной секции (фильтруем ТОЛЬКО по topic и section)
+  const sectionTasks = useMemo(() => {
+    if (!activeTopic || !activeSection) return [];
+    return allTasks.filter(t => 
+      t.topic === activeTopic && 
+      t.section === activeSection
+    );
+  }, [allTasks, activeTopic, activeSection]);
+
+  // Поиск внутри заданий секции
+  const filteredTasks = sectionTasks.filter(t => {
+    if (!taskSearch) return true;
+    const q = taskSearch.toLowerCase();
+    return (
+      t.content?.toLowerCase().includes(q) ||
+      t.answer?.toLowerCase().includes(q) ||
+      t.id?.toString().includes(q)
+    );
+  }).sort((a, b) => {
+    if (a.id !== b.id) return a.id - b.id;
+    return (a.difficulty || 0) - (b.difficulty || 0);
+  });
+
+  const getDifficultyColor = (lvl) => {
+    if (lvl >= 4) return 'text-red-500 bg-red-50 border-red-100';
+    if (lvl >= 3) return 'text-amber-500 bg-amber-50 border-amber-100';
+    return 'text-emerald-500 bg-emerald-50 border-emerald-100';
+  };
+
+  const getTopicIcon = (topicKey) => {
+    const icons = {
+      'numbers': '🔢', 'expressions': '📝', 'equations': '⚖️',
+      'inequalities': '≷', 'functions': '📈', 'text': '📖',
+      'planim': '📐', 'stereo': '🧊', 'geometry': '📏'
+    };
+    return icons[topicKey] || '📚';
+  };
+
+  const getTopicColor = (topicKey) => {
+    const colors = {
+      'numbers': 'from-orange-500 to-red-500',
+      'expressions': 'from-purple-500 to-pink-500',
+      'equations': 'from-blue-500 to-cyan-500',
+      'inequalities': 'from-yellow-500 to-amber-500',
+      'functions': 'from-emerald-500 to-teal-500',
+      'text': 'from-sky-500 to-blue-500',
+      'planim': 'from-green-500 to-lime-500',
+      'stereo': 'from-indigo-500 to-violet-500',
+      'geometry': 'from-rose-500 to-orange-500'
+    };
+    return colors[topicKey] || 'from-slate-500 to-slate-600';
+  };
+
+  const handleBack = () => {
+    if (activeSection) {
+      setActiveSection(null);
+      setTaskSearch('');
+    } else if (activeTopic) {
+      setActiveTopic(null);
+      setSectionSearch('');
+    }
+  };
+
+  const getTopicTaskCount = (topicKey) => {
+    return allTasks.filter(t => t.topic === topicKey).length;
+  };
+
+  const getSectionTaskCount = (section) => {
+    if (!activeTopic) return 0;
+    return allTasks.filter(t => t.topic === activeTopic && t.section === section).length;
+  };
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+      {/* Верхняя панель */}
+      <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+              <BookOpen size={20} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+                Банк заданий
+              </h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {activeTopic 
+                  ? `${availableTopics[activeTopic]?.label || activeTopic}${activeSection ? ` → ${activeSection}` : ' → выберите раздел'}`
+                  : `${Object.keys(availableTopics).length} тем доступно`
+                }
+              </p>
+            </div>
+          </div>
+
+          {(activeTopic || activeSection) && (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-black uppercase text-slate-600 transition-all"
+            >
+              <ChevronRight size={14} className="rotate-180" />
+              {activeSection ? 'К разделам' : 'Ко всем темам'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Уровень 1: ТОПИКИ */}
+      {!activeTopic && (
+        <div className="space-y-4">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Поиск темы..."
+              value={topicSearch}
+              onChange={(e) => setTopicSearch(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-400"
+            />
+            {topicSearch && (
+              <button 
+                onClick={() => setTopicSearch('')} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <XCircle size={16} />
+              </button>
+            )}
+          </div>
+
+          {filteredTopics.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredTopics.map(topic => (
+                <button
+                  key={topic.key}
+                  onClick={() => setActiveTopic(topic.key)}
+                  className="group relative bg-white rounded-[2rem] border-2 border-slate-100 hover:border-slate-200 hover:shadow-xl transition-all overflow-hidden text-left w-full"
+                >
+                  <div className={`h-1.5 bg-gradient-to-r ${getTopicColor(topic.key)}`} />
+                  <div className="p-6">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className={`w-12 h-12 bg-gradient-to-br ${getTopicColor(topic.key)} rounded-xl flex items-center justify-center text-white shadow-lg text-2xl`}>
+                        {getTopicIcon(topic.key)}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-black text-slate-800 text-sm uppercase">
+                          {topic.label}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[9px] font-bold text-slate-400">
+                            {topic.sections.size} разделов
+                          </span>
+                          <span className="text-[9px] text-slate-300">•</span>
+                          <span className="text-[9px] font-bold text-slate-400">
+                            {getTopicTaskCount(topic.key)} заданий
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                      <span className="text-[9px] font-black uppercase text-slate-400">Открыть</span>
+                      <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-[2.5rem] p-12 text-center">
+              <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
+                <Search size={40} className="text-slate-300" />
+              </div>
+              <p className="font-black text-slate-400 uppercase">
+                {topicSearch ? 'Темы не найдены' : 'Нет доступных тем'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Уровень 2: СЕКЦИИ */}
+      {activeTopic && !activeSection && (
+        <div className="space-y-4">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Поиск раздела..."
+              value={sectionSearch}
+              onChange={(e) => setSectionSearch(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-400"
+            />
+            {sectionSearch && (
+              <button 
+                onClick={() => setSectionSearch('')} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <XCircle size={16} />
+              </button>
+            )}
+          </div>
+
+          {filteredSections.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {filteredSections.map((section, index) => {
+                const taskCount = getSectionTaskCount(section);
+                return (
+                  <button
+                    key={index}
+                    onClick={() => setActiveSection(section)}
+                    className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-700 text-sm leading-tight truncate">
+                          {section}
+                        </p>
+                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+                          {taskCount} заданий
+                        </p>
+                      </div>
+                      <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-white rounded-[2.5rem] p-12 text-center">
+              <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
+                <Search size={40} className="text-slate-300" />
+              </div>
+              <p className="font-black text-slate-400 uppercase">
+                {sectionSearch ? 'Разделы не найдены' : 'Нет разделов'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Уровень 3: ЗАДАНИЯ */}
+      {activeTopic && activeSection && (
+        <div className="space-y-4">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Поиск по тексту задания..."
+              value={taskSearch}
+              onChange={(e) => setTaskSearch(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-400"
+            />
+            {taskSearch && (
+              <button 
+                onClick={() => setTaskSearch('')} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <XCircle size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black text-slate-400 uppercase">
+              {taskSearch 
+                ? `Найдено: ${filteredTasks.length} из ${sectionTasks.length}`
+                : `${sectionTasks.length} заданий`
+              }
+            </span>
+          </div>
+
+          {sectionTasks.length > 0 ? (
+            <div className="space-y-4">
+              {filteredTasks.map((t, index) => {
+                const isSolOpen = openSolutions[t.id];
+                const isHintOpen = openHints[t.id];
+                const isSelected = selectedTasks.some(st => st.id === t.id);
+
+                return (
+                  <div key={t.id} className={`group p-4 md:p-6 rounded-2xl border transition-all ${
+                    isSelected ? 'bg-emerald-50 border-emerald-300 shadow-lg' : 'bg-slate-50 border-transparent hover:border-slate-200'
+                  }`}>
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                          № {index + 1}
+                        </span>
+                        <span className="text-[9px] text-slate-400">ID: {t.id}</span>
+                        
+                        <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>
+                          LVL {t.difficulty || '?'}
+                        </div>
+                        
+                        <span className="text-[9px] text-slate-400">
+                          {t.is_open_answer ? 'Открытый' : 'Тест'}
+                        </span>
+                      </div>
+
+                      <MarkdownPreview text={t.content} title="Условие" />
+
+                      {!t.is_open_answer && t.options && (
+                        <div className="pl-4 border-l-2 border-emerald-100">
+                          <MarkdownPreview
+                            text={Array.isArray(t.options) 
+                              ? t.options.map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')
+                              : t.options
+                            }
+                            title="Варианты"
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <div className="bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl flex items-center gap-2">
+                          <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
+                          <span className="text-sm font-black text-emerald-700">{t.answer}</span>
+                        </div>
+
+                        {t.hint && (
+                          <button 
+                            onClick={() => onToggleHint(t.id)}
+                            className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black hover:bg-amber-100"
+                          >
+                            Подсказка
+                          </button>
+                        )}
+
+                        {t.solution && (
+                          <button 
+                            onClick={() => onToggleSolution(t.id)}
+                            className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black hover:bg-blue-100"
+                          >
+                            Решение
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => onTaskToggle(t)}
+                          className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
+                            isSelected 
+                              ? 'bg-emerald-600 text-white' 
+                              : 'bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700'
+                          }`}
+                        >
+                          {isSelected ? '✓ В тесте' : '+ В тест'}
+                        </button>
+                      </div>
+
+                      {isHintOpen && <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />}
+                      {isSolOpen && <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-16 space-y-3">
+              <div className="w-16 h-16 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto">
+                <Search size={32} className="text-slate-200" />
+              </div>
+              <p className="font-black text-slate-400 uppercase">
+                Нет заданий
+              </p>
+              <p className="text-[10px] font-bold text-slate-300 uppercase">
+                В этом разделе пока нет заданий
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 // ==================== МОДАЛЬНОЕ ОКНО НАЗНАЧЕНИЯ ====================
 const AssignTestModal = ({ test, students, onClose, onAssign }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -103,20 +524,7 @@ const AssignTestModal = ({ test, students, onClose, onAssign }) => {
 
         {/* Тело */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {/* Дедлайн */}
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">
-              <Clock size={14} className="inline mr-1" />
-              Дедлайн (необязательно)
-            </label>
-            <input
-              type="datetime-local"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
-            />
-          </div>
-
+      
           {/* Поиск учеников */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
@@ -254,38 +662,45 @@ const TestAssignmentsPanel = ({ test, onClose }) => {
             </div>
           ) : (
             <div className="space-y-2">
-              {assignments.map(assignment => (
-                <div key={assignment.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                  <div className="flex-1">
-                    <div className="font-bold text-sm text-slate-800">
-                      {assignment.student_name}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      {assignment.is_completed ? (
-                        <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
-                          <CheckCircle2 size={12} /> Выполнено
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-bold text-amber-600 flex items-center gap-1">
-                          <Clock size={12} /> Ожидается
-                        </span>
-                      )}
-                      {assignment.due_date && (
-                        <span className="text-[9px] text-slate-400">
-                          до {new Date(assignment.due_date).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(assignment.id)}
-                    className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
+  {assignments.map(assignment => (
+    <div key={assignment.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+      <div className="flex-1">
+        <div className="font-bold text-sm text-slate-800">
+          {assignment.student_name}
+        </div>
+        <div className="flex items-center gap-3 mt-1">
+          {assignment.is_completed ? (
+            <>
+              <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 size={12} /> Выполнено
+              </span>
+              {assignment.best_score !== null && (
+                <span className="text-[9px] text-slate-500">
+                  {assignment.total_points} балл.
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-[9px] font-bold text-amber-600 flex items-center gap-1">
+              <Clock size={12} /> Ожидается
+            </span>
+          )}
+          {assignment.due_date && (
+            <span className="text-[9px] text-slate-400">
+              до {new Date(assignment.due_date).toLocaleDateString()}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={() => handleDelete(assignment.id)}
+        className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  ))}
+</div>
           )}
         </div>
       </div>
@@ -308,6 +723,8 @@ export default function TeacherDashboard() {
   const [bankTopic, setBankTopic] = useState(null);
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
+  const [bankClassSearch, setBankClassSearch] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
   
   // Конструктор тестов
   const [testForm, setTestForm] = useState({
@@ -392,6 +809,33 @@ export default function TeacherDashboard() {
   const availableClasses = useMemo(() => {
     return Object.keys(groupedTasks).sort((a, b) => parseInt(a) - parseInt(b));
   }, [groupedTasks]);
+
+  // Фильтрация классов
+  const filteredClasses = availableClasses.filter(cls => 
+    cls.toString().toLowerCase().includes(bankClassSearch.toLowerCase())
+  );
+
+  // Количество заданий в классе
+  const classTaskCount = (cls) => {
+    const topics = groupedTasks[cls];
+    return topics ? Object.values(topics).reduce((sum, tasks) => sum + tasks.length, 0) : 0;
+  };
+
+  // Текущие задания и поиск по ним
+  const currentTasks = bankTopic && groupedTasks[bankClass] ? groupedTasks[bankClass][bankTopic] : [];
+  const filteredTasks = currentTasks.filter(t => {
+    if (!taskSearch) return true;
+    const q = taskSearch.toLowerCase();
+    return (
+      t.content?.toLowerCase().includes(q) ||
+      t.answer?.toLowerCase().includes(q) ||
+      t.id?.toString().includes(q)
+    );
+  }).sort((a, b) => {
+    if (a.id !== b.id) return a.id - b.id;
+    if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+    return (a.difficulty || 0) - (b.difficulty || 0);
+  });
 
   // Создание/обновление теста
   const handleTestSubmit = async (e) => {
@@ -511,8 +955,9 @@ export default function TeacherDashboard() {
 
           <nav className="flex gap-2 bg-white/10 backdrop-blur-sm p-1.5 rounded-[2rem] w-full">
             {[
-              { id: 'bank', icon: Database, label: 'Банк заданий' },
-              { id: 'constructor', icon: ClipboardList, label: 'Конструктор' },
+              { id: 'bank', icon: Database, label: 'Банк заданий (тесты)' },
+{ id: 'sections', icon: BookOpen, label: 'Банк заданий (темы)' },
+{ id: 'constructor', icon: ClipboardList, label: 'Конструктор' },
               { id: 'students', icon: Users, label: 'Ученики' },
               { id: 'tests_list', icon: BookOpen, label: 'Тесты' }
             ].map(tab => (
@@ -535,169 +980,266 @@ export default function TeacherDashboard() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 md:px-6">
+
+                {/* ==================== ВКЛАДКА: БАНК ЗАДАНИЙ ПО ТЕМАМ ==================== */}
+        {activeTab === 'sections' && (
+          <TheoryBank
+            tasks={tasks}
+            onTaskToggle={toggleTaskSelection}
+            selectedTasks={selectedTasks}
+            openSolutions={openSolutions}
+            openHints={openHints}
+            onToggleSolution={(taskId) => setOpenSolutions(prev => ({ ...prev, [taskId]: !prev[taskId] }))}
+            onToggleHint={(taskId) => setOpenHints(prev => ({ ...prev, [taskId]: !prev[taskId] }))}
+          />
+        )}
         
         {/* ==================== ВКЛАДКА: БАНК ЗАДАНИЙ ==================== */}
         {activeTab === 'bank' && (
-          <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden min-h-[600px] flex flex-col md:flex-row">
-            {/* Боковая панель */}
-            <aside className="w-full md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-8 flex flex-col gap-6">
-              <div>
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Класс</h3>
-                <div className="flex flex-row md:flex-col gap-2 overflow-x-auto pb-2">
-                  {availableClasses.map(cls => (
-                    <button
-                      key={cls}
-                      onClick={() => { setBankClass(cls); setBankTopic(null); }}
-                      className={`shrink-0 p-3 rounded-2xl text-left font-black text-xs transition-all ${
-                        bankClass === cls ? 'bg-emerald-600 text-white shadow-lg' : 'bg-white text-slate-500 border'
-                      }`}
-                    >
-                      {cls} класс
-                    </button>
-                  ))}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+            {/* Верхняя панель */}
+            <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
+                  <Database size={20} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+                    Банк заданий
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                    {bankClass ? `Раздел ${bankClass}, Тема ${bankTopic || 'выберите тему'}` : 'Выберите раздел и тему'}
+                  </p>
                 </div>
               </div>
-              
-              {bankClass && groupedTasks[bankClass] && (
-                <div>
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Темы</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
-                    {Object.keys(groupedTasks[bankClass]).sort().map(topic => (
-                      <button
-                        key={topic}
-                        onClick={() => setBankTopic(topic)}
-                        className={`p-2 md:p-3 rounded-xl font-black text-[10px] transition-all truncate ${
-                          bankTopic === topic ? 'bg-slate-800 text-white' : 'bg-slate-200/50 text-slate-500'
+            </div>
+
+            {/* Основной блок */}
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
+              {/* Боковая панель */}
+              <aside className="w-full md:w-64 bg-slate-50/50 border-b md:border-b-0 md:border-r border-slate-100 p-5 flex flex-col gap-4">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Filter size={14} /> Раздел
+                </h3>
+                
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text"
+                    placeholder="Поиск раздела..."
+                    value={bankClassSearch}
+                    onChange={(e) => setBankClassSearch(e.target.value)}
+                    className="w-full bg-white border border-slate-200 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto max-h-[40vh] md:max-h-[60vh]">
+                  {filteredClasses.length > 0 ? filteredClasses.map(cls => {
+                    const count = classTaskCount(cls);
+                    const isActive = bankClass === cls;
+                    return (
+                      <button 
+                        key={cls} 
+                        onClick={() => { setBankClass(cls); setBankTopic(null); setTaskSearch(''); }}
+                        className={`shrink-0 flex items-center justify-between p-3 rounded-xl text-left transition-all ${
+                          isActive 
+                            ? 'bg-slate-800 text-white shadow-md' 
+                            : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
                         }`}
                       >
-                        Тема {topic}
+                        <span className="font-bold text-xs uppercase">{cls}</span>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
+                          isActive ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'
+                        }`}>{count}</span>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  }) : (
+                    <p className="text-[10px] font-bold text-slate-400 text-center py-10 italic">
+                      {bankClassSearch ? 'Ничего не найдено' : 'Нет разделов'}
+                    </p>
+                  )}
                 </div>
-              )}
-            </aside>
 
-            {/* Основной контент банка */}
-            <main className="flex-1 p-4 md:p-10 overflow-y-auto">
-              {!bankTopic ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-300 font-black text-xs tracking-widest gap-4 py-20">
-                  <Database size={48} className="opacity-10" />
-                  Выберите класс и тему
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center mb-6 border-b pb-4">
-                    <h3 className="text-xl font-black text-slate-800 uppercase">
-                      Класс {bankClass}, Тема {bankTopic}
+                {bankClass && groupedTasks[bankClass] && (
+                  <div>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Темы</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
+                      {Object.keys(groupedTasks[bankClass]).sort().map(topic => (
+                        <button
+                          key={topic}
+                          onClick={() => { setBankTopic(topic); setTaskSearch(''); }}
+                          className={`p-2 md:p-3 rounded-xl font-black text-[10px] transition-all truncate ${
+                            bankTopic === topic ? 'bg-slate-800 text-white' : 'bg-slate-200/50 text-slate-500 hover:bg-slate-200'
+                          }`}
+                        >
+                          {topic}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </aside>
+
+              {/* Основной контент */}
+              <main className="flex-1 p-5 md:p-8 bg-white overflow-y-auto">
+                {!bankTopic ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-16">
+                    <div className="w-20 h-20 rounded-[2rem] bg-slate-50 flex items-center justify-center">
+                      <Database size={40} className="text-slate-200" />
+                    </div>
+                    <h3 className="text-lg font-black uppercase text-slate-300">
+                      {bankClass ? 'Выберите тему' : 'Выберите раздел'}
                     </h3>
-                    <span className="bg-slate-100 px-4 py-1.5 rounded-xl text-[10px] font-black">
-                      {groupedTasks[bankClass][bankTopic].length} заданий
-                    </span>
+                    <p className="text-xs font-bold text-slate-300 max-w-xs">
+                      {bankClass ? 'Для выбранного раздела доступны темы слева' : 'Слева отображаются разделы с заданиями'}
+                    </p>
                   </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-500 flex-wrap">
+                        <button onClick={() => { setBankClass(null); setBankTopic(null); setBankClassSearch(''); }}>
+                          <ChevronRight size={14} className="rotate-180 text-slate-300 hover:text-slate-600" />
+                        </button>
+                        <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-lg">{bankClass}</span>
+                        <ChevronRight size={12} />
+                        <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">{bankTopic}</span>
+                      </div>
 
-                  {groupedTasks[bankClass][bankTopic]
-                    .sort((a, b) => {
-                      if (a.id !== b.id) return a.id - b.id;
-                      if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-                      return (a.difficulty || 0) - (b.difficulty || 0);
-                    })
-                    .map((t, index) => {
-                      const isSolOpen = openSolutions[t.id];
-                      const isHintOpen = openHints[t.id];
-                      const isSelected = selectedTasks.some(st => st.id === t.id);
+                      <div className="relative w-full sm:w-64">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Поиск задания..."
+                          value={taskSearch}
+                          onChange={(e) => setTaskSearch(e.target.value)}
+                          className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold uppercase outline-none focus:border-emerald-400"
+                        />
+                        {taskSearch && (
+                          <button onClick={() => setTaskSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                            <XCircle size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-                      return (
-                        <div key={t.id} className={`group p-4 md:p-6 rounded-2xl border transition-all mb-4 ${
-                          isSelected ? 'bg-emerald-50 border-emerald-300 shadow-lg' : 'bg-slate-50 border-transparent hover:border-slate-200'
-                        }`}>
-                          <div className="space-y-4">
-                            {/* Верхняя панель */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                                № {index + 1}
-                              </span>
-                              <span className="text-[9px] text-slate-400">ID: {t.id}</span>
-                              
-                              {t.topic && MAIN_TOPICS[t.topic] && (
-                                <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">
-                                  {MAIN_TOPICS[t.topic]}
-                                </span>
-                              )}
-                              
-                              <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>
-                                LVL {t.difficulty}
+                    <div className="text-[10px] font-black text-slate-400 uppercase">
+                      {filteredTasks.length} заданий
+                    </div>
+
+                    {filteredTasks.length > 0 ? (
+                      <div className="space-y-4">
+                        {filteredTasks.map((t, index) => {
+                          const isSolOpen = openSolutions[t.id];
+                          const isHintOpen = openHints[t.id];
+                          const isSelected = selectedTasks.some(st => st.id === t.id);
+
+                          return (
+                            <div key={t.id} className={`group p-4 md:p-6 rounded-2xl border transition-all ${
+                              isSelected ? 'bg-emerald-50 border-emerald-300 shadow-lg' : 'bg-slate-50 border-transparent hover:border-slate-200'
+                            }`}>
+                              <div className="space-y-4">
+                                {/* Верхняя панель */}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                                    № {index + 1}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400">ID: {t.id}</span>
+                                  
+                                  {t.topic && MAIN_TOPICS[t.topic] && (
+                                    <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">
+                                      {MAIN_TOPICS[t.topic]}
+                                    </span>
+                                  )}
+                                  
+                                  <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>
+                                    LVL {t.difficulty}
+                                  </div>
+                                  
+                                  <span className="text-[9px] text-slate-400">
+                                    {t.is_open_answer ? 'Открытый' : 'Тест'}
+                                  </span>
+                                </div>
+
+                                {/* Условие */}
+                                <MarkdownPreview text={t.content} title="Условие" />
+
+                                {/* Варианты ответов */}
+                                {!t.is_open_answer && t.options && (
+                                  <div className="pl-4 border-l-2 border-emerald-100">
+                                    <MarkdownPreview
+                                      text={Array.isArray(t.options) 
+                                        ? t.options.map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')
+                                        : t.options
+                                      }
+                                      title="Варианты"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* Ответ и кнопки */}
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  <div className="bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
+                                    <span className="text-sm font-black text-emerald-700">{t.answer}</span>
+                                  </div>
+
+                                  {t.hint && (
+                                    <button 
+                                      onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                      className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black"
+                                    >
+                                      Подсказка
+                                    </button>
+                                  )}
+
+                                  {t.solution && (
+                                    <button 
+                                      onClick={() => setOpenSolutions(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
+                                      className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black"
+                                    >
+                                      Решение
+                                    </button>
+                                  )}
+
+                                  {/* Кнопка добавления в тест */}
+                                  <button
+                                    onClick={() => toggleTaskSelection(t)}
+                                    className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
+                                      isSelected 
+                                        ? 'bg-emerald-600 text-white' 
+                                        : 'bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700'
+                                    }`}
+                                  >
+                                    {isSelected ? '✓ В тесте' : '+ В тест'}
+                                  </button>
+                                </div>
+
+                                {/* Подсказка и решение */}
+                                {isHintOpen && <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />}
+                                {isSolOpen && <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />}
                               </div>
-                              
-                              <span className="text-[9px] text-slate-400">
-                                {t.is_open_answer ? 'Открытый' : 'Тест'}
-                              </span>
                             </div>
-
-                            {/* Условие */}
-                            <MarkdownPreview text={t.content} title="Условие" />
-
-                            {/* Варианты ответов */}
-                            {!t.is_open_answer && t.options && (
-                              <div className="pl-4 border-l-2 border-emerald-100">
-                                <MarkdownPreview
-                                  text={Array.isArray(t.options) 
-                                    ? t.options.map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')
-                                    : t.options
-                                  }
-                                  title="Варианты"
-                                />
-                              </div>
-                            )}
-
-                            {/* Ответ и кнопки */}
-                            <div className="flex flex-wrap gap-2 items-center">
-                              <div className="bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl flex items-center gap-2">
-                                <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
-                                <span className="text-sm font-black text-emerald-700">{t.answer}</span>
-                              </div>
-
-                              {t.hint && (
-                                <button 
-                                  onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
-                                  className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black"
-                                >
-                                  Подсказка
-                                </button>
-                              )}
-
-                              {t.solution && (
-                                <button 
-                                  onClick={() => setOpenSolutions(prev => ({ ...prev, [t.id]: !prev[t.id] }))}
-                                  className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black"
-                                >
-                                  Решение
-                                </button>
-                              )}
-
-                              {/* Кнопка добавления в тест */}
-                              <button
-                                onClick={() => toggleTaskSelection(t)}
-                                className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
-                                  isSelected 
-                                    ? 'bg-emerald-600 text-white' 
-                                    : 'bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700'
-                                }`}
-                              >
-                                {isSelected ? '✓ В тесте' : '+ В тест'}
-                              </button>
-                            </div>
-
-                            {/* Подсказка и решение */}
-                            {isHintOpen && <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />}
-                            {isSolOpen && <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />}
-                          </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 space-y-3">
+                        <div className="w-16 h-16 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto">
+                          <Search size={32} className="text-slate-200" />
                         </div>
-                      );
-                    })}
-                </div>
-              )}
-            </main>
+                        <p className="font-black text-slate-400 uppercase">
+                          {taskSearch ? 'Ничего не найдено' : 'Нет заданий'}
+                        </p>
+                        <p className="text-[10px] font-bold text-slate-300 uppercase">
+                          {taskSearch ? 'Попробуйте другой запрос' : 'В этой теме пока пусто'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </main>
+            </div>
           </div>
         )}
 
@@ -724,7 +1266,7 @@ export default function TeacherDashboard() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Класс</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase">Раздел</label>
                     <input
                       className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm"
                       value={testForm.target_class}
@@ -743,15 +1285,7 @@ export default function TeacherDashboard() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                  <input
-                    type="checkbox"
-                    checked={testForm.is_autocompile}
-                    onChange={e => setTestForm({ ...testForm, is_autocompile: e.target.checked })}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-[10px] font-black text-slate-600 uppercase">Автосборка</span>
-                </div>
+                
 
                 {/* Выбранные задания */}
                 <div>
@@ -991,12 +1525,12 @@ export default function TeacherDashboard() {
                     <div className="flex gap-2 mb-3 flex-wrap">
                       {test.target_class && (
                         <span className="text-[9px] font-black bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">
-                          {test.target_class} класс
+                          {test.target_class}
                         </span>
                       )}
                       {test.target_topic && (
                         <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">
-                          Тема {test.target_topic}
+                          {test.target_topic}
                         </span>
                       )}
                       <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded-lg">

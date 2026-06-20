@@ -2,8 +2,103 @@ import React, { useState, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Download, CheckCircle2, XCircle, AlertCircle, PenTool, Image as ImageIcon, Sparkles } from 'lucide-react';
-import { MarkdownRenderer as MarkdownViewer } from '../pages/AdminResultView';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
 
+const MarkdownViewer = ({ children, className = "", isPdf = false }) => {
+  return (
+    <div className={`prose prose-slate max-w-none text-black ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          // Кастомизация таблиц
+          table: ({ node, ...props }) => (
+            <div className="overflow-x-auto my-4">
+              <table className="min-w-full border-collapse border border-gray-300 rounded-lg" {...props} />
+            </div>
+          ),
+          th: ({ node, ...props }) => (
+            <th className="border border-gray-300 bg-gray-100 px-4 py-2 text-left font-bold text-black" {...props} />
+          ),
+          td: ({ node, ...props }) => (
+            <td className="border border-gray-300 px-4 py-2 text-black" {...props} />
+          ),
+          
+          // Кастомизация кода (блок / инлайн)
+          code: ({ node, inline, className: codeClassName, children, ...props }) => {
+            return !inline ? (
+              <code className={`${codeClassName || ''} block bg-gray-900 text-white p-4 rounded-xl overflow-x-auto text-sm`} {...props}>
+                {children}
+              </code>
+            ) : (
+              <code className="bg-gray-100 text-red-600 px-1.5 py-0.5 rounded-md text-sm font-bold" {...props}>
+                {children}
+              </code>
+            );
+          },
+          
+          // Кастомизация ссылок
+          a: ({ node, ...props }) => (
+            <a className="text-blue-600 hover:text-blue-800 underline transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+          ),
+          
+          // Кастомизация картинок
+          img: ({ node, src, alt, ...props }) => (
+            <div className="my-6 overflow-hidden rounded-2xl bg-gray-100">
+              <img 
+                {...props}
+                src={src} 
+                alt={alt || 'Изображение'} 
+                crossOrigin="anonymous"
+                loading={isPdf ? "eager" : "lazy"}
+                className={`w-full h-auto object-contain max-h-[400px] ${
+                  !isPdf ? 'hover:scale-105 transition-transform duration-500' : ''
+                }`}
+              />
+            </div>
+          ),
+          
+          // Чёрный текст для всех элементов
+          p: ({ node, ...props }) => (
+            <p className="text-black mb-3" {...props} />
+          ),
+          h1: ({ node, ...props }) => (
+            <h1 className="text-black font-bold text-2xl mt-6 mb-4" {...props} />
+          ),
+          h2: ({ node, ...props }) => (
+            <h2 className="text-black font-bold text-xl mt-5 mb-3" {...props} />
+          ),
+          h3: ({ node, ...props }) => (
+            <h3 className="text-black font-bold text-lg mt-4 mb-2" {...props} />
+          ),
+          ul: ({ node, ...props }) => (
+            <ul className="text-black list-disc pl-6 mb-3" {...props} />
+          ),
+          ol: ({ node, ...props }) => (
+            <ol className="text-black list-decimal pl-6 mb-3" {...props} />
+          ),
+          li: ({ node, ...props }) => (
+            <li className="text-black mb-1" {...props} />
+          ),
+          strong: ({ node, ...props }) => (
+            <strong className="text-black font-bold" {...props} />
+          ),
+          em: ({ node, ...props }) => (
+            <em className="text-black italic" {...props} />
+          ),
+          blockquote: ({ node, ...props }) => (
+            <blockquote className="border-l-4 border-gray-300 pl-4 py-2 my-4 bg-gray-50 rounded-r-lg text-black italic" {...props} />
+          )
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
+  );
+};
 export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const pdfTemplateRef = useRef(null); 
@@ -36,39 +131,57 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
 
   // 2. Генерация PDF ОДНОЙ ДЛИННОЙ СТРАНИЦЕЙ
   const handleDownloadPDF = async () => {
-    if (!pdfTemplateRef.current) return;
-    setIsGenerating(true);
+  if (!pdfTemplateRef.current) return;
+  setIsGenerating(true);
 
-    try {
-      const element = pdfTemplateRef.current;
-      
-      const canvas = await html2canvas(element, {
-        scale: 2,             // Высокое разрешение для четкого отображения формул и графики
-        useCORS: true,        // Пропуск внешних изображений
-        logging: false,
-        backgroundColor: '#FFFFFF',
-        windowWidth: 1024,    // Стабильная десктопная ширина шаблона
-      });
+  try {
+    const element = pdfTemplateRef.current;
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      
-      const pdfWidth = 210; // Базовая ширина А4 в мм
-      // Динамический расчет высоты страницы в мм пропорционально высоте канваса
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width; 
-
-      // Инициализируем кастомный размер страницы [ширина, высота] вместо стандартного 'a4'
-      const pdf = new jsPDF('p', 'mm', [pdfWidth, pdfHeight]);
-
-      // Рендерим всё изображение на одну единую страницу
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-
-      pdf.save(`Результат_${test?.title || 'теста'}.pdf`);
-    } catch (error) {
-      console.error('Ошибка при сборке PDF:', error);
-    } finally {
-      setIsGenerating(false);
+    // СТРАТЕГИЯ ОЖИДАНИЯ:
+    
+    // 1. Ждем, пока браузер полностью загрузит все веб-шрифты (критично для KaTeX/MathJax)
+    if (document.fonts) {
+      await document.fonts.ready;
     }
-  };
+
+    // 2. Находим все картинки внутри PDF-шаблона и ждем их полной загрузки
+    const images = Array.from(element.querySelectorAll('img'));
+    const imagePromises = images.map((img) => {
+      if (img.complete) return Promise.resolve(); // Если уже загружена
+      return new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve; // Обязательно resolve при ошибке, чтобы код не завис из-за битой ссылки
+      });
+    });
+    await Promise.all(imagePromises);
+
+    // 3. Даем браузеру 400-500мс "перевести дух" и окончательно отрисовать формулы
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Теперь, когда всё гарантированно готово, делаем скриншот
+    const canvas = await html2canvas(element, {
+      scale: 2,             // Высокое разрешение для четкости формул
+      useCORS: true,        // Разрешаем загрузку внешних изображений
+      logging: false,
+      backgroundColor: '#FFFFFF',
+      windowWidth: 1024,    // Фиксированная ширина
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    
+    const pdfWidth = 210; 
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width; 
+
+    const pdf = new jsPDF('p', 'mm', [pdfWidth, pdfHeight]);
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`Результат_${test?.title || 'теста'}.pdf`);
+
+  } catch (error) {
+    console.error('Ошибка при сборке PDF:', error);
+  } finally {
+    setIsGenerating(false);
+  }
+};
 
   const renderAnswerMD = (task, answer, isCorrectAnswer = false) => {
     const targetAnswer = isCorrectAnswer ? task.answer : answer;
@@ -90,8 +203,8 @@ export const TestReport = ({ test, userAnswers, drawings, onBack }) => {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
           <div>
-            <h1 className="text-2xl font-black italic">{test?.title || 'Результаты тестирования'}</h1>
-            <p className="text-sm text-slate-500 mt-1">Проверено автоматически</p>
+            <h1 className="text-2xl font-black italic text-black">{test?.title || 'Результаты тестирования'}</h1>
+<p className="text-sm text-gray-600 mt-1">Проверено автоматически</p>
           </div>
           <div className="flex gap-3 w-full sm:w-auto">
             <button onClick={onBack} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-full text-[10px] font-black uppercase hover:bg-slate-200 transition">

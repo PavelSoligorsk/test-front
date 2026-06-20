@@ -10,12 +10,15 @@ import {
   Search, Send, Eye, UserX, Image as ImageIcon, 
   ChevronRight, Layers, Trash2, Edit3, CheckCircle2,
   ChevronDown, ChevronUp, MailCheck, ShieldCheck, XCircle,
-  Upload, Loader2, MapPin, BookOpen, Library
+  Upload, Loader2, MapPin, BookOpen, Library, UserPlus  
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 // Выходим из pages, заходим в components
 import { TheoryViewer } from "../components/Theory";
 // ==================== КОНСТАНТЫ ТЕМ И РАЗДЕЛОВ ====================
+
+// В начало файла, после импортов:
+const API_BASE = 'https://tests-production-46d5.up.railway.app';
 
 const MAIN_TOPICS = {
   'numbers': 'Числа и вычисления',
@@ -148,7 +151,7 @@ const SECTIONS_BY_TOPIC = {
 };
 
 // ==================== КОМПОНЕНТ ПРЕДПРОСМОТРА MARKDOWN ====================
-const MarkdownPreview = ({ text, title, type }) => (
+export const MarkdownPreview = ({ text, title, type }) => (
   <div className={`p-6 rounded-[2rem] border shadow-sm ${
     type === 'hint' ? 'bg-amber-50/40 border-amber-100' : 
     type === 'solution' ? 'bg-emerald-50/40 border-emerald-100' : 'bg-white border-slate-200'
@@ -406,6 +409,164 @@ const TaskMap = ({ tasks, onScroll }) => {
   );
 };
 
+// ==================== КОМПОНЕНТ: СТРОКА ПОЛЬЗОВАТЕЛЯ ====================
+const UserRow = ({ user, users, getAuthHeaders, API_BASE, navigate, handleChangeRole, handleDeleteUser }) => {
+  const [showTeacherSelect, setShowTeacherSelect] = useState(false);
+  const [teacherSearch, setTeacherSearch] = useState('');
+  // ✅ Берём преподавателя из user.teacher (приходит с бэкенда)
+  const [teacherInfo, setTeacherInfo] = useState(user.teacher || null);
+  
+  // Фильтруем только учителей для выбора
+  const availableTeachers = users.filter(u => 
+    u.role === 'teacher' && 
+    `${u.first_name} ${u.last_name}`.toLowerCase().includes(teacherSearch.toLowerCase())
+  );
+
+  const handleAssignTeacher = async (teacherId) => {
+    try {
+      await axios.post(
+        `${API_BASE}/admin/assign-student-to-teacher`,
+        {
+          teacher_id: teacherId,
+          student_id: user.id
+        },
+        { headers: getAuthHeaders() }
+      );
+      
+      // Находим препода в users и сохраняем
+      const teacher = users.find(t => t.id === teacherId);
+      setTeacherInfo({
+        id: teacher.id,
+        first_name: teacher.first_name,
+        last_name: teacher.last_name,
+        username: teacher.username
+      });
+      
+      setShowTeacherSelect(false);
+      setTeacherSearch('');
+    } catch (e) {
+      alert('Ошибка при назначении преподавателя');
+    }
+  };
+
+  const handleRemoveTeacher = async () => {
+    if (!confirm('Открепить преподавателя?')) return;
+    try {
+      await axios.delete(
+        `${API_BASE}/admin/remove-student-from-teacher/${user.id}`,
+        { headers: getAuthHeaders() }
+      );
+      setTeacherInfo(null);
+    } catch (e) {
+      alert('Ошибка при откреплении преподавателя');
+    }
+  };
+
+  return (
+    <tr className="border-t border-slate-50 hover:bg-slate-50/50 transition-all group">
+      <td className="p-4 sm:p-8 cursor-pointer" onClick={() => navigate(`/admin/users/${user.id}`)}>
+        <div className="font-black text-slate-800 uppercase tracking-tighter text-sm sm:text-base group-hover:text-blue-600 transition-colors">
+          {user.first_name} {user.last_name}
+        </div>
+        <div className="text-[10px] text-blue-500 font-bold">@{user.username}</div>
+      </td>
+      <td className="p-4 sm:p-8">
+        <button onClick={(e) => handleChangeRole(e, user.id, user.role)} className={`px-3 sm:px-4 py-1.5 rounded-full font-black text-[9px] uppercase border transition-all ${
+          user.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 
+          user.role === 'teacher' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
+          'bg-slate-50 text-slate-400'
+        }`}>
+          {user.role}
+        </button>
+      </td>
+      <td className="p-4 sm:p-8">
+        {user.role === 'student' ? (
+          <div className="relative">
+            {/* ✅ Если есть teacherInfo — показываем препода */}
+            {teacherInfo ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">
+                  {teacherInfo.first_name} {teacherInfo.last_name}
+                </span>
+                <button
+                  onClick={handleRemoveTeacher}
+                  className="text-slate-300 hover:text-red-500 transition-colors"
+                  title="Открепить"
+                >
+                  <XCircle size={14} />
+                </button>
+              </div>
+            ) : (
+              /* Если преподавателя нет — кнопка Назначить */
+              <button
+                onClick={() => setShowTeacherSelect(!showTeacherSelect)}
+                className="text-[9px] font-black text-blue-500 hover:text-blue-700 uppercase flex items-center gap-1"
+              >
+                <UserPlus size={12} />
+                Назначить
+              </button>
+            )}
+            
+            {/* Мини-окно поиска преподавателя */}
+            {showTeacherSelect && (
+              <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 w-64 p-3">
+                <div className="relative mb-2">
+                  <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300" />
+                  <input
+                    type="text"
+                    placeholder="Поиск преподавателя..."
+                    value={teacherSearch}
+                    onChange={(e) => setTeacherSearch(e.target.value)}
+                    className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {availableTeachers.length > 0 ? (
+                    availableTeachers.map(teacher => (
+                      <button
+                        key={teacher.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAssignTeacher(teacher.id);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 text-xs font-bold text-slate-700 hover:text-blue-600 transition-all"
+                      >
+                        {teacher.first_name} {teacher.last_name}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-[10px] text-slate-400 text-center py-2">
+                      {teacherSearch ? 'Не найдено' : 'Нет преподавателей'}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowTeacherSelect(false);
+                  }}
+                  className="w-full mt-2 text-[9px] font-black text-slate-400 hover:text-slate-600 uppercase text-center"
+                >
+                  Отмена
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-slate-300">—</span>
+        )}
+      </td>
+      <td className="p-4 sm:p-8 text-right">
+        <button onClick={(e) => handleDeleteUser(e, user.id)} className="p-2 sm:p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+          <UserX size={18} className="sm:w-5 sm:h-5" />
+        </button>
+      </td>
+    </tr>
+  );
+};
+
 // ==================== ОСНОВНОЙ КОМПОНЕНТ АДМИНКИ ====================
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('create');
@@ -495,6 +656,26 @@ const [bankTopic, setBankTopic] = useState(null);
       console.error("Ошибка:", e);
     }
   };
+
+    const getAuthHeaders = () => {
+    try {
+      const sessionStr = localStorage.getItem('edu_session');
+      if (!sessionStr) return {};
+      
+      const session = JSON.parse(sessionStr);
+      const token = session?.token || session?.access_token;
+      
+      if (!token) {
+        console.warn('Токен не найден в сессии');
+        return {};
+      }
+      
+      return { Authorization: `Bearer ${token}` };
+    } catch (e) {
+      console.error('Ошибка чтения сессии:', e);
+      return {};
+    }
+  };
   
 
   const groupedTasks = useMemo(() => {
@@ -505,6 +686,8 @@ const [bankTopic, setBankTopic] = useState(null);
     return acc;
   }, {});
 }, [tasks]);
+
+
 
 // 2. Потом availableClasses (зависит от groupedTasks)
 const availableClasses = useMemo(() => {
@@ -1611,74 +1794,64 @@ const handleTaskSubmit = async (e) => {
       )}
       
         {/* ==================== ВКЛАДКА: ПОЛЬЗОВАТЕЛИ ==================== */}
-        {activeTab === 'users' && (
-          <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
-            <div className="p-10 bg-slate-50/50 border-b border-slate-100 space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-black italic uppercase text-slate-950">Студенты & Состав</h2>
-                <span className="text-[10px] font-black text-white bg-blue-600 px-4 py-1.5 rounded-full uppercase">{filteredUsers.length} найдено</span>
-              </div>
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                  <input type="text" placeholder="Поиск..." className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-                </div>
-                <div className="flex bg-slate-200/50 p-1 rounded-2xl">
-                  {['all', 'admin', 'teacher', 'student'].map(role => (
-                    <button 
-                      key={role} 
-                      onClick={() => setUserRoleFilter(role)} 
-                      className={`flex-1 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
-                        userRoleFilter === role 
-                          ? 'bg-white text-blue-600 shadow-md scale-105' 
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      {role === 'all' ? 'Все' : role}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[600px]">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    <th className="p-4 sm:p-8">Пользователь</th>
-                    <th className="p-4 sm:p-8">Роль</th>
-                    <th className="p-4 sm:p-8 text-right">Управление</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map(u => (
-                    <tr key={u.id} className="border-t border-slate-50 hover:bg-slate-50/50 transition-all group cursor-pointer" onClick={() => navigate(`/admin/users/${u.id}`)}>
-                      <td className="p-4 sm:p-8">
-                        <div className="font-black text-slate-800 uppercase tracking-tighter text-sm sm:text-base group-hover:text-blue-600 transition-colors">
-                          {u.first_name} {u.last_name}
-                        </div>
-                        <div className="text-[10px] text-blue-500 font-bold">@{u.username}</div>
-                      </td>
-                      <td className="p-4 sm:p-8">
-                        <button onClick={(e) => handleChangeRole(e, u.id, u.role)} className={`px-3 sm:px-4 py-1.5 rounded-full font-black text-[9px] uppercase border transition-all ${
-                          u.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 
-                          u.role === 'teacher' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-                          'bg-slate-50 text-slate-400'
-                        }`}>
-                          {u.role}
-                        </button>
-                      </td>
-                      <td className="p-4 sm:p-8 text-right">
-                        <button onClick={(e) => handleDeleteUser(e, u.id)} className="p-2 sm:p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                          <UserX size={18} className="sm:w-5 sm:h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {/* ==================== ВКЛАДКА: ПОЛЬЗОВАТЕЛИ ==================== */}
+{activeTab === 'users' && (
+  <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
+    <div className="p-10 bg-slate-50/50 border-b border-slate-100 space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-black italic uppercase text-slate-950">Студенты & Состав</h2>
+        <span className="text-[10px] font-black text-white bg-blue-600 px-4 py-1.5 rounded-full uppercase">{filteredUsers.length} найдено</span>
+      </div>
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+          <input type="text" placeholder="Поиск..." className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+        </div>
+        <div className="flex bg-slate-200/50 p-1 rounded-2xl">
+          {['all', 'admin', 'teacher', 'student'].map(role => (
+            <button 
+              key={role} 
+              onClick={() => setUserRoleFilter(role)} 
+              className={`flex-1 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
+                userRoleFilter === role 
+                  ? 'bg-white text-blue-600 shadow-md scale-105' 
+                  : 'text-slate-400'
+              }`}
+            >
+              {role === 'all' ? 'Все' : role}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+        <div className="overflow-x-auto">
+      <table className="w-full text-left min-w-[600px]">
+        <thead>
+          <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+            <th className="p-4 sm:p-8">Пользователь</th>
+            <th className="p-4 sm:p-8">Роль</th>
+            <th className="p-4 sm:p-8">Преподаватель</th>
+            <th className="p-4 sm:p-8 text-right">Управление</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredUsers.map(u => (
+            <UserRow
+              key={u.id}
+              user={u}
+              users={users}
+              getAuthHeaders={getAuthHeaders}
+              API_BASE={API_BASE}
+              navigate={navigate}
+              handleChangeRole={handleChangeRole}
+              handleDeleteUser={handleDeleteUser}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
 
         {/* ==================== ВКЛАДКА: УПРАВЛЕНИЕ ДОСТУПОМ ==================== */}
         {activeTab === 'access' && (

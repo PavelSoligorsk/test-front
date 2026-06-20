@@ -1,9 +1,10 @@
 // ==================== TeacherStudentProfile.jsx ====================
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Phone, MessageSquare, History, 
-  ArrowRight, Trophy, Target, Calendar, Search 
+  ArrowRight, Trophy, Target, Calendar, Search,
+  Clock, CheckCircle2, ListTodo
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -15,6 +16,7 @@ export default function TeacherStudentProfile() {
   
   const [data, setData] = useState(null);
   const [history, setHistory] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -38,13 +40,15 @@ export default function TeacherStudentProfile() {
       try {
         const headers = getAuthHeaders();
         
-        const [profileRes, historyRes] = await Promise.all([
+        const [profileRes, historyRes, assignmentsRes] = await Promise.all([
           axios.get(`${API_BASE}/teacher/students-profile/${userId}`, { headers }),
-          axios.get(`${API_BASE}/teacher/students-history/${userId}`, { headers })
+          axios.get(`${API_BASE}/teacher/students-history/${userId}`, { headers }),
+          axios.get(`${API_BASE}/teacher/student/${userId}/assignments`, { headers })
         ]);
 
         setData(profileRes.data);
         setHistory(historyRes.data);
+        setAssignments(assignmentsRes.data);
       } catch (err) {
         console.error("Ошибка:", err);
         if (err.response?.status === 401) navigate('/login');
@@ -55,6 +59,28 @@ export default function TeacherStudentProfile() {
 
     fetchData();
   }, [userId, navigate]);
+
+  // Для каждого назначения ищем соответствующий результат в истории
+  const assignmentsWithResults = useMemo(() => {
+    return assignments.map(assignment => {
+      // Ищем результат с таким же названием теста (можно заменить на test_id, если будет в history)
+      const foundResult = history.find(
+        item => item.test_id === assignment.test_id
+      );
+      return {
+        ...assignment,
+        result: foundResult?.result || null
+      };
+    });
+  }, [assignments, history]);
+
+  // Сортируем: сначала невыполненные, потом выполненные
+  const sortedAssignments = [...assignmentsWithResults].sort((a, b) => {
+    const aDone = !!a.result;
+    const bDone = !!b.result;
+    if (aDone === bDone) return 0;
+    return aDone ? 1 : -1;
+  });
 
   if (loading) {
     return (
@@ -124,8 +150,9 @@ export default function TeacherStudentProfile() {
         {/* Основной контент */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           
-          {/* Колонка контактов */}
+          {/* Левая колонка: контакты + назначения */}
           <div className="space-y-6">
+            {/* Контакты */}
             <div className="p-8 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
               <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.2em] flex items-center gap-2">
                 <Target size={14} className="text-emerald-600"/> Контакты
@@ -156,6 +183,81 @@ export default function TeacherStudentProfile() {
               </div>
             </div>
 
+            {/* Назначенные тесты */}
+            <div className="p-8 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black uppercase text-[10px] text-slate-400 tracking-[0.2em] flex items-center gap-2">
+                  <ListTodo size={14} className="text-blue-600"/> Назначенные тесты
+                </h3>
+                <span className="text-[9px] font-black text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
+                  {assignments.length}
+                </span>
+              </div>
+
+              {assignments.length === 0 ? (
+                <div className="text-center py-8 text-slate-300 text-[10px] font-black uppercase tracking-widest">
+                  Нет назначений
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  {sortedAssignments.map((assignment) => {
+                    const isDone = !!assignment.is_completed;
+                    const resultId = assignment.result_id;
+
+                    return (
+                      <div 
+                        key={assignment.id} 
+                        className={`p-4 rounded-2xl border transition-all ${
+                          isDone 
+                            ? 'bg-emerald-50/50 border-emerald-100 hover:shadow-md cursor-pointer' 
+                            : 'bg-amber-50/50 border-amber-100'
+                        }`}
+                        onClick={() => {
+                          if (isDone && resultId) {
+                            navigate(`/teacher/results/${resultId}`);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-xs text-slate-800 truncate flex items-center gap-2">
+                              {assignment.test_title}
+                              {isDone && assignment.result?.total_points !== undefined && (
+                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
+                                  {assignment.result.total_points} баллов
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {isDone ? (
+                                <span className="flex items-center gap-1 text-[9px] font-black text-emerald-600">
+                                  <CheckCircle2 size={12} /> Выполнен
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-[9px] font-black text-amber-600">
+                                  <Clock size={12} /> Ожидается
+                                </span>
+                              )}
+                              {assignment.due_date && (
+                                <span className="text-[9px] text-slate-400">
+                                  до {new Date(assignment.due_date).toLocaleDateString('ru-RU')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {isDone && resultId && (
+                            <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400 hover:text-emerald-600 transition-all">
+                              <ArrowRight size={14} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Статус */}
             <div className="p-8 bg-emerald-600 rounded-[3rem] text-white shadow-xl shadow-emerald-100 flex items-center justify-between">
               <div>
@@ -166,7 +268,7 @@ export default function TeacherStudentProfile() {
             </div>
           </div>
 
-          {/* История решений */}
+          {/* Правая колонка: история решений */}
           <div className="md:col-span-2">
             <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden h-full flex flex-col">
               <div className="p-8 border-b border-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
