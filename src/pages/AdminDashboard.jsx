@@ -1019,30 +1019,34 @@ const handleTaskSubmit = async (e) => {
             </div>
           </div>
 
-          <nav className="flex gap-2 bg-slate-800 p-1.5 rounded-[2rem] w-full">
-            {[
-              { id: 'create', icon: PlusCircle, label: 'Создать' },
-              { id: 'bank', icon: Database, label: 'Банк' },
-              { id: 'theoryConstructor', icon: BookOpen, label: 'Теория+' },
-              { id: 'theoryBank', icon: Library, label: 'Библиотека' },
-              { id: 'users', icon: Users, label: 'Юзеры' },
-              { id: 'access', icon: ShieldCheck, label: 'Доступ' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-0 py-2 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs transition-all flex-1 ${
-                  activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-lg scale-[0.98] md:scale-105'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <tab.icon size={14} className="md:w-4 md:h-4" />
-                <span className="hidden sm:inline">{tab.label.toUpperCase()}</span>
-                <span className="sm:hidden">{tab.label.toUpperCase().slice(0, 1)}</span>
-              </button>
-            ))}
-          </nav>
+          <nav className="flex gap-1.5 md:gap-2 bg-slate-800 p-1.5 rounded-[2rem] w-full overflow-x-auto">
+  {[
+    { id: 'create', icon: PlusCircle, label: 'Создать' },
+    { id: 'bank', icon: Database, label: 'Банк' },
+    { id: 'theoryConstructor', icon: BookOpen, label: 'Теория+' },
+    { id: 'theoryBank', icon: Library, label: 'Библиотека' },
+    { id: 'users', icon: Users, label: 'Юзеры' },
+    { id: 'access', icon: ShieldCheck, label: 'Доступ' }
+  ].map(tab => (
+    <button
+      key={tab.id}
+      onClick={() => setActiveTab(tab.id)}
+      className={`flex items-center justify-center gap-1 md:gap-2 px-2 md:px-4 py-2 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs transition-all flex-1 min-w-[44px] md:min-w-0 ${
+        activeTab === tab.id
+          ? 'bg-blue-600 text-white shadow-lg scale-[0.95] md:scale-105'
+          : 'text-slate-400 hover:text-white'
+      }`}
+    >
+      <tab.icon size={16} className="md:w-4 md:h-4 flex-shrink-0" />
+      <span className="hidden sm:inline text-[10px] md:text-xs whitespace-nowrap">
+        {tab.label.toUpperCase()}
+      </span>
+      <span className="sm:hidden text-[10px] font-bold">
+        {tab.label.toUpperCase().slice(0, 1)}
+      </span>
+    </button>
+  ))}
+</nav>
         </div>
       </div>
 

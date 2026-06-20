@@ -1084,19 +1084,39 @@ useEffect(() => {
               Количество задач (1-30)
             </label>
             <input
-              type="number"
-              min="1"
-              max="30"
-              value={aiTaskCount}
-              onChange={(e) => {
-                let val = parseInt(e.target.value);
-                if (isNaN(val)) val = 10;
-                if (val < 1) val = 1;
-                if (val > 30) val = 30;
-                setAiTaskCount(val);
-              }}
-              className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-purple-400 transition-all"
-            />
+  type="number"
+  min="1"
+  max="30"
+  value={aiTaskCount}
+  onChange={(e) => {
+    const val = e.target.value;
+    // Разрешаем пустое значение для удобства ввода
+    if (val === '') {
+      setAiTaskCount('');
+      return;
+    }
+    
+    const num = Number(val);
+    // Игнорируем нечисловые значения
+    if (isNaN(num)) return;
+    
+    // Применяем ограничения только к числовым значениям
+    if (num < 1) {
+      setAiTaskCount(1);
+    } else if (num > 30) {
+      setAiTaskCount(30);
+    } else {
+      setAiTaskCount(num);
+    }
+  }}
+  onBlur={() => {
+    // Если поле пустое или содержит невалидное значение - ставим 10
+    if (aiTaskCount === '' || isNaN(aiTaskCount) || aiTaskCount < 1) {
+      setAiTaskCount(10);
+    }
+  }}
+  className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-purple-400 transition-all"
+/>
           </div>
           <div>
             <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">
