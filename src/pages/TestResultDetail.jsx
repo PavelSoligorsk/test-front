@@ -312,7 +312,7 @@ const AISolutionPreview = ({ data, isLoading = false, error = null, onClose = nu
 };
 
 // Компонент для рендеринга Markdown
-const MarkdownRenderer = ({ children, className = "" }) => {
+export const MarkdownRenderer = ({ children, className = "" }) => {
   return (
     <div className={`prose prose-slate max-w-none ${className}`}>
       <ReactMarkdown
