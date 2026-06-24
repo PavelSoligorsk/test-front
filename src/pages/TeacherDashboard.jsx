@@ -12,7 +12,7 @@ import {
   XCircle, BookOpen, ClipboardList, GraduationCap,
   ChevronLeft, ArrowRight, Calendar, Trophy, Target,
   UserPlus, Clock, AlertCircle, CheckSquare, Square,
-  Filter, ChevronRight
+  Filter, ChevronRight, FileText 
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 import { MarkdownPreview } from '../pages/AdminDashboard';
@@ -473,8 +473,42 @@ const AssignTestModal = ({ test, students, onClose, onAssign }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [dueDate, setDueDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [alreadyAssigned, setAlreadyAssigned] = useState([]);
+  const [loadingAssigned, setLoadingAssigned] = useState(true);
 
-  const filteredStudents = students.filter(s => {
+  // Загружаем уже назначенных студентов
+  useEffect(() => {
+    fetchAssignedStudents();
+  }, []);
+
+  const fetchAssignedStudents = async () => {
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const res = await axios.get(`${API_BASE}/teacher/test/${test.id}/assignments`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAlreadyAssigned(res.data);
+    } catch (e) {
+      console.error('Ошибка загрузки назначений:', e);
+    } finally {
+      setLoadingAssigned(false);
+    }
+  };
+
+  const assignedIds = alreadyAssigned.map(a => a.user_id);
+  
+  // Студенты уже назначенные
+  const assignedStudents = students.filter(s => assignedIds.includes(s.id));
+  
+  // Студенты доступные для назначения
+  const availableStudents = students.filter(s => !assignedIds.includes(s.id));
+
+  const filteredAssigned = assignedStudents.filter(s => {
+    const fullName = `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase();
+    return fullName.includes(searchTerm.toLowerCase());
+  });
+
+  const filteredAvailable = availableStudents.filter(s => {
     const fullName = `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase();
     return fullName.includes(searchTerm.toLowerCase());
   });
@@ -488,10 +522,10 @@ const AssignTestModal = ({ test, students, onClose, onAssign }) => {
   };
 
   const selectAll = () => {
-    if (selectedStudents.length === filteredStudents.length) {
+    if (selectedStudents.length === filteredAvailable.length && filteredAvailable.length > 0) {
       setSelectedStudents([]);
     } else {
-      setSelectedStudents(filteredStudents.map(s => s.id));
+      setSelectedStudents(filteredAvailable.map(s => s.id));
     }
   };
 
@@ -524,61 +558,110 @@ const AssignTestModal = ({ test, students, onClose, onAssign }) => {
         </div>
 
         {/* Тело */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-      
-          {/* Поиск учеников */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
-            <input
-              type="text"
-              placeholder="Поиск учеников..."
-              className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl text-sm font-bold"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          
+          {/* 🔥 УЖЕ НАЗНАЧЕННЫЕ СТУДЕНТЫ */}
+          {assignedStudents.length > 0 && (
+            <div>
+              <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-emerald-500" />
+                Уже назначены ({assignedStudents.length})
+              </h4>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {filteredAssigned.map(student => {
+                  const assignment = alreadyAssigned.find(a => a.user_id === student.id);
+                  return (
+                    <div key={student.id} className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                      <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                      <div className="flex-1">
+                        <div className="font-bold text-sm text-slate-700">
+                          {student.first_name} {student.last_name}
+                        </div>
+                        <div className="text-[10px] text-slate-400">{student.username}</div>
+                      </div>
+                      {assignment?.is_completed ? (
+                        <span className="text-[10px] font-black text-emerald-600">
+                          {assignment.percentage !== null ? `${assignment.percentage}%` : `${assignment.max_points || 0} балл.`}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-600 font-bold">Ожидается</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-          {/* Выбрать всех */}
-          <button
-            onClick={selectAll}
-            className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600"
-          >
-            {selectedStudents.length === filteredStudents.length && filteredStudents.length > 0 ? (
-              <CheckSquare size={16} className="text-emerald-600" />
-            ) : (
-              <Square size={16} />
-            )}
-            Выбрать всех ({filteredStudents.length})
-          </button>
+          {/* 🔥 ДОСТУПНЫЕ ДЛЯ НАЗНАЧЕНИЯ */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
+              <Users size={14} className="text-slate-400" />
+              Доступно для назначения ({availableStudents.length})
+            </h4>
 
-          {/* Список учеников */}
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {filteredStudents.map(student => (
+            {/* Поиск */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+              <input
+                type="text"
+                placeholder="Поиск учеников..."
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl text-sm font-bold"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            {/* Выбрать всех */}
+            {filteredAvailable.length > 0 && (
               <button
-                key={student.id}
-                onClick={() => toggleStudent(student.id)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
-                  selectedStudents.includes(student.id)
-                    ? 'bg-emerald-50 border border-emerald-200'
-                    : 'bg-slate-50 hover:bg-slate-100 border border-transparent'
-                }`}
+                onClick={selectAll}
+                className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-600 mb-2"
               >
-                {selectedStudents.includes(student.id) ? (
-                  <CheckSquare size={18} className="text-emerald-600" />
+                {selectedStudents.length === filteredAvailable.length ? (
+                  <CheckSquare size={16} className="text-emerald-600" />
                 ) : (
-                  <Square size={18} className="text-slate-300" />
+                  <Square size={16} />
                 )}
-                <div>
-                  <div className="font-bold text-sm text-slate-800">
-                    {student.first_name} {student.last_name}
-                  </div>
-                  <div className="text-[10px] text-slate-400">@{student.username}</div>
-                </div>
-                {student.tg_username && (
-                  <span className="ml-auto text-[9px] text-blue-400">{student.tg_username}</span>
-                )}
+                Выбрать всех ({filteredAvailable.length})
               </button>
-            ))}
+            )}
+
+            {/* Список доступных учеников */}
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {filteredAvailable.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-4">
+                  {searchTerm ? 'Ничего не найдено' : 'Все студенты уже назначены'}
+                </p>
+              ) : (
+                filteredAvailable.map(student => (
+                  <button
+                    key={student.id}
+                    onClick={() => toggleStudent(student.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
+                      selectedStudents.includes(student.id)
+                        ? 'bg-emerald-50 border border-emerald-200'
+                        : 'bg-slate-50 hover:bg-slate-100 border border-transparent'
+                    }`}
+                  >
+                    {selectedStudents.includes(student.id) ? (
+                      <CheckSquare size={18} className="text-emerald-600" />
+                    ) : (
+                      <Square size={18} className="text-slate-300" />
+                    )}
+                    <div>
+                      <div className="font-bold text-sm text-slate-800">
+                        {student.first_name} {student.last_name}
+                      </div>
+                      <div className="text-[10px] text-slate-400">{student.username}</div>
+                    </div>
+                    {student.tg_username && (
+                      <span className="ml-auto text-[9px] text-blue-400">{student.tg_username}</span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
 
@@ -604,7 +687,7 @@ const AssignTestModal = ({ test, students, onClose, onAssign }) => {
   );
 };
 
-// ==================== КОМПОНЕНТ НАЗНАЧЕНИЙ ТЕСТА ====================
+// ==================== КОМПОНЕНТ НАЗНАЧЕНИЙ ТЕСТА (С РЕЗУЛЬТАТАМИ) ====================
 const TestAssignmentsPanel = ({ test, onClose }) => {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -640,74 +723,805 @@ const TestAssignmentsPanel = ({ test, onClose }) => {
     }
   };
 
+  const navigateToResult = (resultId) => {
+    if (resultId) {
+      window.location.href = `/teacher/results/${resultId}`;
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-black text-slate-800">Назначения теста</h3>
-            <p className="text-sm text-slate-500">{test.title}</p>
+        {/* Заголовок */}
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-black text-slate-800">Назначения теста</h3>
+              <p className="text-sm text-slate-500 mt-1">{test.title}</p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
+              <XCircle size={20} className="text-slate-400" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
-            <XCircle size={20} className="text-slate-400" />
-          </button>
         </div>
 
+        {/* Тело */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="text-center py-8 text-slate-400">Загрузка...</div>
           ) : assignments.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <Users size={48} className="mx-auto text-slate-200 mb-3" />
               <p className="text-slate-400 text-sm font-bold">Нет назначений</p>
+              <p className="text-xs text-slate-300 mt-1">Этот тест пока не назначен ученикам</p>
             </div>
           ) : (
             <div className="space-y-2">
-  {assignments.map(assignment => (
-    <div key={assignment.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-      <div className="flex-1">
-        <div className="font-bold text-sm text-slate-800">
-          {assignment.student_name}
+              <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
+                <Users size={14} className="text-slate-400" />
+                Назначено ({assignments.length})
+              </h4>
+              
+              {assignments.map(assignment => (
+                <div key={assignment.id} className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-slate-800">
+                      {assignment.student_name}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      {assignment.is_completed ? (
+                        <>
+                          <span className="text-[9px] font-black text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 size={12} /> Выполнено
+                          </span>
+                          {assignment.total_points !== null && assignment.max_points !== null && (
+                            <span className="text-[9px] font-bold text-slate-500">
+                              {assignment.total_points}/{assignment.max_points} балл.
+                            </span>
+                          )}
+                          {assignment.percentage !== null && (
+                            <span className="text-[9px] font-bold text-blue-600">
+                              {assignment.percentage}%
+                            </span>
+                          )}
+                          {assignment.result_id && (
+                            <button
+                              onClick={() => navigateToResult(assignment.result_id)}
+                              className="text-[9px] font-black text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full hover:bg-emerald-100 transition-all"
+                            >
+                              <FileText size={10} />
+                              Рез-т
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[9px] font-black text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full">
+                          <Clock size={12} /> Ожидается
+                        </span>
+                      )}
+                      {assignment.due_date && (
+                        <span className="text-[9px] text-slate-400 flex items-center gap-1">
+                          <Calendar size={10} />
+                          до {new Date(assignment.due_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {assignment.is_completed && (
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-black text-slate-600">
+                        {assignment.total_points || 0}/{assignment.max_points || 2}
+                      </span>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => handleDelete(assignment.id)}
+                    className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all shrink-0"
+                    title="Отменить назначение"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-3 mt-1">
-          {assignment.is_completed ? (
-            <>
-              <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
-                <CheckCircle2 size={12} /> Выполнено
-              </span>
-              {assignment.best_score !== null && (
-                <span className="text-[9px] text-slate-500">
-                  {assignment.total_points} балл.
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="text-[9px] font-bold text-amber-600 flex items-center gap-1">
-              <Clock size={12} /> Ожидается
-            </span>
-          )}
-          {assignment.due_date && (
-            <span className="text-[9px] text-slate-400">
-              до {new Date(assignment.due_date).toLocaleDateString()}
-            </span>
-          )}
-        </div>
-      </div>
-      <button
-        onClick={() => handleDelete(assignment.id)}
-        className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
-      >
-        <Trash2 size={14} />
-      </button>
-    </div>
-  ))}
-</div>
-          )}
+
+        {/* Футер */}
+        <div className="p-6 border-t border-slate-100">
+          <button
+            onClick={onClose}
+            className="w-full p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+          >
+            ЗАКРЫТЬ
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
+// Добавляем новый компонент перед TeacherDashboard
+const GroupStudentsModal = ({ group, allStudents, onClose, onAdd, onRemove }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  const groupStudentIds = group.students.map(s => s.id);
+  
+  // Студенты НЕ в группе
+  const availableStudents = allStudents.filter(s => 
+    !groupStudentIds.includes(s.id) &&
+    `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleAdd = () => {
+    if (selectedIds.length === 0) return;
+    onAdd(group.id, selectedIds);
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        {/* Заголовок */}
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-black text-slate-800">{group.name}</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                {group.students.length} студентов в группе
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
+              <XCircle size={20} className="text-slate-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Список студентов в группе */}
+        <div className="p-6 border-b border-slate-50">
+          <h4 className="text-xs font-black text-slate-400 uppercase mb-3">В группе:</h4>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {group.students.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">Нет студентов</p>
+            ) : (
+              group.students.map(student => (
+                <div key={student.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                  <div>
+                    <span className="text-sm font-bold text-slate-700">
+                      {student.first_name} {student.last_name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 ml-2">@{student.username}</span>
+                  </div>
+                  <button
+                    onClick={() => onRemove(group.id, student.id)}
+                    className="p-1 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
+                  >
+                    <XCircle size={14} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Добавление студентов */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <h4 className="text-xs font-black text-slate-400 uppercase">Добавить студентов:</h4>
+          
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+            <input
+              type="text"
+              placeholder="Поиск..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-xs font-bold"
+            />
+          </div>
+
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {availableStudents.map(student => (
+              <button
+                key={student.id}
+                onClick={() => toggleSelect(student.id)}
+                className={`w-full flex items-center gap-2 p-2 rounded-lg text-left text-xs ${
+                  selectedIds.includes(student.id)
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                {selectedIds.includes(student.id) ? (
+                  <CheckSquare size={14} className="text-emerald-600" />
+                ) : (
+                  <Square size={14} className="text-slate-300" />
+                )}
+                {student.first_name} {student.last_name}
+                <span className="text-[10px] text-slate-400">@{student.username}</span>
+              </button>
+            ))}
+            {availableStudents.length === 0 && (
+              <p className="text-xs text-slate-400 italic p-2">Нет доступных студентов</p>
+            )}
+          </div>
+        </div>
+
+        {/* Футер */}
+        <div className="p-6 border-t border-slate-100 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 p-3 bg-slate-100 text-slate-600 rounded-xl font-black text-sm"
+          >
+            ЗАКРЫТЬ
+          </button>
+          <button
+            onClick={handleAdd}
+            disabled={selectedIds.length === 0}
+            className="flex-1 p-3 bg-emerald-600 text-white rounded-xl font-black text-sm disabled:opacity-50"
+          >
+            ДОБАВИТЬ ({selectedIds.length})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Компонент: Модальное окно назначения теста группе
+const AssignTestToGroupModal = ({ group, tests, onClose, onAssign, onUnassign }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [groupAssignments, setGroupAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Загружаем назначенные тесты группы
+  useEffect(() => {
+    fetchGroupAssignedTests();
+  }, []);
+
+  const fetchGroupAssignedTests = async () => {
+    setLoading(true);
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const studentIds = group.students?.map(s => s.id) || [];
+      
+      const allAssignments = [];
+      for (const studentId of studentIds) {
+        try {
+          const res = await axios.get(`${API_BASE}/teacher/student/${studentId}/assignments`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          allAssignments.push(...res.data.map(a => ({ ...a, _studentId: studentId })));
+        } catch (e) {}
+      }
+      setGroupAssignments(allAssignments);
+    } catch (e) {
+      console.error('Ошибка загрузки назначений:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Получаем ID тестов, которые уже назначены
+  const assignedTestIds = [...new Set(groupAssignments.map(a => a.test_id))];
+
+  // Тесты которые ещё НЕ назначены
+  const availableTests = tests.filter(t => !assignedTestIds.includes(t.id));
+  
+  // Тесты которые УЖЕ назначены
+  const assignedTests = tests.filter(t => assignedTestIds.includes(t.id));
+
+  const filteredAvailable = availableTests.filter(t => 
+    t.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleAssign = (testId) => {
+    if (confirm(`Назначить тест группе "${group.name}"?`)) {
+      onAssign(testId, group.id);
+      // Обновляем список после назначения
+      setTimeout(fetchGroupAssignedTests, 500);
+    }
+  };
+
+  const handleUnassignFromAll = async (testId) => {
+    if (!confirm(`Отменить назначение теста для всех студентов группы?`)) return;
+    
+    const testAssignments = groupAssignments.filter(a => a.test_id === testId);
+    
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      for (const assignment of testAssignments) {
+        await axios.delete(`${API_BASE}/teacher/assignments/${assignment.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      fetchGroupAssignedTests();
+    } catch (e) {
+      alert('Ошибка при отмене назначения');
+    }
+  };
+
+  const getStudentName = (studentId) => {
+    const s = group.students?.find(st => st.id === studentId);
+    return s ? `${s.first_name} ${s.last_name}` : `ID: ${studentId}`;
+  };
+
+  const navigateToResult = (resultId) => {
+    if (resultId) {
+      window.location.href = `teacher/results/${resultId}`;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        {/* Заголовок */}
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-black text-slate-800">Управление тестами</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Группа: {group.name} ({group.students?.length || 0} студентов)
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
+              <XCircle size={20} className="text-slate-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Тело */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          
+          {/* 🔥 УЖЕ НАЗНАЧЕННЫЕ ТЕСТЫ */}
+          {assignedTests.length > 0 && (
+            <div>
+              <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-emerald-500" />
+                Назначенные тесты ({assignedTests.length})
+              </h4>
+              <div className="space-y-2">
+                {assignedTests.map(test => {
+                  const testAssignments = groupAssignments.filter(a => a.test_id === test.id);
+                  const completedCount = testAssignments.filter(a => a.is_completed).length;
+                  const totalCount = testAssignments.length;
+                  const avgPercentage = testAssignments
+                    .filter(a => a.percentage !== null)
+                    .reduce((sum, a) => sum + a.percentage, 0) / (testAssignments.filter(a => a.percentage !== null).length || 1);
+
+                  return (
+                    <div key={test.id} className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h5 className="font-bold text-sm text-slate-800">{test.title}</h5>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-slate-400">{test.tasks?.length || 0} заданий</span>
+                            <span className="text-[10px] text-slate-300">•</span>
+                            <span className={`text-[10px] font-bold ${completedCount === totalCount ? 'text-emerald-600' : 'text-amber-600'}`}>
+                              {completedCount}/{totalCount} выполнили
+                            </span>
+                            {completedCount > 0 && (
+                              <>
+                                <span className="text-[10px] text-slate-300">•</span>
+                                <span className="text-[10px] font-bold text-blue-600">
+                                  Средний: {Math.round(avgPercentage)}%
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleUnassignFromAll(test.id)}
+                          className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-[10px] font-black hover:bg-red-100 transition-all"
+                        >
+                          Отменить всем
+                        </button>
+                      </div>
+
+                      {/* Прогресс-бар */}
+                      <div className="w-full h-2 bg-emerald-100 rounded-full overflow-hidden mb-2">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all"
+                          style={{ width: `${(completedCount / totalCount) * 100}%` }}
+                        />
+                      </div>
+
+                      {/* Список студентов */}
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {testAssignments.map(assignment => (
+                          <div key={assignment.id} className="flex items-center justify-between p-2 bg-white rounded-lg">
+                            <div className="flex items-center gap-2">
+                              {assignment.is_completed ? (
+                                <CheckCircle2 size={12} className="text-emerald-500" />
+                              ) : (
+                                <Clock size={12} className="text-amber-500" />
+                              )}
+                              <span className="text-xs font-bold text-slate-600">
+                                {getStudentName(assignment._studentId || assignment.user_id)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {assignment.is_completed ? (
+                                <>
+                                  <span className="text-[10px] font-bold text-emerald-600">
+                                    {assignment.total_points || 0}/{assignment.max_points || 0} балл.
+                                  </span>
+                                  {assignment.percentage && (
+                                    <span className="text-[10px] font-bold text-blue-600">
+                                      {assignment.percentage}%
+                                    </span>
+                                  )}
+                                  {assignment.result_id && (
+                                    <button
+                                      onClick={() => navigateToResult(assignment.result_id)}
+                                      className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black hover:bg-emerald-100 transition-all flex items-center gap-1"
+                                    >
+                                      <FileText size={10} />
+                                      Рез-т
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 font-bold">Ожидается</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 🔥 ДОСТУПНЫЕ ДЛЯ НАЗНАЧЕНИЯ */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
+              <BookOpen size={14} className="text-slate-400" />
+              Доступные тесты ({availableTests.length})
+            </h4>
+            
+            <div className="relative mb-3">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+              <input
+                type="text"
+                placeholder="Поиск теста..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-xs font-bold"
+              />
+            </div>
+
+            {filteredAvailable.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-4">
+                {searchTerm ? 'Ничего не найдено' : 'Все тесты назначены'}
+              </p>
+            ) : (
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {filteredAvailable.map(test => (
+                  <button
+                    key={test.id}
+                    onClick={() => handleAssign(test.id)}
+                    className="w-full p-3 bg-slate-50 hover:bg-emerald-50 rounded-xl text-left transition-all border border-transparent hover:border-emerald-200"
+                  >
+                    <div className="font-bold text-sm text-slate-700">{test.title}</div>
+                    <div className="text-[10px] text-slate-400 mt-1">
+                      {test.tasks?.length || 0} заданий
+                      {test.target_class && ` • ${test.target_class} класс`}
+                      {test.target_topic && ` • Тема ${test.target_topic}`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Футер */}
+        <div className="p-6 border-t border-slate-100">
+          <button
+            onClick={onClose}
+            className="w-full p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+          >
+            ЗАКРЫТЬ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Компонент: Детальная информация о группе
+const GroupDetailModal = ({ group, tests, students, onClose, onRemoveStudent, navigate }) => {
+  const [activeSubTab, setActiveSubTab] = useState('students');
+  const [assignments, setAssignments] = useState([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+
+  // Загружаем назначения при открытии вкладки
+  useEffect(() => {
+    if (activeSubTab === 'assignments') {
+      fetchGroupAssignments();
+    }
+  }, [activeSubTab]);
+
+  const fetchGroupAssignments = async () => {
+    setLoadingAssignments(true);
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const studentIds = group.students?.map(s => s.id) || [];
+      
+      const allAssignments = [];
+      for (const studentId of studentIds) {
+        try {
+          const res = await axios.get(`${API_BASE}/teacher/student/${studentId}/assignments`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          allAssignments.push(...res.data.map(a => ({ ...a, _studentId: studentId })));
+        } catch (e) {
+          console.error(`Ошибка для студента ${studentId}:`, e);
+        }
+      }
+      setAssignments(allAssignments);
+    } catch (e) {
+      console.error('Ошибка загрузки назначений:', e);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  const handleUnassign = async (assignmentId) => {
+    if (!confirm('Отменить назначение?')) return;
+    try {
+      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      await axios.delete(`${API_BASE}/teacher/assignments/${assignmentId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchGroupAssignments();
+    } catch (e) {
+      alert('Ошибка при отмене');
+    }
+  };
+
+  const getStudentName = (studentId) => {
+    const s = students.find(st => st.id === studentId);
+    return s ? `${s.first_name} ${s.last_name}` : `ID: ${studentId}`;
+  };
+
+  const navigateToResult = (resultId) => {
+    if (resultId && navigate) {
+      navigate(`/result/${resultId}`);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        {/* Заголовок */}
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-xl font-black text-slate-800">{group.name}</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                {group.students?.length || 0} студентов
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
+              <XCircle size={20} className="text-slate-400" />
+            </button>
+          </div>
+
+          {/* Подвкладки */}
+          <div className="flex gap-2 mt-4 bg-slate-50 p-1.5 rounded-xl">
+            <button
+              onClick={() => setActiveSubTab('students')}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${
+                activeSubTab === 'students' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'
+              }`}
+            >
+              👥 Студенты ({group.students?.length || 0})
+            </button>
+            <button
+              onClick={() => setActiveSubTab('assignments')}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${
+                activeSubTab === 'assignments' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'
+              }`}
+            >
+              📝 Назначения
+            </button>
+          </div>
+        </div>
+
+        {/* Тело */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Вкладка СТУДЕНТЫ */}
+          {activeSubTab === 'students' && (
+            <div className="space-y-2">
+              {group.students?.length === 0 ? (
+                <p className="text-sm text-slate-400 italic text-center py-8">Нет студентов в группе</p>
+              ) : (
+                group.students?.map(student => (
+                  <div key={student.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-black text-sm">
+                        {student.first_name?.charAt(0)}{student.last_name?.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-slate-700">
+                          {student.first_name} {student.last_name}
+                        </p>
+                        <p className="text-[10px] text-slate-400">@{student.username}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/stats/${student.id}`)}
+                        className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black hover:bg-blue-100 transition-all"
+                        title="Статистика"
+                      >
+                        📊
+                      </button>
+                      <button
+                        onClick={() => navigate(`/teacher/students/${student.id}`)}
+                        className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black hover:bg-emerald-100 transition-all"
+                        title="Профиль"
+                      >
+                        👤
+                      </button>
+                      <button
+                        onClick={() => onRemoveStudent(group.id, student.id)}
+                        className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
+                        title="Удалить из группы"
+                      >
+                        <XCircle size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* 🔥 Вкладка НАЗНАЧЕНИЯ */}
+          {activeSubTab === 'assignments' && (
+            <div>
+              {loadingAssignments ? (
+                <div className="text-center py-8 text-slate-400">Загрузка...</div>
+              ) : assignments.length === 0 ? (
+                <div className="text-center py-8">
+                  <BookOpen size={48} className="mx-auto text-slate-200 mb-3" />
+                  <p className="text-slate-400 text-sm font-bold">Нет назначенных тестов</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(
+                    assignments.reduce((acc, a) => {
+                      const key = a.test_id;
+                      if (!acc[key]) acc[key] = { 
+                        test_title: a.test_title, 
+                        students: [],
+                        max_points: a.max_points || 0
+                      };
+                      acc[key].students.push(a);
+                      return acc;
+                    }, {})
+                  ).map(([testId, data]) => {
+                    const completedCount = data.students.filter(s => s.is_completed).length;
+                    const totalCount = data.students.length;
+                    const avgPercentage = data.students
+                      .filter(s => s.percentage !== null)
+                      .reduce((sum, s) => sum + s.percentage, 0) / (data.students.filter(s => s.percentage !== null).length || 1);
+                    
+                    return (
+                      <div key={testId} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h4 className="font-black text-sm text-slate-800">{data.test_title}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-slate-400">{totalCount} студентов</span>
+                              <span className={`text-[10px] font-bold ${completedCount === totalCount ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {completedCount}/{totalCount} выполнили
+                              </span>
+                              {completedCount > 0 && (
+                                <>
+                                  <span className="text-[10px] text-slate-300">•</span>
+                                  <span className="text-[10px] font-bold text-blue-600">
+                                    Средний: {Math.round(avgPercentage)}%
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="hidden md:flex items-center gap-2">
+                            <div className="w-20 h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${completedCount === totalCount ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                style={{ width: `${(completedCount / totalCount) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-black text-slate-500">
+                              {Math.round((completedCount / totalCount) * 100)}%
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {data.students.map(assignment => (
+                            <div key={assignment.id} className="flex items-center justify-between p-3 bg-white rounded-xl">
+                              <div className="flex items-center gap-2">
+                                {assignment.is_completed ? (
+                                  <CheckCircle2 size={14} className="text-emerald-500" />
+                                ) : (
+                                  <Clock size={14} className="text-amber-500" />
+                                )}
+                                <span className="text-xs font-bold text-slate-600">
+                                  {getStudentName(assignment._studentId || assignment.user_id)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {assignment.is_completed ? (
+                                  <>
+                                    <span className="text-[10px] font-bold text-emerald-600">
+                                      {assignment.total_points || 0}/{assignment.max_points || data.max_points || 0} балл.
+                                    </span>
+                                    {assignment.percentage && (
+                                      <span className="text-[10px] font-bold text-blue-600">
+                                        {assignment.percentage}%
+                                      </span>
+                                    )}
+                                    {assignment.result_id && (
+                                      <button
+                                        onClick={() => navigateToResult(assignment.result_id)}
+                                        className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black hover:bg-emerald-100 transition-all flex items-center gap-1"
+                                      >
+                                        <FileText size={10} />
+                                        Рез-т
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 font-bold">Ожидается</span>
+                                )}
+                                <button
+                                  onClick={() => handleUnassign(assignment.id)}
+                                  className="p-1 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
+                                >
+                                  <XCircle size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Футер */}
+        <div className="p-6 border-t border-slate-100">
+          <button
+            onClick={onClose}
+            className="w-full p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+          >
+            ЗАКРЫТЬ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 // ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
 export default function TeacherDashboard() {
@@ -726,6 +1540,15 @@ export default function TeacherDashboard() {
   const [openHints, setOpenHints] = useState({});
   const [bankClassSearch, setBankClassSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
+    const [groupDetailModal, setGroupDetailModal] = useState(null);
+
+
+  // В начале компонента TeacherDashboard, после существующих состояний
+const [groups, setGroups] = useState([]);
+const [groupForm, setGroupForm] = useState({ id: null, name: '', description: '' });
+const [groupStudentsModal, setGroupStudentsModal] = useState(null); // группа для управления студентами
+const [assignGroupModal, setAssignGroupModal] = useState(null); // группа для назначения теста
+const [groupSearch, setGroupSearch] = useState('');
   
   // Конструктор тестов
   const [testForm, setTestForm] = useState({
@@ -801,6 +1624,105 @@ export default function TeacherDashboard() {
     }
   };
 
+// После fetchStudents
+const fetchGroups = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/teacher/groups/`, { headers: getAuthHeaders() });
+    setGroups(res.data);
+  } catch (e) {
+    console.error('Ошибка загрузки групп:', e);
+  }
+};
+
+// Добавляем в useEffect
+useEffect(() => {
+  fetchTasks();
+  fetchTests();
+  fetchStudents();
+  fetchGroups();  // 🔥
+}, []);
+
+// CRUD группы
+const handleCreateGroup = async (e) => {
+  e.preventDefault();
+  try {
+    if (groupForm.id) {
+      await axios.put(`${API_BASE}/teacher/groups/${groupForm.id}`, {
+        name: groupForm.name,
+        description: groupForm.description
+      }, { headers: getAuthHeaders() });
+      alert('Группа обновлена!');
+    } else {
+      await axios.post(`${API_BASE}/teacher/groups/`, {
+        name: groupForm.name,
+        description: groupForm.description
+      }, { headers: getAuthHeaders() });
+      alert('Группа создана!');
+    }
+    setGroupForm({ id: null, name: '', description: '' });
+    fetchGroups();
+  } catch (e) {
+    alert(e.response?.data?.detail || 'Ошибка при сохранении группы');
+  }
+};
+
+const handleDeleteGroup = async (groupId) => {
+  if (!confirm('Удалить группу? Все студенты останутся в системе.')) return;
+  try {
+    await axios.delete(`${API_BASE}/teacher/groups/${groupId}`, { headers: getAuthHeaders() });
+    fetchGroups();
+  } catch (e) {
+    alert('Ошибка при удалении группы');
+  }
+};
+
+const handleEditGroup = (group) => {
+  setGroupForm({
+    id: group.id,
+    name: group.name,
+    description: group.description || ''
+  });
+};
+
+// Управление студентами в группе
+const handleAddStudentsToGroup = async (groupId, studentIds) => {
+  try {
+    await axios.post(`${API_BASE}/teacher/groups/${groupId}/students`, {
+      student_ids: studentIds
+    }, { headers: getAuthHeaders() });
+    fetchGroups();
+    setGroupStudentsModal(null);
+  } catch (e) {
+    alert('Ошибка при добавлении студентов');
+  }
+};
+
+const handleRemoveStudentFromGroup = async (groupId, studentId) => {
+  try {
+    await axios.delete(`${API_BASE}/teacher/groups/${groupId}/students/${studentId}`, {
+      headers: getAuthHeaders()
+    });
+    fetchGroups();
+  } catch (e) {
+    alert('Ошибка при удалении студента');
+  }
+};
+
+// Назначение теста группе
+const handleAssignTestToGroup = async (testId, groupId) => {
+  try {
+    await axios.post(`${API_BASE}/teacher/assign-test-to-group`, {
+      test_id: testId,
+      group_id: groupId,
+      due_date: null
+    }, { headers: getAuthHeaders() });
+    alert('Тест назначен группе!');
+    setAssignGroupModal(null);
+  } catch (e) {
+    alert('Ошибка при назначении теста');
+  }
+};
+
   // Группировка заданий
   const groupedTasks = useMemo(() => {
     if (!tasks.grouped) return {};
@@ -862,6 +1784,7 @@ export default function TeacherDashboard() {
       alert('Ошибка при сохранении теста');
     }
   };
+
 
   const resetTestForm = () => {
     setTestForm({
@@ -960,7 +1883,8 @@ export default function TeacherDashboard() {
 { id: 'sections', icon: BookOpen, label: 'Банк заданий (темы)' },
 { id: 'constructor', icon: ClipboardList, label: 'Конструктор' },
               { id: 'students', icon: Users, label: 'Ученики' },
-              { id: 'tests_list', icon: BookOpen, label: 'Тесты' }
+              { id: 'tests_list', icon: BookOpen, label: 'Тесты' },
+                  { id: 'groups', icon: LayoutDashboard, label: 'Группы' }, // 🔥
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1579,6 +2503,162 @@ export default function TeacherDashboard() {
           </div>
         )}
 
+        {/* ==================== ВКЛАДКА: ГРУППЫ ==================== */}
+{activeTab === 'groups' && (
+  <div className="space-y-6 animate-in fade-in duration-500">
+    {/* Форма создания/редактирования группы */}
+    <div className="bg-white rounded-[2.5rem] p-5 md:p-8 shadow-sm border border-slate-100">
+      <h3 className="text-lg font-black text-slate-800 uppercase mb-4">
+        {groupForm.id ? 'Редактировать группу' : 'Создать группу'}
+      </h3>
+      
+      <form onSubmit={handleCreateGroup} className="space-y-4">
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">
+            Название группы
+          </label>
+          <input
+            required
+            type="text"
+            value={groupForm.name}
+            onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
+            placeholder="9А, Олимпиадники, Отстающие..."
+            className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-400"
+          />
+        </div>
+        
+        <div>
+          <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">
+            Описание (опционально)
+          </label>
+          <textarea
+            value={groupForm.description}
+            onChange={e => setGroupForm({ ...groupForm, description: e.target.value })}
+            placeholder="Описание группы..."
+            rows={3}
+            className="w-full p-4 bg-slate-50 rounded-2xl font-medium text-sm outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase hover:bg-emerald-700 transition-all"
+          >
+            {groupForm.id ? 'Обновить' : 'Создать'}
+          </button>
+          
+          {groupForm.id && (
+            <button
+              type="button"
+              onClick={() => setGroupForm({ id: null, name: '', description: '' })}
+              className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm uppercase hover:bg-slate-200 transition-all"
+            >
+              Отмена
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+
+    {/* Список групп */}
+    <div className="bg-white rounded-[2.5rem] p-5 md:p-8 shadow-sm border border-slate-100">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-black text-slate-800 uppercase">Мои группы</h3>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+          <input
+            type="text"
+            placeholder="Поиск..."
+            value={groupSearch}
+            onChange={e => setGroupSearch(e.target.value)}
+            className="pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-xs font-bold outline-none"
+          />
+        </div>
+      </div>
+
+      {groups.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <LayoutDashboard size={32} className="text-slate-300" />
+          </div>
+          <p className="font-black text-slate-400 uppercase">Нет групп</p>
+          <p className="text-xs font-bold text-slate-300 mt-1">Создайте группу выше</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {groups
+    .filter(g => g.name.toLowerCase().includes(groupSearch.toLowerCase()))
+    .map(group => (
+      <div key={group.id} className="bg-slate-50 rounded-2xl p-5 border border-slate-100 hover:shadow-md transition-all">
+        <div className="flex items-start justify-between mb-3">
+          {/* 🔥 Клик по названию открывает детальную модалку */}
+          {/* Стало: клик по названию открывает детали */}
+<div 
+  onClick={() => setGroupDetailModal(group)}
+  className="cursor-pointer hover:text-emerald-600 transition-colors"
+>
+  <h4 className="font-black text-slate-800 text-sm uppercase group-hover:text-emerald-600">{group.name}</h4>
+  {group.description && (
+    <p className="text-[10px] text-slate-400 mt-1">{group.description}</p>
+  )}
+</div>
+          <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-2 py-1 rounded-lg">
+            {group.students_count || group.students?.length || 0} уч.
+          </span>
+        </div>
+
+        {/* Студенты группы (компактно) */}
+        {group.students && group.students.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-4">
+            {group.students.slice(0, 5).map(s => (
+              <span key={s.id} className="text-[9px] bg-white px-2 py-1 rounded-lg text-slate-500 font-bold">
+                {s.first_name} {s.last_name?.charAt(0)}.
+              </span>
+            ))}
+            {group.students.length > 5 && (
+              <span className="text-[9px] text-slate-400 font-bold">
+                +{group.students.length - 5}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Кнопки действий */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setGroupStudentsModal(group)}
+            className="flex-1 p-2 bg-white text-slate-600 rounded-xl text-[10px] font-black hover:bg-blue-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1"
+          >
+            <Users size={12} /> Студенты
+          </button>
+          <button
+            onClick={() => setAssignGroupModal(group)}
+            className="flex-1 p-2 bg-white text-slate-600 rounded-xl text-[10px] font-black hover:bg-emerald-50 hover:text-emerald-600 transition-all flex items-center justify-center gap-1"
+          >
+            <Send size={12} /> Тест
+          </button>
+          <button
+            onClick={() => handleEditGroup(group)}
+            className="p-2 bg-white text-slate-400 rounded-xl hover:bg-amber-50 hover:text-amber-600 transition-all"
+          >
+            <Edit3 size={12} />
+          </button>
+          <button
+            onClick={() => handleDeleteGroup(group.id)}
+            className="p-2 bg-white text-slate-400 rounded-xl hover:bg-red-50 hover:text-red-500 transition-all"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+    ))}
+</div>
+      )}
+    </div>
+  </div>
+)}
+
       </main>
 
       {/* Модальные окна */}
@@ -1597,6 +2677,106 @@ export default function TeacherDashboard() {
           onClose={() => setAssignmentsModalTest(null)}
         />
       )}
+
+      {/* Модалка: Управление студентами группы */}
+{groupStudentsModal && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+      {/* Заголовок */}
+      <div className="p-6 border-b border-slate-100">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-xl font-black text-slate-800">{groupStudentsModal.name}</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              {groupStudentsModal.students?.length || 0} студентов в группе
+            </p>
+          </div>
+          <button onClick={() => setGroupStudentsModal(null)} className="p-2 hover:bg-slate-100 rounded-xl">
+            <XCircle size={20} className="text-slate-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* Тело */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* Студенты В группе */}
+        <div>
+          <h4 className="text-xs font-black text-slate-400 uppercase mb-2">В группе:</h4>
+          {groupStudentsModal.students?.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">Нет студентов</p>
+          ) : (
+            <div className="space-y-1">
+              {groupStudentsModal.students?.map(s => (
+                <div key={s.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                  <div>
+                    <span className="text-sm font-bold text-slate-700">
+                      {s.first_name} {s.last_name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 ml-2">@{s.username}</span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveStudentFromGroup(groupStudentsModal.id, s.id)}
+                    className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-all"
+                    title="Удалить из группы"
+                  >
+                    <XCircle size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Добавить студентов */}
+        <div>
+          <h4 className="text-xs font-black text-slate-400 uppercase mb-2">Добавить в группу:</h4>
+          {students.filter(s => !groupStudentsModal.students?.some(gs => gs.id === s.id)).length === 0 ? (
+            <p className="text-xs text-slate-400 italic">Все студенты уже в группе</p>
+          ) : (
+            <div className="space-y-1">
+              {students
+                .filter(s => !groupStudentsModal.students?.some(gs => gs.id === s.id))
+                .map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleAddStudentsToGroup(groupStudentsModal.id, [s.id])}
+                    className="w-full flex items-center justify-between p-3 bg-slate-50 hover:bg-emerald-50 rounded-xl transition-all text-left"
+                  >
+                    <div>
+                      <span className="text-sm font-bold text-slate-600">
+                        {s.first_name} {s.last_name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 ml-2">@{s.username}</span>
+                    </div>
+                    <span className="text-emerald-600 font-black text-xs">+ Добавить</span>
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Футер */}
+      <div className="p-6 border-t border-slate-100">
+        <button
+          onClick={() => setGroupStudentsModal(null)}
+          className="w-full p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+        >
+          ЗАКРЫТЬ
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{assignGroupModal && (
+  <AssignTestToGroupModal
+    group={assignGroupModal}
+    tests={tests}
+    onClose={() => setAssignGroupModal(null)}
+    onAssign={handleAssignTestToGroup}
+  />
+)}
 
       {/* Индикатор выбранных заданий (плавающий) */}
       {selectedTasks.length > 0 && activeTab !== 'constructor' && (
@@ -1623,6 +2803,21 @@ export default function TeacherDashboard() {
           </button>
         </div>
       )}
+
+      {/* Модалка: Детальная информация о группе */}
+{groupDetailModal && (
+  <GroupDetailModal
+    group={groupDetailModal}
+    tests={tests}
+    students={students}
+    onClose={() => setGroupDetailModal(null)}
+    onRemoveStudent={handleRemoveStudentFromGroup}
+    onUnassignTest={(assignmentId) => {
+      // Удаление назначения
+    }}
+    navigate={navigate}
+  />
+)}
     </div>
   );
 }
