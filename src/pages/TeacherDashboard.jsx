@@ -1877,30 +1877,42 @@ const handleAssignTestToGroup = async (testId, groupId) => {
             </div>
           </div>
 
-          <nav className="flex gap-2 bg-white/10 backdrop-blur-sm p-1.5 rounded-[2rem] w-full">
-            {[
-              { id: 'bank', icon: Database, label: 'Банк заданий (тесты)' },
-{ id: 'sections', icon: BookOpen, label: 'Банк заданий (темы)' },
-{ id: 'constructor', icon: ClipboardList, label: 'Конструктор' },
-              { id: 'students', icon: Users, label: 'Ученики' },
-              { id: 'tests_list', icon: BookOpen, label: 'Тесты' },
-                  { id: 'groups', icon: LayoutDashboard, label: 'Группы' }, // 🔥
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs transition-all flex-1 ${
-                  activeTab === tab.id
-                    ? 'bg-white text-emerald-700 shadow-lg scale-[0.98] md:scale-105'
-                    : 'text-white/70 hover:text-white'
-                }`}
-              >
-                <tab.icon size={14} className="md:w-4 md:h-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
-                <span className="sm:hidden">{tab.label.slice(0, 1)}</span>
-              </button>
-            ))}
-          </nav>
+        <nav className="flex flex-wrap gap-1.5 bg-white/10 backdrop-blur-sm p-1.5 rounded-2xl w-full">
+  {[
+    { id: 'bank', icon: Database, label: 'Банк заданий' },
+    { id: 'sections', icon: BookOpen, label: 'Банк заданий' },
+    { id: 'constructor', icon: ClipboardList, label: 'Конструктор' },
+    { id: 'students', icon: Users, label: 'Ученики' },
+    { id: 'tests_list', icon: BookOpen, label: 'Тесты' },
+    { id: 'groups', icon: LayoutDashboard, label: 'Группы' },
+  ].map(tab => (
+    <button
+      key={tab.id}
+      onClick={() => setActiveTab(tab.id)}
+      className={`
+        flex items-center justify-center gap-1 
+        px-1 py-1.5 
+        rounded-xl 
+        font-black text-[9px] 
+        transition-all 
+        flex-[1_0_calc(33.333%-0.5rem)] 
+        sm:flex-1 sm:px-3 sm:py-2 sm:text-xs sm:rounded-2xl
+        ${
+          activeTab === tab.id
+            ? 'bg-white text-emerald-700 shadow-lg scale-[0.97] sm:scale-105'
+            : 'text-white/70 hover:text-white'
+        }
+      `}
+    >
+      <tab.icon size={12} className="sm:w-4 sm:h-4 flex-shrink-0" />
+      <span className="truncate max-w-[40px] sm:max-w-none sm:inline">
+        {tab.id === 'bank' ? 'Тесты' :
+         tab.id === 'sections' ? 'Темы' :
+         tab.label}
+      </span>
+    </button>
+  ))}
+</nav>
         </div>
       </div>
 
