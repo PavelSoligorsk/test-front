@@ -12,6 +12,7 @@ import TestResultDetail from './pages/TestResultDetail';
 import AdminResultView from './pages/AdminResultView';
 import TeacherResultView from './pages/TeacherResultView';
 import TeacherStudentProfile from './pages/TeacherStudentProfile';
+import StatsPage from './pages/StatsPage';  // ← Добавляем
 import axios from 'axios';
 
 // ========== ФУНКЦИЯ ДЛЯ НАДЁЖНОГО ВОССТАНОВЛЕНИЯ СЕССИИ ==========
@@ -133,6 +134,10 @@ export default function App() {
           <Route path="/admin" element={
             <PrivateRoute allowedRoles={['admin']}><AdminDashboard /></PrivateRoute>
           } />
+
+                  <Route path="/stats" element={<StatsPage />} />
+        <Route path="/stats/:userId" element={<StatsPage />} />
+        <Route path="/stats/me" element={<StatsPage />} />
 
           <Route path="/result/:resultId" element={<TestResultDetail />} />
 

@@ -24,6 +24,8 @@ import {
   XCircle,
   Filter,
   ChevronRight,
+  BarChart3 ,
+  Trophy ,
   Hash, Library, BookOpen as BookIcon
 } from 'lucide-react';
 import axios from 'axios';
@@ -855,6 +857,16 @@ useEffect(() => {
                         ID: {profile?.user.id || '001'}
                       </p>
                     </div>
+                    {/* В секции profile, после блока со статистикой */}
+<div className="flex gap-4 mt-6">
+  <button
+    onClick={() => navigate('/stats/me')}
+    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+  >
+    <BarChart3 size={16} />
+    Детальная статистика
+  </button>
+</div>
                   </div>
 
                   <div className="flex gap-8 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-50">

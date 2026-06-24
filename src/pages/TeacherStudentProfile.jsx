@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Phone, MessageSquare, History, 
   ArrowRight, Trophy, Target, Calendar, Search,
-  Clock, CheckCircle2, ListTodo
+  Clock, CheckCircle2, ListTodo, BarChart3 
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -133,6 +133,14 @@ export default function TeacherStudentProfile() {
           
           {/* Статистика */}
           <div className="flex gap-10 bg-white p-8 rounded-[2.5rem] border border-slate-50 shadow-sm">
+                                {/* В секции profile, после блока со статистикой */}
+<button
+      onClick={() => navigate(`/stats/${user.id}`)}
+      className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-black text-xs uppercase hover:bg-blue-100 transition-all flex items-center gap-2"
+    >
+      <BarChart3 size={14} />
+      Статистика
+    </button>
             <div className="text-right">
               <div className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Средний результат</div>
               <div className="text-5xl font-black text-slate-950 italic">

@@ -9,7 +9,8 @@ import {
   Trophy, 
   Target,
   Calendar,
-  Search 
+  Search,
+  BarChart3 
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -110,6 +111,16 @@ const filteredHistory = history.filter(item =>
           <div className="flex items-center gap-2 text-slate-400 font-bold text-lg">
             {user.username}
           </div>
+          {/* В компоненте профиля пользователя */}
+<div className="flex gap-3 mt-6">
+  <button
+    onClick={() => navigate(`/stats/${user.id}`)}
+    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+  >
+    <BarChart3 size={16} />
+    Статистика ученика
+  </button>
+</div>
         </div>
         
         <div className="flex gap-10 bg-white p-8 rounded-[2.5rem] border border-slate-50 shadow-sm">
