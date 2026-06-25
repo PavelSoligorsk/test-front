@@ -14,6 +14,7 @@ import TeacherResultView from './pages/TeacherResultView';
 import TeacherStudentProfile from './pages/TeacherStudentProfile';
 import StatsPage from './pages/StatsPage';  // ← Добавляем
 import axios from 'axios';
+import ResetPassword from './pages/ResetPassword';  // Добавить этот импорт
 
 // ========== ФУНКЦИЯ ДЛЯ НАДЁЖНОГО ВОССТАНОВЛЕНИЯ СЕССИИ ==========
 function restoreSession() {
@@ -128,6 +129,8 @@ export default function App() {
           <Route path="/teacher" element={
             <PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherDashboard /></PrivateRoute>
           } />
+
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route path="/admin/results/:resultId" element={<AdminResultView mode="view" />} />
 
