@@ -588,16 +588,16 @@ useEffect(() => {
         {/* ==================== ВКЛАДКА: ТЕСТЫ ==================== */}
 {/* ==================== ВКЛАДКА: ТЕСТЫ ==================== */}
 {activeTab === 'tests' && (
-  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6">
 
     {/* --- 1. ВЕРХНЯЯ ПАНЕЛЬ --- */}
-    <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 shadow-sm border border-slate-100">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4">
         <div>
-          <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+          <h2 className="text-xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
             Доступные тесты
           </h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+          <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 md:mt-1">
             {testTypeFilter === 'all' 
               ? `${allTestsCount} тестов доступно`
               : testTypeFilter === 'static'
@@ -609,94 +609,103 @@ useEffect(() => {
       </div>
     </div>
 
-    {/* --- 2. ФИЛЬТРЫ ПО ТИПУ ТЕСТОВ --- */}
-<div className="flex justify-center">
-  <div className="flex flex-wrap gap-2 w-full max-w-2xl">
-    {[
-      { 
-        key: 'all', 
-        label: 'Все', 
-        icon: '📚',
-        activeColor: 'bg-slate-800',
-        badgeColor: 'bg-slate-700'
-      },
-      { 
-        key: 'static', 
-        label: 'Общие', 
-        icon: '📖',
-        activeColor: 'bg-blue-600',
-        badgeColor: 'bg-blue-500'
-      },
-      { 
-        key: 'custom', 
-        label: 'Учительские', 
-        icon: '👨‍🏫',
-        activeColor: 'bg-emerald-600',
-        badgeColor: 'bg-emerald-500'
-      }
-    ].map(filter => {
-      const count = filter.key === 'all' 
-        ? allTestsCount 
-        : filter.key === 'static' 
-          ? publicStaticCount 
-          : teacherTestsCount;
-      
-      return (
-        <button
-          key={filter.key}
-          onClick={() => {
-            setTestTypeFilter(filter.key);
-            setSelectedClass(null);
-            setSelectedSubject('Все');
-            setTestSearch('');
-          }}
-          className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 min-w-[100px] ${
-            testTypeFilter === filter.key
-              ? `${filter.activeColor} text-white shadow-md`
-              : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
-          }`}
-        >
-          <span>{filter.icon}</span>
-          <span>{filter.label}</span>
-          <span className={`text-[9px] px-2 py-0.5 rounded-lg ${
-            testTypeFilter === filter.key 
-              ? `${filter.badgeColor} text-white` 
-              : 'bg-slate-100 text-slate-400'
-          }`}>
-            {count}
-          </span>
-        </button>
-      );
-    })}
-  </div>
-</div>
+    {/* --- 2. ФИЛЬТРЫ ПО ТИПУ ТЕСТОВ (ГОРИЗОНТАЛЬНЫЙ СКРОЛЛ ДЛЯ МОБИЛКИ) --- */}
+    <div className="flex justify-center overflow-x-auto px-1 md:px-0 pb-1 md:pb-0 -mx-2 md:mx-0">
+      <div className="flex gap-1.5 md:gap-2 w-full max-w-2xl min-w-max md:min-w-0">
+        {[
+          { 
+            key: 'all', 
+            label: 'Все', 
+            icon: '📚',
+            activeColor: 'bg-slate-800',
+            badgeColor: 'bg-slate-700'
+          },
+          { 
+            key: 'static', 
+            label: 'Общие', 
+            icon: '📖',
+            activeColor: 'bg-blue-600',
+            badgeColor: 'bg-blue-500'
+          },
+          { 
+            key: 'custom', 
+            label: 'Учительские', 
+            icon: '👨‍🏫',
+            activeColor: 'bg-emerald-600',
+            badgeColor: 'bg-emerald-500'
+          }
+        ].map(filter => {
+          const count = filter.key === 'all' 
+            ? allTestsCount 
+            : filter.key === 'static' 
+              ? publicStaticCount 
+              : teacherTestsCount;
+          
+          return (
+            <button
+              key={filter.key}
+              onClick={() => {
+                setTestTypeFilter(filter.key);
+                setSelectedClass(null);
+                setSelectedSubject('Все');
+                setTestSearch('');
+              }}
+              className={`flex-1 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 md:gap-2 min-w-[80px] md:min-w-[100px] whitespace-nowrap ${
+                testTypeFilter === filter.key
+                  ? `${filter.activeColor} text-white shadow-md`
+                  : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
+              }`}
+            >
+              <span className="text-xs md:text-sm">{filter.icon}</span>
+              <span className="hidden xs:inline">{filter.label}</span>
+              <span className="inline xs:hidden">
+                {filter.key === 'all' ? 'Все' : filter.key === 'static' ? 'Общ' : 'Учит'}
+              </span>
+              <span className={`text-[7px] md:text-[9px] px-1.5 md:px-2 py-0.5 rounded-lg ${
+                testTypeFilter === filter.key 
+                  ? `${filter.badgeColor} text-white` 
+                  : 'bg-slate-100 text-slate-400'
+              }`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
 
     {/* --- 3. ОСНОВНОЙ БЛОК --- */}
-    <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
+    <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row min-h-[400px] md:min-h-[500px]">
       
-      {/* Левая панель — Разделы */}
-      <aside className="w-full md:w-64 bg-slate-50/50 border-b md:border-b-0 md:border-r border-slate-100 p-5 flex flex-col gap-4">
-        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-          <Filter size={14} /> Раздел
-        </h3>
+      {/* Левая панель — Разделы (для мобилки - выпадающий список или скролл) */}
+      <aside className="w-full md:w-64 bg-slate-50/50 border-b md:border-b-0 md:border-r border-slate-100 p-3 md:p-5 flex flex-col gap-3 md:gap-4">
+        <div className="flex items-center justify-between md:justify-start">
+          <h3 className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 md:gap-2">
+            <Filter size={12} className="md:w-[14px] md:h-[14px]" /> Раздел
+          </h3>
+          {/* Индикатор количества для мобилки */}
+          <span className="md:hidden text-[8px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-lg border border-slate-100">
+            {uniqueClasses.length}
+          </span>
+        </div>
         
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={12} className="md:w-[14px] md:h-[14px] absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text"
             placeholder="Поиск раздела..."
             value={classSearch}
             onChange={(e) => setClassSearch(e.target.value)}
-            className="w-full bg-white border border-slate-200 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-blue-400"
+            className="w-full bg-white border border-slate-200 py-2 md:py-2.5 pl-8 md:pl-9 pr-3 md:pr-4 rounded-xl text-[10px] md:text-xs font-bold outline-none focus:border-blue-400 placeholder:text-[8px] md:placeholder:text-xs"
           />
         </div>
 
-        <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto max-h-[40vh] md:max-h-[60vh]">
+        {/* Горизонтальный скролл для мобилки, вертикальный для десктопа */}
+        <div className="flex md:flex-col gap-1.5 md:gap-2 overflow-x-auto md:overflow-y-auto max-h-[30vh] md:max-h-[60vh] pb-1 md:pb-0">
           {uniqueClasses.length > 0 ? uniqueClasses.map(cls => {
             const count = typeFilteredTests.filter(t => (t.target_class || "Общие") === cls).length;
             const isActive = selectedClass === cls;
             
-            // Проверяем, есть ли в этом разделе учительские тесты
             const hasTeacherTests = typeFilteredTests.some(t => 
               (t.target_class || "Общие") === cls && t.type === 'custom'
             );
@@ -705,25 +714,27 @@ useEffect(() => {
               <button 
                 key={cls} 
                 onClick={() => { setSelectedClass(cls); setSelectedSubject('Все'); setTestSearch(''); }}
-                className={`shrink-0 flex items-center justify-between p-3 rounded-xl text-left transition-all ${
+                className={`shrink-0 md:shrink flex items-center justify-between p-2.5 md:p-3 rounded-xl text-left transition-all min-w-[120px] md:min-w-0 ${
                   isActive 
                     ? 'bg-slate-800 text-white shadow-md' 
                     : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 md:gap-2">
                   {hasTeacherTests && testTypeFilter === 'all' && (
-                    <span className="text-[14px]">👨‍🏫</span>
+                    <span className="text-[12px] md:text-[14px]">👨‍🏫</span>
                   )}
-                  <span className="font-bold text-xs uppercase">{cls}</span>
+                  <span className="font-bold text-[9px] md:text-xs uppercase truncate max-w-[80px] md:max-w-none">
+                    {cls}
+                  </span>
                 </div>
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
+                <span className={`text-[8px] md:text-[10px] font-black px-1.5 md:px-2 py-0.5 rounded-lg ${
                   isActive ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'
                 }`}>{count}</span>
               </button>
             );
           }) : (
-            <p className="text-[10px] font-bold text-slate-400 text-center py-10 italic">
+            <p className="text-[8px] md:text-[10px] font-bold text-slate-400 text-center py-6 md:py-10 italic w-full">
               {classSearch ? 'Ничего не найдено' : 'Нет разделов'}
             </p>
           )}
@@ -731,69 +742,73 @@ useEffect(() => {
       </aside>
 
       {/* Правая часть — контент */}
-      <main className="flex-1 p-5 md:p-8 bg-white overflow-y-auto">
+      <main className="flex-1 p-3 md:p-8 bg-white overflow-y-auto">
         {!selectedClass ? (
-          <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-16">
-            <div className="w-20 h-20 rounded-[2rem] bg-slate-50 flex items-center justify-center">
-              {testTypeFilter === 'static' && <BookOpen size={40} className="text-blue-200" />}
-              {testTypeFilter === 'custom' && <Users size={40} className="text-emerald-200" />}
-              {testTypeFilter === 'all' && <GraduationCap size={40} className="text-slate-200" />}
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-3 md:space-y-4 py-8 md:py-16">
+            <div className="w-14 h-14 md:w-20 md:h-20 rounded-[1.5rem] md:rounded-[2rem] bg-slate-50 flex items-center justify-center">
+              {testTypeFilter === 'static' && <BookOpen size={28} className="md:w-[40px] md:h-[40px] text-blue-200" />}
+              {testTypeFilter === 'custom' && <Users size={28} className="md:w-[40px] md:h-[40px] text-emerald-200" />}
+              {testTypeFilter === 'all' && <GraduationCap size={28} className="md:w-[40px] md:h-[40px] text-slate-200" />}
             </div>
-            <h3 className="text-lg font-black uppercase text-slate-300">Выберите раздел</h3>
-            <p className="text-xs font-bold text-slate-300 max-w-xs">
+            <h3 className="text-sm md:text-lg font-black uppercase text-slate-300">Выберите раздел</h3>
+            <p className="text-[8px] md:text-xs font-bold text-slate-300 max-w-[200px] md:max-w-xs">
               Слева отображаются разделы с доступными тестами
             </p>
           </div>
         ) : (
-          <div className="space-y-6 animate-in fade-in">
+          <div className="space-y-4 md:space-y-6 animate-in fade-in">
             {/* Хлебные крошки + поиск */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2 flex-wrap text-xs font-black uppercase text-slate-500">
-                <button onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }}>
-                  <ChevronRight size={14} className="rotate-180 text-slate-300 hover:text-slate-600" />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 pb-3 md:pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-1.5 md:gap-2 flex-wrap text-[8px] md:text-xs font-black uppercase text-slate-500">
+                <button onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }} className="p-0.5">
+                  <ChevronRight size={12} className="md:w-[14px] md:h-[14px] rotate-180 text-slate-300 hover:text-slate-600" />
                 </button>
-                <span className={`px-2 py-1 rounded-lg ${
+                <span className={`px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg text-[7px] md:text-[10px] ${
                   testTypeFilter === 'static' ? 'bg-blue-50 text-blue-600' :
                   testTypeFilter === 'custom' ? 'bg-emerald-50 text-emerald-600' :
                   'bg-slate-100 text-slate-500'
                 }`}>
                   {testTypeFilter === 'static' ? 'Общие' : testTypeFilter === 'custom' ? 'Учительские' : 'Все'}
                 </span>
-                <ChevronRight size={12} />
-                <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">{selectedClass}</span>
+                <ChevronRight size={10} className="md:w-[12px] md:h-[12px]" />
+                <span className="bg-blue-50 text-blue-600 px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg text-[7px] md:text-[10px]">
+                  {selectedClass}
+                </span>
                 {selectedSubject !== 'Все' && (
                   <>
-                    <ChevronRight size={12} />
-                    <span className="bg-slate-50 px-2 py-1 rounded-lg">{selectedSubject}</span>
+                    <ChevronRight size={10} className="md:w-[12px] md:h-[12px]" />
+                    <span className="bg-slate-50 px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg text-[7px] md:text-[10px]">
+                      {selectedSubject}
+                    </span>
                   </>
                 )}
               </div>
               
-              <div className="relative w-full sm:w-64">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <div className="relative w-full sm:w-56 md:w-64">
+                <Search size={12} className="md:w-[14px] md:h-[14px] absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Поиск теста..."
                   value={testSearch}
                   onChange={(e) => setTestSearch(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold uppercase outline-none focus:border-blue-400"
+                  className="w-full pl-8 md:pl-9 pr-8 md:pr-9 py-2 md:py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] md:text-xs font-bold uppercase outline-none focus:border-blue-400 placeholder:text-[8px] md:placeholder:text-xs"
                 />
                 {testSearch && (
                   <button onClick={() => setTestSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                    <XCircle size={14} />
+                    <XCircle size={12} className="md:w-[14px] md:h-[14px]" />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Темы */}
+            {/* Темы (горизонтальный скролл) */}
             {selectedClass && subjects.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              <div className="flex gap-1.5 md:gap-2 overflow-x-auto pb-1 md:pb-2 -mx-1 md:mx-0 px-1 md:px-0">
                 {subjects.map(subject => (
                   <button
                     key={subject}
                     onClick={() => setSelectedSubject(subject)}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap transition-all ${
+                    className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase whitespace-nowrap transition-all ${
                       selectedSubject === subject 
                         ? 'bg-slate-800 text-white' 
                         : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
@@ -807,7 +822,7 @@ useEffect(() => {
 
             {/* Сетка тестов */}
             {searchedTests.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 xs:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
                 {searchedTests.map(test => (
                   <TestCard
                     key={`${test.type}-${test.id}`}
@@ -819,14 +834,14 @@ useEffect(() => {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-16 space-y-3">
-                <div className="w-16 h-16 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto">
-                  <Search size={32} className="text-slate-200" />
+              <div className="text-center py-10 md:py-16 space-y-2 md:space-y-3">
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-slate-50 rounded-[1.5rem] md:rounded-[2rem] flex items-center justify-center mx-auto">
+                  <Search size={24} className="md:w-[32px] md:h-[32px] text-slate-200" />
                 </div>
-                <p className="font-black text-slate-400 uppercase">
+                <p className="font-black text-slate-400 uppercase text-xs md:text-base">
                   {testSearch ? 'Ничего не найдено' : 'Нет тестов'}
                 </p>
-                <p className="text-[10px] font-bold text-slate-300 uppercase">
+                <p className="text-[8px] md:text-[10px] font-bold text-slate-300 uppercase">
                   {testSearch ? 'Попробуйте другой запрос' : 'В этой категории пока пусто'}
                 </p>
               </div>
