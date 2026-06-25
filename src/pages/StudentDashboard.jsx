@@ -601,23 +601,75 @@ useEffect(() => {
             {testTypeFilter === 'all' 
               ? `${allTestsCount} тестов доступно`
               : testTypeFilter === 'static'
-                ? `${publicStaticCount} общих тестов (автосборка)`
-                : testTypeFilter === 'custom'
-                  ? `${teacherTestsCount} тестов от учителя`
-                  : `${aiTestsCount} AI тестов`
+                ? `${publicStaticCount} общих тестов`
+                : `${teacherTestsCount} тестов от учителя`
             }
           </p>
         </div>
-
-        <button
-          onClick={() => setShowAiModal(true)}
-          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase hover:shadow-xl hover:shadow-purple-200 transition-all"
-        >
-          <Sparkles size={16} />
-          <span>AI тест</span>
-        </button>
       </div>
     </div>
+
+    {/* --- 2. ФИЛЬТРЫ ПО ТИПУ ТЕСТОВ --- */}
+<div className="flex justify-center">
+  <div className="flex flex-wrap gap-2 w-full max-w-2xl">
+    {[
+      { 
+        key: 'all', 
+        label: 'Все', 
+        icon: '📚',
+        activeColor: 'bg-slate-800',
+        badgeColor: 'bg-slate-700'
+      },
+      { 
+        key: 'static', 
+        label: 'Общие', 
+        icon: '📖',
+        activeColor: 'bg-blue-600',
+        badgeColor: 'bg-blue-500'
+      },
+      { 
+        key: 'custom', 
+        label: 'Учительские', 
+        icon: '👨‍🏫',
+        activeColor: 'bg-emerald-600',
+        badgeColor: 'bg-emerald-500'
+      }
+    ].map(filter => {
+      const count = filter.key === 'all' 
+        ? allTestsCount 
+        : filter.key === 'static' 
+          ? publicStaticCount 
+          : teacherTestsCount;
+      
+      return (
+        <button
+          key={filter.key}
+          onClick={() => {
+            setTestTypeFilter(filter.key);
+            setSelectedClass(null);
+            setSelectedSubject('Все');
+            setTestSearch('');
+          }}
+          className={`flex-1 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 min-w-[100px] ${
+            testTypeFilter === filter.key
+              ? `${filter.activeColor} text-white shadow-md`
+              : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
+          }`}
+        >
+          <span>{filter.icon}</span>
+          <span>{filter.label}</span>
+          <span className={`text-[9px] px-2 py-0.5 rounded-lg ${
+            testTypeFilter === filter.key 
+              ? `${filter.badgeColor} text-white` 
+              : 'bg-slate-100 text-slate-400'
+          }`}>
+            {count}
+          </span>
+        </button>
+      );
+    })}
+  </div>
+</div>
 
     {/* --- 3. ОСНОВНОЙ БЛОК --- */}
     <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
@@ -643,6 +695,12 @@ useEffect(() => {
           {uniqueClasses.length > 0 ? uniqueClasses.map(cls => {
             const count = typeFilteredTests.filter(t => (t.target_class || "Общие") === cls).length;
             const isActive = selectedClass === cls;
+            
+            // Проверяем, есть ли в этом разделе учительские тесты
+            const hasTeacherTests = typeFilteredTests.some(t => 
+              (t.target_class || "Общие") === cls && t.type === 'custom'
+            );
+            
             return (
               <button 
                 key={cls} 
@@ -653,7 +711,12 @@ useEffect(() => {
                     : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300'
                 }`}
               >
-                <span className="font-bold text-xs uppercase">{cls}</span>
+                <div className="flex items-center gap-2">
+                  {hasTeacherTests && testTypeFilter === 'all' && (
+                    <span className="text-[14px]">👨‍🏫</span>
+                  )}
+                  <span className="font-bold text-xs uppercase">{cls}</span>
+                </div>
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
                   isActive ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'
                 }`}>{count}</span>
@@ -674,7 +737,6 @@ useEffect(() => {
             <div className="w-20 h-20 rounded-[2rem] bg-slate-50 flex items-center justify-center">
               {testTypeFilter === 'static' && <BookOpen size={40} className="text-blue-200" />}
               {testTypeFilter === 'custom' && <Users size={40} className="text-emerald-200" />}
-              {testTypeFilter === 'ai' && <Bot size={40} className="text-purple-200" />}
               {testTypeFilter === 'all' && <GraduationCap size={40} className="text-slate-200" />}
             </div>
             <h3 className="text-lg font-black uppercase text-slate-300">Выберите раздел</h3>
@@ -693,10 +755,9 @@ useEffect(() => {
                 <span className={`px-2 py-1 rounded-lg ${
                   testTypeFilter === 'static' ? 'bg-blue-50 text-blue-600' :
                   testTypeFilter === 'custom' ? 'bg-emerald-50 text-emerald-600' :
-                  testTypeFilter === 'ai' ? 'bg-purple-50 text-purple-600' :
                   'bg-slate-100 text-slate-500'
                 }`}>
-                  {testTypeFilter === 'static' ? 'Общие' : testTypeFilter === 'custom' ? 'Учитель' : testTypeFilter === 'ai' ? 'AI' : 'Все'}
+                  {testTypeFilter === 'static' ? 'Общие' : testTypeFilter === 'custom' ? 'Учительские' : 'Все'}
                 </span>
                 <ChevronRight size={12} />
                 <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">{selectedClass}</span>
@@ -777,6 +838,7 @@ useEffect(() => {
 
   </div>
 )}
+
         {/* ==================== ВКЛАДКА: ИСТОРИЯ ==================== */}
         {activeTab === 'history' && (
           <div className="bg-white rounded-[3rem] border border-slate-100 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
