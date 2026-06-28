@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams  } from 'react-router-dom';
 import { 
   PlusCircle, Database, Users, LayoutDashboard, 
   Search, Send, Eye, UserX, Image as ImageIcon, 
@@ -571,10 +571,66 @@ const UserRow = ({ user, users, getAuthHeaders, API_BASE, navigate, handleChange
 
 // ==================== ОСНОВНОЙ КОМПОНЕНТ АДМИНКИ ====================
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('create');
+    const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scrollPositions = useRef({});
+
+  // Восстановление позиций
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('admin_scroll_positions');
+      if (saved) scrollPositions.current = JSON.parse(saved);
+    } catch (e) {}
+  }, []);
+
+  // Активный таб
+  const [activeTab, setActiveTabState] = useState(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab) {
+      localStorage.setItem('admin_tab', urlTab);
+      return urlTab;
+    }
+    return localStorage.getItem('admin_tab') || 'create';
+  });
+
+  // Сохранение скролла
+  useEffect(() => {
+    const handleScroll = () => {
+      scrollPositions.current[activeTab] = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeTab]);
+
+  // Автосохранение при уходе
+  useEffect(() => {
+    return () => {
+      scrollPositions.current[activeTab] = window.scrollY;
+      localStorage.setItem('admin_tab', activeTab);
+      localStorage.setItem('admin_scroll_positions', JSON.stringify(scrollPositions.current));
+    };
+  }, [activeTab]);
+
+  // Восстановление позиции
+  useEffect(() => {
+    const savedPosition = scrollPositions.current[activeTab] || 0;
+    const timer = setTimeout(() => {
+      window.scrollTo({ top: savedPosition, behavior: 'instant' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
+
+  // Смена таба
+  const setActiveTab = (tabId) => {
+    if (tabId === activeTab) return;
+    scrollPositions.current[activeTab] = window.scrollY;
+    setActiveTabState(tabId);
+    localStorage.setItem('admin_tab', tabId);
+    localStorage.setItem('admin_scroll_positions', JSON.stringify(scrollPositions.current));
+    setSearchParams({ tab: tabId }, { replace: true });
+  };
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const navigate = useNavigate();
   const [allowedEmails, setAllowedEmails] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [openSolutions, setOpenSolutions] = useState({});

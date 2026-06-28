@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Phone, MessageSquare, History, 
   ArrowRight, Trophy, Target, Calendar, Search,
-  Clock, CheckCircle2, ListTodo, BarChart3 
+  Clock, CheckCircle2, ListTodo, BarChart3, Trash2 
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -60,6 +60,8 @@ export default function TeacherStudentProfile() {
     fetchData();
   }, [userId, navigate]);
 
+  
+
   // Для каждого назначения ищем соответствующий результат в истории
   const assignmentsWithResults = useMemo(() => {
     return assignments.map(assignment => {
@@ -95,6 +97,26 @@ export default function TeacherStudentProfile() {
   if (!data) return null;
 
   const { user, stats } = data;
+
+  const handleDeleteAssignment = async (assignmentId) => {
+  if (!confirm('Отменить назначение теста?')) return;
+  
+  try {
+    const headers = getAuthHeaders();
+    await axios.delete(`${API_BASE}/teacher/assignments/${assignmentId}`, { headers });
+    
+    // 🔥 Заново загружаем назначения с сервера
+    const res = await axios.get(`${API_BASE}/teacher/student/${userId}/assignments`, { headers });
+    setAssignments(res.data);
+    
+  } catch (e) {
+    console.error('Ошибка при удалении назначения:', e);
+    // Не показываем alert если сервер вернул 200
+    if (e.response?.status !== 200) {
+      alert('Ошибка при отмене назначения');
+    }
+  }
+};
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
@@ -202,68 +224,97 @@ export default function TeacherStudentProfile() {
                 </span>
               </div>
 
-              {assignments.length === 0 ? (
-                <div className="text-center py-8 text-slate-300 text-[10px] font-black uppercase tracking-widest">
-                  Нет назначений
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                  {sortedAssignments.map((assignment) => {
-                    const isDone = !!assignment.is_completed;
-                    const resultId = assignment.result_id;
+             {assignments.length === 0 ? (
+  <div className="text-center py-8 text-slate-300 text-[10px] font-black uppercase tracking-widest">
+    Нет назначений
+  </div>
+) : (
+  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+    {sortedAssignments.map((assignment) => {
+      const isDone = !!assignment.is_completed;
+      const resultId = assignment.result_id;
 
-                    return (
-                      <div 
-                        key={assignment.id} 
-                        className={`p-4 rounded-2xl border transition-all ${
-                          isDone 
-                            ? 'bg-emerald-50/50 border-emerald-100 hover:shadow-md cursor-pointer' 
-                            : 'bg-amber-50/50 border-amber-100'
-                        }`}
-                        onClick={() => {
-                          if (isDone && resultId) {
-                            navigate(`/teacher/results/${resultId}`);
-                          }
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xs text-slate-800 truncate flex items-center gap-2">
-                              {assignment.test_title}
-                              {isDone && assignment.result?.total_points !== undefined && (
-                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
-                                  {assignment.result.total_points} баллов
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {isDone ? (
-                                <span className="flex items-center gap-1 text-[9px] font-black text-emerald-600">
-                                  <CheckCircle2 size={12} /> Выполнен
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-[9px] font-black text-amber-600">
-                                  <Clock size={12} /> Ожидается
-                                </span>
-                              )}
-                              {assignment.due_date && (
-                                <span className="text-[9px] text-slate-400">
-                                  до {new Date(assignment.due_date).toLocaleDateString('ru-RU')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {isDone && resultId && (
-                            <div className="p-2 bg-white rounded-xl shadow-sm text-slate-400 hover:text-emerald-600 transition-all">
-                              <ArrowRight size={14} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+      return (  
+        <div 
+          key={assignment.id} 
+          className={`p-4 rounded-2xl border transition-all group ${
+            isDone 
+              ? 'bg-emerald-50/50 border-emerald-100 hover:shadow-md' 
+              : 'bg-amber-50/50 border-amber-100'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            {/* Левая часть — кликабельная если есть результат */}
+            <div 
+              className={`flex-1 min-w-0 ${isDone && resultId ? 'cursor-pointer' : ''}`}
+              onClick={() => {
+                if (isDone && resultId) {
+                  navigate(`/teacher/results/${resultId}`);
+                }
+              }}
+            >
+              <div className="font-bold text-xs text-slate-800 truncate flex items-center gap-2">
+                {assignment.test_title}
+                {isDone && assignment.total_points !== undefined && (
+                  <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
+                    {assignment.total_points}/{assignment.max_points || 0} балл.
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {isDone ? (
+                  <span className="flex items-center gap-1 text-[9px] font-black text-emerald-600">
+                    <CheckCircle2 size={12} /> Выполнен
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[9px] font-black text-amber-600">
+                    <Clock size={12} /> Ожидается
+                  </span>
+                )}
+                {assignment.due_date && (
+                  <span className="text-[9px] text-slate-400">
+                    до {new Date(assignment.due_date).toLocaleDateString('ru-RU')}
+                  </span>
+                )}
+                {assignment.percentage !== null && assignment.percentage !== undefined && (
+                  <span className="text-[9px] font-bold text-blue-600">
+                    {assignment.percentage}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Правая часть — кнопки */}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Кнопка перехода к результату */}
+              {isDone && resultId && (
+                <button
+                  onClick={() => navigate(`/teacher/results/${resultId}`)}
+                  className="p-2 bg-white rounded-xl shadow-sm text-slate-400 hover:text-emerald-600 transition-all"
+                  title="Посмотреть результат"
+                >
+                  <ArrowRight size={14} />
+                </button>
               )}
+              
+              {/* Кнопка удаления назначения */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteAssignment(assignment.id);
+                }}
+                className="p-2 bg-white rounded-xl shadow-sm text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                title="Отменить назначение"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
             </div>
 
             {/* Статус */}

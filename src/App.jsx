@@ -158,16 +158,19 @@ export default function App() {
 }
 
 function HomeRedirect() {
-  let savedUser = null;
-  try {
-    savedUser = JSON.parse(localStorage.getItem('edu_session'));
-    if (!savedUser) {
-      savedUser = JSON.parse(sessionStorage.getItem('edu_session'));
-    }
-  } catch(e) {}
+  // Используем ту же логику восстановления, что и везде
+  const savedUser = restoreSession();
   
-  if (!savedUser) return <Navigate to="/login" />;
-  if (savedUser.role === 'admin') return <Navigate to="/admin" />;
-  if (savedUser.role === 'teacher') return <Navigate to="/teacher" />;
-  return <Navigate to="/student" />;
+  if (!savedUser) return <Navigate to="/login" replace />;
+  
+  // Редирект в зависимости от роли
+  switch (savedUser.role) {
+    case 'admin':
+      return <Navigate to="/admin" replace />;
+    case 'teacher':
+      return <Navigate to="/teacher" replace />;
+    case 'student':
+    default:
+      return <Navigate to="/student" replace />;
+  }
 }

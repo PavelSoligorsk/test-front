@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef  } from 'react';
+import { useNavigate, useSearchParams  } from 'react-router-dom';
 import { 
   BookOpen, 
   Star, 
@@ -223,6 +223,63 @@ const TopicCard = ({ topic, onClick }) => {
 // ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
 export default function StudentDashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scrollPositions = useRef({});
+
+  // Восстановление позиций
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('student_scroll_positions');
+      if (saved) scrollPositions.current = JSON.parse(saved);
+    } catch (e) {}
+  }, []);
+
+  // Активный таб
+  const [activeTab, setActiveTabState] = useState(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab) {
+      localStorage.setItem('student_tab', urlTab);
+      return urlTab;
+    }
+    return localStorage.getItem('student_tab') || 'tests';
+  });
+
+  // Сохранение скролла
+  useEffect(() => {
+    const handleScroll = () => {
+      scrollPositions.current[activeTab] = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeTab]);
+
+  // Автосохранение при уходе
+  useEffect(() => {
+    return () => {
+      scrollPositions.current[activeTab] = window.scrollY;
+      localStorage.setItem('student_tab', activeTab);
+      localStorage.setItem('student_scroll_positions', JSON.stringify(scrollPositions.current));
+    };
+  }, [activeTab]);
+
+  // Восстановление позиции
+  useEffect(() => {
+    const savedPosition = scrollPositions.current[activeTab] || 0;
+    const timer = setTimeout(() => {
+      window.scrollTo({ top: savedPosition, behavior: 'instant' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
+
+  // Смена таба
+  const setActiveTab = (tabId) => {
+    if (tabId === activeTab) return;
+    scrollPositions.current[activeTab] = window.scrollY;
+    setActiveTabState(tabId);
+    localStorage.setItem('student_tab', tabId);
+    localStorage.setItem('student_scroll_positions', JSON.stringify(scrollPositions.current));
+    setSearchParams({ tab: tabId }, { replace: true });
+  };
   
   // Состояния
   const [staticTests, setStaticTests] = useState([]);
@@ -231,7 +288,6 @@ export default function StudentDashboard() {
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('tests');
   const [testTypeFilter, setTestTypeFilter] = useState('all');
   // После существующих состояний
 const [theoryTopics, setTheoryTopics] = useState([]);
@@ -264,6 +320,8 @@ const [sectionsForModal, setSectionsForModal] = useState([]);
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiTaskCount, setAiTaskCount] = useState('10');
   const [aiDifficulty, setAiDifficulty] = useState('none');
+
+  
 
   useEffect(() => {
     const sessionData = localStorage.getItem('edu_session');
@@ -408,6 +466,8 @@ const fetchTheoryTopics = async () => {
   }
 };
 
+
+
 const fetchTheorySections = async (topic) => {
   try {
     const { token } = JSON.parse(localStorage.getItem('edu_session'));
@@ -420,6 +480,7 @@ const fetchTheorySections = async (topic) => {
     return [];
   }
 };
+
 
 const fetchTheoryByTopicSection = async (topic, section) => {
   setTheoryLoading(true);
@@ -463,41 +524,31 @@ useEffect(() => {
   }
 }, [activeTab]);
 
-  // ==================== ЛОГИКА ИЕРАРХИИ ====================
-  
   // 1. Общие тесты = только autocompile (is_autocompile !== false)
-  const publicStaticTests = staticTests.filter(t => t.is_autocompile !== false);
-  
-  // 2. Тесты от учителя = назначенные + статические НЕ autocompile
-  const teacherTests = [
-    ...customTests.map(t => ({ ...t, type: 'custom' })),
-    ...staticTests.filter(t => t.is_autocompile === false).map(t => ({ ...t, type: 'custom' }))
-  ];
-  
-  // 3. AI тесты
-  const aiTestsMapped = aiTests.map(t => ({ ...t, type: 'ai' }));
+const publicStaticTests = staticTests.filter(t => t.is_autocompile !== false);
 
-  // Все тесты
-  const allTests = [
-    ...publicStaticTests.map(t => ({ ...t, type: 'static' })),
-    ...teacherTests,
-    ...aiTestsMapped
-  ];
+// 2. Тесты от учителя = назначенные + статические НЕ autocompile
+const teacherTests = [
+  ...customTests.map(t => ({ ...t, type: 'custom' })),
+  ...staticTests.filter(t => t.is_autocompile === false).map(t => ({ ...t, type: 'custom' }))
+];
 
-  // Количества
-  const publicStaticCount = publicStaticTests.length;
-  const teacherTestsCount = teacherTests.length;
-  const aiTestsCount = aiTestsMapped.length;
-  const allTestsCount = allTests.length;
+// 3. AI тесты
+const aiTestsMapped = aiTests.map(t => ({ ...t, type: 'ai' }));
 
-  // Фильтрация по типу
-  const typeFilteredTests = testTypeFilter === 'all' 
-    ? allTests 
-    : testTypeFilter === 'static'
-      ? publicStaticTests.map(t => ({ ...t, type: 'static' }))
-      : testTypeFilter === 'custom'
-        ? teacherTests
-        : aiTestsMapped;
+// Все тесты
+const allTests = [
+  ...publicStaticTests.map(t => ({ ...t, type: 'static' })),
+  ...teacherTests,
+  ...aiTestsMapped
+];
+
+const typeFilteredTests = testTypeFilter === 'all' 
+  ? allTests 
+  : testTypeFilter === 'public'
+    ? publicStaticTests.map(t => ({ ...t, type: 'static' }))
+    : teacherTests;
+
 
   // Уникальные классы
   const uniqueClasses = [...new Set(typeFilteredTests.map(t => t.target_class || "Общие"))]
@@ -538,6 +589,8 @@ useEffect(() => {
   const filteredHistory = history.filter(item =>
     item.test_title?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -585,29 +638,65 @@ useEffect(() => {
 
       <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
         
-        {/* ==================== ВКЛАДКА: ТЕСТЫ ==================== */}
+
 {/* ==================== ВКЛАДКА: ТЕСТЫ ==================== */}
+
 {activeTab === 'tests' && (
   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6 max-w-7xl mx-auto px-2 sm:px-4 md:px-0">
 
     {/* --- 1. ВЕРХНЯЯ ПАНЕЛЬ --- */}
     <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 shadow-sm border border-slate-100/80">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 md:gap-4">
-        <div>
-          <h2 className="text-xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+      {/* Главный контейнер панели: на десктопе расталкивает элементы по краям через justify-between */}
+      <div className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        
+        {/* Текстовый блок (всегда слева) */}
+        <div className="space-y-0.5 md:space-y-1">
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
             Доступные тесты
           </h2>
-          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5 md:mt-1">
-            {publicStaticCount} проверочных тестов доступно
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {typeFilteredTests.length} тестов доступно
           </p>
         </div>
+        
+        {/* Кнопка-переключатель: на мобилке во всю ширину, на ПК справа */}
+        <button
+          onClick={() => setTestTypeFilter(testTypeFilter === 'all' ? 'public' : testTypeFilter === 'public' ? 'teacher' : 'all')}
+          className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 ${
+            testTypeFilter === 'all' 
+              ? 'bg-slate-900 text-white border-transparent shadow-lg shadow-slate-900/20' 
+              : testTypeFilter === 'public'
+              ? 'bg-blue-600 text-white border-transparent shadow-lg shadow-blue-600/20'
+              : 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-600/20'
+          }`}
+        >
+          {testTypeFilter === 'all' && (
+            <>
+              <span className="text-base"></span> 
+              <span>Все ({publicStaticTests.length + teacherTests.length})</span>
+            </>
+          )}
+          {testTypeFilter === 'public' && (
+            <>
+              <span className="text-base animate-spin-[spin_3s_infinite]"></span> 
+              <span>Общие ({publicStaticTests.length})</span>
+            </>
+          )}
+          {testTypeFilter === 'teacher' && (
+            <>
+              <span className="text-base"></span> 
+              <span>Учительские ({teacherTests.length})</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
 
     {/* --- 2. ОСНОВНОЙ БЛОК --- */}
     <div className="bg-white rounded-2xl md:rounded-[2.5rem] shadow-sm border border-slate-100/80 overflow-hidden flex flex-col md:flex-row min-h-[450px] md:min-h-[550px]">
       
-      {/* Левая панель — Разделы (Скрывается на мобилке, если раздел УЖЕ выбран) */}
+      {/* Левая панель — Разделы */}
       <aside className={`w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-5 flex flex-col gap-3 ${
         selectedClass ? 'hidden md:flex' : 'flex'
       }`}>
@@ -668,7 +757,6 @@ useEffect(() => {
         !selectedClass ? 'hidden md:flex flex-col justify-center' : 'block'
       }`}>
         {!selectedClass ? (
-          // Заглушка на десктопе, когда ни один раздел не выбран
           <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12">
             <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[2rem] bg-slate-50 flex items-center justify-center border border-slate-100">
               <BookOpen size={32} className="text-blue-400/70" />
@@ -681,19 +769,31 @@ useEffect(() => {
             </div>
           </div>
         ) : (
-          // Контентная область с тестами
           <div className="space-y-4 md:space-y-6 animate-in fade-in duration-300">
             
             {/* Навигационная панель + Поиск */}
             <div className="flex flex-col gap-3 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-1.5 flex-wrap text-[10px] md:text-xs font-black uppercase text-slate-400">
-                {/* Кнопка НАЗАД (только для мобилки) */}
                 <button 
                   onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }} 
                   className="flex items-center gap-1 bg-slate-100 text-slate-700 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all md:hidden mr-1"
                 >
                   <ChevronRight size={12} className="rotate-180" /> Назад
                 </button>
+                
+                {/* Показываем текущий фильтр типа */}
+                {testTypeFilter !== 'all' && (
+                  <>
+                    <span className={`px-2 py-1 rounded-md ${
+                      testTypeFilter === 'public' 
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'bg-emerald-50 text-emerald-600'
+                    }`}>
+                      {testTypeFilter === 'public' ? '🌐 Общие' : '👨‍🏫 Учительские'}
+                    </span>
+                    <ChevronRight size={12} className="text-slate-300" />
+                  </>
+                )}
                 
                 <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md">
                   {selectedClass}
@@ -762,7 +862,6 @@ useEffect(() => {
                 ))}
               </div>
             ) : (
-              // Ничего не найдено
               <div className="text-center py-12 space-y-3">
                 <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto border border-slate-100">
                   <Search size={22} className="text-slate-300" />
