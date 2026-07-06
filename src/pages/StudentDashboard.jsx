@@ -333,8 +333,8 @@ const [sectionsForModal, setSectionsForModal] = useState([]);
     const config = { headers: { 'Authorization': `Bearer ${token}` } };
 
     Promise.all([
-      axios.get('https://tests-production-46d5.up.railway.app/student/tests', config),
-      axios.get('https://tests-production-46d5.up.railway.app/student/my-assignments', config).catch(() => ({ data: [] })),
+      axios.get('https://tests-production-46d5.up.railway.app/student/tests-meta', config),
+      axios.get('https://tests-production-46d5.up.railway.app/student/my-assignments-meta', config).catch(() => ({ data: [] })),
       axios.get('https://tests-production-46d5.up.railway.app/student/ai-tests', config).catch(() => ({ data: [] })),
       axios.get('https://tests-production-46d5.up.railway.app/student/me', config),
       axios.get('https://tests-production-46d5.up.railway.app/student/history', config)
@@ -547,7 +547,9 @@ const typeFilteredTests = testTypeFilter === 'all'
   ? allTests 
   : testTypeFilter === 'public'
     ? publicStaticTests.map(t => ({ ...t, type: 'static' }))
-    : teacherTests;
+    : testTypeFilter === 'teacher'
+    ? teacherTests
+    : aiTestsMapped;  // ← AI тесты
 
 
   // Уникальные классы
@@ -660,36 +662,28 @@ const typeFilteredTests = testTypeFilter === 'all'
           </p>
         </div>
         
-        {/* Кнопка-переключатель: на мобилке во всю ширину, на ПК справа */}
         <button
-          onClick={() => setTestTypeFilter(testTypeFilter === 'all' ? 'public' : testTypeFilter === 'public' ? 'teacher' : 'all')}
-          className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 ${
-            testTypeFilter === 'all' 
-              ? 'bg-slate-900 text-white border-transparent shadow-lg shadow-slate-900/20' 
-              : testTypeFilter === 'public'
-              ? 'bg-blue-600 text-white border-transparent shadow-lg shadow-blue-600/20'
-              : 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-600/20'
-          }`}
-        >
-          {testTypeFilter === 'all' && (
-            <>
-              <span className="text-base"></span> 
-              <span>Все ({publicStaticTests.length + teacherTests.length})</span>
-            </>
-          )}
-          {testTypeFilter === 'public' && (
-            <>
-              <span className="text-base animate-spin-[spin_3s_infinite]"></span> 
-              <span>Общие ({publicStaticTests.length})</span>
-            </>
-          )}
-          {testTypeFilter === 'teacher' && (
-            <>
-              <span className="text-base"></span> 
-              <span>Учительские ({teacherTests.length})</span>
-            </>
-          )}
-        </button>
+  onClick={() => {
+    const filters = ['all', 'public', 'teacher', 'ai'];
+    const currentIndex = filters.indexOf(testTypeFilter);
+    const nextIndex = (currentIndex + 1) % filters.length;
+    setTestTypeFilter(filters[nextIndex]);
+  }}
+  className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 ${
+    testTypeFilter === 'all' 
+      ? 'bg-slate-900 text-white border-transparent shadow-lg shadow-slate-900/20' 
+      : testTypeFilter === 'public'
+      ? 'bg-blue-600 text-white border-transparent shadow-lg shadow-blue-600/20'
+      : testTypeFilter === 'teacher'
+      ? 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-600/20'
+      : 'bg-purple-600 text-white border-transparent shadow-lg shadow-purple-600/20'
+  }`}
+>
+  {testTypeFilter === 'all' && <span>Все ({allTests.length})</span>}
+  {testTypeFilter === 'public' && <span>Общие ({publicStaticTests.length})</span>}
+  {testTypeFilter === 'teacher' && <span>Учительские ({teacherTests.length})</span>}
+  {testTypeFilter === 'ai' && <span>AI ({aiTestsMapped.length})</span>}
+</button>
       </div>
     </div>
 

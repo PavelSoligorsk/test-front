@@ -53,8 +53,9 @@ const MAIN_TOPICS = {
 const API_BASE = "https://tests-production-46d5.up.railway.app";
 
 // ==================== КОМПОНЕНТ: ТЕОРЕТИЧЕСКИЙ БАНК (ДИНАМИЧЕСКИЙ) ====================
+// ==================== КОМПОНЕНТ: ТЕОРЕТИЧЕСКИЙ БАНК (С ЛЕНИВОЙ ЗАГРУЗКОЙ) ====================
 const TheoryBank = ({
-  tasks,
+  tasksMeta,        // метаинформация: { класс: { тема: { sections: [...], count: N } } }
   onTaskToggle,
   selectedTasks,
   openSolutions,
@@ -67,44 +68,95 @@ const TheoryBank = ({
   const [topicSearch, setTopicSearch] = useState("");
   const [sectionSearch, setSectionSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
+  
+  // 🔥 Ленивая загрузка заданий
+  const [sectionTasks, setSectionTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
-  // Все задания (плоский массив)
-  const allTasks = useMemo(() => {
-    if (!tasks) return [];
-    // Если tasks приходит как объект с полем all - берём его
-    if (tasks.all) return tasks.all;
-    // Если tasks приходит как объект с группировкой по классам
-    if (tasks.grouped) {
-      const flat = [];
-      Object.values(tasks.grouped).forEach((classTopics) => {
-        Object.values(classTopics).forEach((topicTasks) => {
-          flat.push(...topicTasks);
-        });
-      });
-      return flat;
-    }
-    return [];
-  }, [tasks]);
-
-  // Динамически собираем все топики из заданий
+  // Все топики из метаинформации
   const availableTopics = useMemo(() => {
-    const topicsMap = {};
-    allTasks.forEach((task) => {
-      if (!task.topic) return;
+  if (!tasksMeta) return {};
+  const topicsMap = {};
+  
+  // ✅ Берем КЛЮЧИ верхнего уровня как темы
+  Object.keys(tasksMeta).forEach((topicKey) => {
+    const sectionsData = tasksMeta[topicKey]; // { "Расстояние от точки до прямой": 24, ... }
+    const sections = Object.keys(sectionsData);
+    const totalCount = Object.values(sectionsData).reduce((sum, count) => sum + count, 0);
+    
+    topicsMap[topicKey] = {
+      key: topicKey,
+      label: MAIN_TOPICS[topicKey] || topicKey,
+      sections: sections, // ✅ Теперь есть разделы!
+      count: totalCount,
+    };
+  });
+  
+  return topicsMap;
+}, [tasksMeta]);
 
-      if (!topicsMap[task.topic]) {
-        topicsMap[task.topic] = {
-          key: task.topic,
-          label: MAIN_TOPICS[task.topic] || task.topic,
-          sections: new Set(),
-        };
-      }
-      if (task.section) {
-        topicsMap[task.topic].sections.add(task.section);
-      }
-    });
-    return topicsMap;
-  }, [allTasks]);
+  const fetchTasksByTopicSection = async (topic, section) => {
+  const cacheKey = `${topic}/${section}`;
+  if (sectionTasks[cacheKey]) return;
+  
+  try {
+    const res = await axios.get(
+      `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+      { headers: getAuthHeaders() }
+    );
+    setSectionTasks(prev => ({ ...prev, [cacheKey]: res.data }));
+  } catch (e) {
+    if (e.response) {
+      console.error('Ошибка загрузки заданий:', e.response.data);
+    }
+  }
+};
+
+
+
+  // 🔥 Загрузка заданий при выборе раздела
+  useEffect(() => {
+    if (activeTopic && activeSection) {
+      loadSectionTasks(activeTopic, activeSection);
+    } else {
+      setSectionTasks([]);
+    }
+  }, [activeTopic, activeSection]);
+
+  const loadSectionTasks = async (topic, section) => {
+    setLoadingTasks(true);
+    setTaskSearch(""); // сбрасываем поиск при смене раздела
+
+    
+    
+    
+    try {
+      const token = JSON.parse(localStorage.getItem("edu_session"))?.token;
+      const res = await axios.get(
+        `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSectionTasks(res.data);
+    } catch (e) {
+      console.error("Ошибка загрузки заданий:", e);
+      setSectionTasks([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const loadTheoryTasks = async (topic, section) => {
+  try {
+    const res = await axios.get(
+      `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+      { headers: getAuthHeaders() }
+    );
+    setTheoryTasks(res.data); // ← сохраняем задания
+  } catch (e) {
+    console.error("Ошибка:", e);
+    setTheoryTasks([]);
+  }
+};
 
   // Фильтрация топиков по поиску
   const filteredTopics = Object.values(availableTopics).filter(
@@ -116,36 +168,25 @@ const TheoryBank = ({
   // Секции выбранного топика
   const sections = useMemo(() => {
     if (!activeTopic || !availableTopics[activeTopic]) return [];
-    return Array.from(availableTopics[activeTopic].sections).sort();
+    return availableTopics[activeTopic].sections.sort();
   }, [activeTopic, availableTopics]);
 
   const filteredSections = sections.filter((section) =>
     section.toLowerCase().includes(sectionSearch.toLowerCase()),
   );
 
-  // Задания выбранной секции (фильтруем ТОЛЬКО по topic и section)
-  const sectionTasks = useMemo(() => {
-    if (!activeTopic || !activeSection) return [];
-    return allTasks.filter(
-      (t) => t.topic === activeTopic && t.section === activeSection,
-    );
-  }, [allTasks, activeTopic, activeSection]);
-
-  // Поиск внутри заданий секции
-  const filteredTasks = sectionTasks
-    .filter((t) => {
-      if (!taskSearch) return true;
-      const q = taskSearch.toLowerCase();
+  // 🔥 Поиск внутри загруженных заданий
+  const filteredTasks = useMemo(() => {
+    if (!taskSearch) return sectionTasks;
+    const q = taskSearch.toLowerCase();
+    return sectionTasks.filter((t) => {
       return (
         t.content?.toLowerCase().includes(q) ||
         t.answer?.toLowerCase().includes(q) ||
         t.id?.toString().includes(q)
       );
-    })
-    .sort((a, b) => {
-      if (a.id !== b.id) return a.id - b.id;
-      return (a.difficulty || 0) - (b.difficulty || 0);
     });
+  }, [sectionTasks, taskSearch]);
 
   const getDifficultyColor = (lvl) => {
     if (lvl >= 4) return "text-red-500 bg-red-50 border-red-100";
@@ -155,15 +196,9 @@ const TheoryBank = ({
 
   const getTopicIcon = (topicKey) => {
     const icons = {
-      numbers: "🔢",
-      expressions: "📝",
-      equations: "⚖️",
-      inequalities: "≷",
-      functions: "📈",
-      text: "📖",
-      planim: "📐",
-      stereo: "🧊",
-      geometry: "📏",
+      numbers: "🔢", expressions: "📝", equations: "⚖️",
+      inequalities: "≷", functions: "📈", text: "📖",
+      planim: "📐", stereo: "🧊", geometry: "📏",
     };
     return icons[topicKey] || "📚";
   };
@@ -187,21 +222,11 @@ const TheoryBank = ({
     if (activeSection) {
       setActiveSection(null);
       setTaskSearch("");
+      setSectionTasks([]); // очищаем кэш заданий
     } else if (activeTopic) {
       setActiveTopic(null);
       setSectionSearch("");
     }
-  };
-
-  const getTopicTaskCount = (topicKey) => {
-    return allTasks.filter((t) => t.topic === topicKey).length;
-  };
-
-  const getSectionTaskCount = (section) => {
-    if (!activeTopic) return 0;
-    return allTasks.filter(
-      (t) => t.topic === activeTopic && t.section === section,
-    ).length;
   };
 
   return (
@@ -286,11 +311,11 @@ const TheoryBank = ({
                         </h3>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[9px] font-bold text-slate-400">
-                            {topic.sections.size} разделов
+                             {topic.sections.length} разделов
                           </span>
                           <span className="text-[9px] text-slate-300">•</span>
                           <span className="text-[9px] font-bold text-slate-400">
-                            {getTopicTaskCount(topic.key)} заданий
+                            {topic.count} заданий
                           </span>
                         </div>
                       </div>
@@ -349,33 +374,33 @@ const TheoryBank = ({
           {filteredSections.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {filteredSections.map((section, index) => {
-                const taskCount = getSectionTaskCount(section);
-                return (
-                  <button
-                    key={index}
-                    onClick={() => setActiveSection(section)}
-                    className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-slate-700 text-sm leading-tight truncate">
-                          {section}
-                        </p>
-                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                          {taskCount} заданий
-                        </p>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0"
-                      />
-                    </div>
-                  </button>
-                );
-              })}
+  const taskCount = availableTopics[activeTopic]?.count || 0;
+  return (
+    <button
+      key={index}
+      onClick={() => setActiveSection(section)}
+      className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
+          {index + 1}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-700 text-sm leading-tight truncate">
+            {section}
+          </p>
+          <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+            {taskCount} заданий
+          </p>
+        </div>
+        <ChevronRight
+          size={16}
+          className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0"
+        />
+      </div>
+    </button>
+  );
+})}
             </div>
           ) : (
             <div className="bg-white rounded-[2.5rem] p-12 text-center">
@@ -2088,7 +2113,20 @@ export default function TeacherDashboard() {
   const [groupStudentsModal, setGroupStudentsModal] = useState(null); // группа для управления студентами
   const [assignGroupModal, setAssignGroupModal] = useState(null); // группа для назначения теста
   const [groupSearch, setGroupSearch] = useState("");
+const [theoryTasks, setTheoryTasks] = useState([]);
 
+const loadTheoryTasks = async (topic, section) => {
+  try {
+    const res = await axios.get(
+      `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+      { headers: getAuthHeaders() }
+    );
+    setTheoryTasks(res.data);
+  } catch (e) {
+    console.error("Ошибка загрузки заданий:", e);
+    setTheoryTasks([]);
+  }
+};
   // Конструктор тестов
   const [testForm, setTestForm] = useState({
     id: null,
@@ -2137,13 +2175,33 @@ export default function TeacherDashboard() {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/teacher/tasks-grouped`, {
+      const res = await axios.get(`${API_BASE}/teacher/tasks-meta`, {
         headers: getAuthHeaders(),
       });
-      setTasks(res.data);
+      setTasks(res.data); // { "10": {"1": 15, "2": 8}, "11": {"1": 10} }
     } catch (e) {
-      console.error("Ошибка загрузки заданий:", e);
+      console.error("Ошибка загрузки:", e);
     }
+  };
+  const [sectionTasks, setSectionTasks] = useState({}); // кэш заданий по разделам
+const [loadingSection, setLoadingSection] = useState(false);
+
+const fetchTasksBySection = async (topic, section) => {
+    const cacheKey = `${taskClass}/${topicNumber}`;
+  if (sectionTasks[cacheKey]) return;
+  
+  try {
+    const res = await axios.get(`${API_BASE}/teacher/tasks/by-class-topic`, {
+      params: {
+        task_class: taskClass,
+        topic_number: topicNumber
+      },
+      headers: getAuthHeaders()
+    });
+    setSectionTasks(prev => ({ ...prev, [cacheKey]: res.data }));
+  } catch (e) {
+    console.error(e);
+  }
   };
 
   const fetchTests = async () => {
@@ -2185,7 +2243,8 @@ export default function TeacherDashboard() {
     fetchTasks();
     fetchTests();
     fetchStudents();
-    fetchGroups(); // 🔥
+    fetchGroups();
+      fetchTopicSectionMeta(); // ← ДОБАВЬ ЭТУ СТРОКУ // 🔥
   }, []);
 
   // CRUD группы
@@ -2239,6 +2298,20 @@ export default function TeacherDashboard() {
       description: group.description || "",
     });
   };
+  const [topicSectionMeta, setTopicSectionMeta] = useState({});
+  const fetchTopicSectionMeta = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/teacher/tasks-meta-by-topic-section`, {
+      headers: getAuthHeaders(),
+    });
+    setTopicSectionMeta(res.data);
+    console.log('📦 Метаданные topic/section:', res.data);
+  } catch (e) {
+    console.error("Ошибка загрузки метаданных topic/section:", e);
+  }
+};
+
+  const [activeSection, setActiveSection] = useState(null); // ← добавь к другим useState
 
   // Управление студентами в группе
   const handleAddStudentsToGroup = async (groupId, studentIds) => {
@@ -2406,6 +2479,27 @@ export default function TeacherDashboard() {
     setActiveTab("constructor");
   };
 
+ const fetchTasksByClassAndTopic = async (taskClass, topicNumber) => {
+  const cacheKey = `${taskClass}/${topicNumber}`;
+  if (sectionTasks[cacheKey]) return;
+  
+  try {
+    const res = await axios.get(`${API_BASE}/teacher/tasks/by-class-topic`, {
+      params: {
+        task_class: taskClass,
+        topic_number: topicNumber
+      },
+      headers: getAuthHeaders()
+    });
+    setSectionTasks(prev => ({ ...prev, [cacheKey]: res.data }));
+  } catch (e) {
+    if (e.response) {
+      console.error('Ошибка валидации:', e.response.data);
+      console.error('Статус:', e.response.status);
+    }
+  }
+};
+
   const handleDeleteTest = async (testId) => {
     if (!confirm("Удалить тест?")) return;
     try {
@@ -2456,6 +2550,12 @@ export default function TeacherDashboard() {
     if (lvl >= 3) return "text-amber-500 bg-amber-50 border-amber-100";
     return "text-emerald-500 bg-emerald-50 border-emerald-100";
   };
+
+  useEffect(() => {
+  if (bankClass && bankTopic) {
+    fetchTasksByClassAndTopic(bankClass, bankTopic);
+  }
+}, [bankClass, bankTopic]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
@@ -2522,400 +2622,243 @@ export default function TeacherDashboard() {
       <main className="max-w-7xl mx-auto px-4 md:px-6">
         {/* ==================== ВКЛАДКА: БАНК ЗАДАНИЙ ПО ТЕМАМ ==================== */}
         {activeTab === "sections" && (
-          <TheoryBank
-            tasks={tasks}
-            onTaskToggle={toggleTaskSelection}
-            selectedTasks={selectedTasks}
-            openSolutions={openSolutions}
-            openHints={openHints}
-            onToggleSolution={(taskId) =>
-              setOpenSolutions((prev) => ({ ...prev, [taskId]: !prev[taskId] }))
-            }
-            onToggleHint={(taskId) =>
-              setOpenHints((prev) => ({ ...prev, [taskId]: !prev[taskId] }))
-            }
-          />
-        )}
+  <TheoryBank
+    tasksMeta={topicSectionMeta}  // ← МЕНЯЕМ НА topicSectionMeta
+    onTaskToggle={toggleTaskSelection}
+    selectedTasks={selectedTasks}
+    openSolutions={openSolutions}
+    openHints={openHints}
+    onToggleSolution={(taskId) =>
+      setOpenSolutions((prev) => ({ ...prev, [taskId]: !prev[taskId] }))
+    }
+    onToggleHint={(taskId) =>
+      setOpenHints((prev) => ({ ...prev, [taskId]: !prev[taskId] }))
+    }
+  />
+)}
 
-        {/* ==================== ВКЛАДКА: БАНК ЗАДАНИЙ ==================== */}
-        {activeTab === "bank" && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6 max-w-7xl mx-auto px-2 sm:px-4 md:px-0">
-            {/* --- ВЕРХНЯЯ ПАНЕЛЬ --- */}
-            <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 shadow-sm border border-slate-100/80">
-              <div className="space-y-0.5 md:space-y-1">
-                <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
-                  Банк заданий
-                </h2>
-                <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {bankClass
-                    ? `${bankTopic || "Выберите тему"} • ${filteredTasks.length} заданий`
-                    : "Выберите раздел и тему"}
-                </p>
+{/* ==================== ВКЛАДКА: БАНК ЗАДАНИЙ ==================== */}
+{activeTab === "bank" && (
+  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6 max-w-7xl mx-auto px-2 sm:px-4 md:px-0">
+    
+    {/* --- 1. ВЕРХНЯЯ ПАНЕЛЬ --- */}
+    <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 shadow-sm border border-slate-100/80">
+      <div className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-0.5 md:space-y-1">
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+            Банк заданий
+          </h2>
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {Object.keys(tasks || {}).length} классов доступно
+          </p>
+        </div>
+        
+        <button
+          onClick={() => {
+            // Сброс фильтров
+            setBankClass(null);
+            setBankTopic(null);
+          }}
+          className="w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"
+        >
+          <Database size={16} />
+          <span>Все задания</span>
+        </button>
+      </div>
+    </div>
+
+    {/* --- 2. ОСНОВНОЙ БЛОК --- */}
+    <div className="bg-white rounded-2xl md:rounded-[2.5rem] shadow-sm border border-slate-100/80 overflow-hidden flex flex-col md:flex-row min-h-[450px] md:min-h-[550px]">
+      
+      {/* Левая панель — Классы */}
+      <aside className={`w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-5 flex flex-col gap-3 ${
+        bankClass ? 'hidden md:flex' : 'flex'
+      }`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Filter size={14} className="text-slate-400" /> Классы
+          </h3>
+          <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-100 shadow-sm">
+            {Object.keys(tasks || {}).length}
+          </span>
+        </div>
+        
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input 
+            type="text"
+            placeholder="Поиск класса..."
+            value={bankClassSearch}
+            onChange={(e) => setBankClassSearch(e.target.value)}
+            className="w-full bg-white border border-slate-200 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all placeholder:text-slate-400 placeholder:font-normal"
+          />
+        </div>
+
+        {/* Список классов */}
+        <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[350px] md:max-h-[550px] pr-1 md:pr-0 scrollbar-thin">
+          {Object.keys(tasks || {}).filter(cls => 
+            cls.toLowerCase().includes(bankClassSearch.toLowerCase())
+          ).sort().map(cls => {
+            const count = Object.values(tasks[cls] || {}).reduce((sum, val) => sum + val, 0);
+            const isActive = bankClass === cls;
+            
+            return (
+              <button 
+                key={cls} 
+                onClick={() => { setBankClass(cls); setBankTopic(null); }}
+                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all border ${
+                  isActive 
+                    ? 'bg-slate-800 text-white border-transparent shadow-md shadow-slate-700/20' 
+                    : 'bg-white text-slate-600 border-slate-100 hover:border-slate-200 hover:bg-slate-50/50'
+                }`}
+              >
+                <span className="font-extrabold text-xs uppercase truncate mr-2">
+                  {cls}
+                </span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md shrink-0 ${
+                  isActive ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'
+                }`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Правая часть — Темы или Задания */}
+      <main className={`flex-1 p-4 md:p-6 lg:p-8 bg-white overflow-y-auto ${
+        !bankClass ? 'hidden md:flex flex-col justify-center' : 'block'
+      }`}>
+        {!bankClass ? (
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[2rem] bg-slate-50 flex items-center justify-center border border-slate-100">
+              <Database size={32} className="text-emerald-400/70" />
+            </div>
+            <div>
+              <h3 className="text-base md:text-lg font-black uppercase text-slate-400 tracking-tight">Выберите класс</h3>
+              <p className="text-xs font-bold text-slate-300 mt-1 max-w-xs mx-auto">
+                В левой панели находятся классы с доступными заданиями
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 md:space-y-6 animate-in fade-in duration-300">
+            
+            {/* Навигационная панель + Поиск */}
+            <div className="flex flex-col gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-1.5 flex-wrap text-[10px] md:text-xs font-black uppercase text-slate-400">
+                <button 
+                  onClick={() => { setBankClass(null); setBankTopic(null); }} 
+                  className="flex items-center gap-1 bg-slate-100 text-slate-700 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all md:hidden mr-1"
+                >
+                  <ChevronRight size={12} className="rotate-180" /> Назад
+                </button>
+                
+                <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md">
+                  {bankClass}
+                </span>
+                
+                {bankTopic && (
+                  <>
+                    <ChevronRight size={12} className="text-slate-300" />
+                    <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md">
+                      {bankTopic}
+                    </span>
+                  </>
+                )}
+              </div>
+              
+              {/* Поиск тем или заданий */}
+              <div className="relative w-full">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder={bankTopic ? "Поиск по тексту задания..." : "Поиск темы..."}
+                  value={bankTopic ? taskSearch : bankClassSearch}
+                  onChange={(e) => bankTopic ? setTaskSearch(e.target.value) : setBankClassSearch(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-100 focus:border-emerald-400 focus:bg-white rounded-xl text-xs font-bold uppercase tracking-wide outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                />
+                {(bankTopic ? taskSearch : bankClassSearch) && (
+                  <button 
+                    onClick={() => bankTopic ? setTaskSearch('') : setBankClassSearch('')} 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <XCircle size={14} />
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* --- ОСНОВНОЙ БЛОК --- */}
-            <div className="bg-white rounded-2xl md:rounded-[2.5rem] shadow-sm border border-slate-100/80 overflow-hidden flex flex-col md:flex-row min-h-[450px] md:min-h-[550px]">
-              {/* Левая панель — Разделы */}
-              <aside
-                className={`w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-5 flex flex-col gap-3 ${
-                  bankClass && bankTopic ? "hidden md:flex" : "flex"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Filter size={14} className="text-slate-400" /> Разделы
-                  </h3>
-                  <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-100 shadow-sm">
-                    {filteredClasses.length}
-                  </span>
-                </div>
+            {/* Темы или Задания */}
+            {!bankTopic ? (
+              /* 🔥 ПОКАЗЫВАЕМ ТЕМЫ */
+              <div className="space-y-2">
+                {Object.keys(tasks[bankClass] || {}).sort().map(topic => (
+                  <button
+                    key={topic}
+                    onClick={() => {
+                      setBankTopic(topic);
+                      fetchTasksByClassAndTopic(bankClass, topic);
+                    }}
+                    className="w-full p-4 bg-slate-50 hover:bg-emerald-50 rounded-xl text-left transition-all border border-slate-100 hover:border-emerald-200 font-bold text-sm text-slate-600 flex items-center justify-between"
+                  >
+                    <span>{topic}</span>
+                    <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded-md">
+                      {tasks[bankClass][topic]} заданий
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* 🔥 ПОКАЗЫВАЕМ ЗАДАНИЯ */
+              <div className="space-y-4">
+                {(sectionTasks[`${bankClass}/${bankTopic}`] || []).map((t, i) => {
+                  const isSolOpen = openSolutions[t.id];
+                  const isHintOpen = openHints[t.id];
+                  const isSelected = selectedTasks.some(st => st.id === t.id);
 
-                <div className="relative">
-                  <Search
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Поиск раздела..."
-                    value={bankClassSearch}
-                    onChange={(e) => setBankClassSearch(e.target.value)}
-                    className="w-full bg-white border border-slate-200 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all placeholder:text-slate-400 placeholder:font-normal"
-                  />
-                </div>
-
-                {/* Список разделов */}
-                <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[350px] md:max-h-[550px] pr-1 md:pr-0">
-                  {filteredClasses.length > 0 ? (
-                    filteredClasses.map((cls) => {
-                      const count = classTaskCount(cls);
-                      const isActive = bankClass === cls;
-                      return (
-                        <button
-                          key={cls}
-                          onClick={() => {
-                            setBankClass(cls);
-                            setBankTopic(null);
-                            setTaskSearch("");
-                          }}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all border ${
-                            isActive
-                              ? "bg-slate-800 text-white border-transparent shadow-md shadow-slate-700/20"
-                              : "bg-white text-slate-600 border-slate-100 hover:border-slate-200 hover:bg-slate-50/50"
-                          }`}
-                        >
-                          <span className="font-extrabold text-xs uppercase truncate mr-2">
-                            {cls}
-                          </span>
-                          <span
-                            className={`text-[10px] font-black px-2 py-0.5 rounded-md shrink-0 ${
-                              isActive
-                                ? "bg-slate-700 text-white"
-                                : "bg-slate-100 text-slate-400"
-                            }`}
-                          >
-                            {count}
-                          </span>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <p className="text-xs font-bold text-slate-400 text-center py-8 italic">
-                      {bankClassSearch ? "Ничего не найдено" : "Нет разделов"}
-                    </p>
-                  )}
-                </div>
-              </aside>
-
-              {/* Правая часть — Задания */}
-              <main
-                className={`flex-1 p-4 md:p-6 lg:p-8 bg-white overflow-y-auto ${
-                  !bankClass
-                    ? "hidden md:flex flex-col justify-center"
-                    : "block"
-                }`}
-              >
-                {!bankClass ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12">
-                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[2rem] bg-slate-50 flex items-center justify-center border border-slate-100">
-                      <Database size={32} className="text-emerald-400/70" />
-                    </div>
-                    <div>
-                      <h3 className="text-base md:text-lg font-black uppercase text-slate-400 tracking-tight">
-                        Выберите раздел
-                      </h3>
-                      <p className="text-xs font-bold text-slate-300 mt-1 max-w-xs mx-auto">
-                        В левой панели находятся разделы с заданиями
-                      </p>
-                    </div>
-                  </div>
-                ) : !bankTopic ? (
-                  /* Выбор темы */
-                  <div className="space-y-4 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-400 pb-4 border-b border-slate-100">
-                      <button
-                        onClick={() => {
-                          setBankClass(null);
-                          setBankTopic(null);
-                          setBankClassSearch("");
-                        }}
-                        className="flex items-center gap-1 bg-slate-100 text-slate-700 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all md:hidden"
-                      >
-                        <ChevronRight size={12} className="rotate-180" /> Назад
-                      </button>
-                      <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md">
-                        {bankClass}
-                      </span>
-                    </div>
-
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                      Темы
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {Object.keys(groupedTasks[bankClass] || {})
-                        .sort()
-                        .map((topic) => {
-                          const count =
-                            groupedTasks[bankClass][topic]?.length || 0;
-                          return (
-                            <button
-                              key={topic}
-                              onClick={() => {
-                                setBankTopic(topic);
-                                setTaskSearch("");
-                              }}
-                              className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-all border border-slate-100 hover:border-emerald-200 group"
-                            >
-                              <div className="font-bold text-sm text-slate-700 group-hover:text-emerald-600 transition-colors truncate">
-                                {topic}
-                              </div>
-                              <div className="text-[10px] font-black text-slate-400 mt-1">
-                                {count} заданий
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-                ) : (
-                  /* Список заданий */
-                  <div className="space-y-4 md:space-y-6 animate-in fade-in duration-300">
-                    {/* Хлебные крошки + Поиск */}
-                    <div className="flex flex-col gap-3 pb-4 border-b border-slate-100">
-                      <div className="flex items-center gap-1.5 flex-wrap text-[10px] md:text-xs font-black uppercase text-slate-400">
-                        <button
-                          onClick={() => {
-                            setBankTopic(null);
-                            setTaskSearch("");
-                          }}
-                          className="flex items-center gap-1 bg-slate-100 text-slate-700 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all"
-                        >
-                          <ChevronRight size={12} className="rotate-180" />{" "}
-                          Назад
-                        </button>
-                        <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-md">
-                          {bankClass}
-                        </span>
-                        <ChevronRight size={12} className="text-slate-300" />
-                        <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md">
-                          {bankTopic}
-                        </span>
+                  return (
+                    <div key={t.id} className={`p-4 md:p-6 rounded-2xl border transition-all ${isSelected ? "bg-emerald-50 border-emerald-300" : "bg-slate-50 border-transparent hover:border-slate-200"}`}>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">№{i+1}</span>
+                        <span className="text-[9px] text-slate-400">ID: {t.id}</span>
+                        <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty}</div>
+                        <span className="text-[9px] text-slate-400">{t.is_open_answer ? "Открытый" : "Тест"}</span>
                       </div>
 
-                      <div className="relative w-full">
-                        <Search
-                          size={14}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Поиск по тексту задания..."
-                          value={taskSearch}
-                          onChange={(e) => setTaskSearch(e.target.value)}
-                          className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-100 focus:border-emerald-400 focus:bg-white rounded-xl text-xs font-bold uppercase tracking-wide outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
-                        />
-                        {taskSearch && (
-                          <button
-                            onClick={() => setTaskSearch("")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                          >
-                            <XCircle size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                      <MarkdownPreview text={t.content} title="Условие" />
 
-                    <div className="text-[10px] font-black text-slate-400 uppercase">
-                      {filteredTasks.length} заданий
-                    </div>
-
-                    {/* Список заданий */}
-                    {filteredTasks.length > 0 ? (
-                      <div className="space-y-4">
-                        {filteredTasks.map((t, index) => {
-                          const isSolOpen = openSolutions[t.id];
-                          const isHintOpen = openHints[t.id];
-                          const isSelected = selectedTasks.some(
-                            (st) => st.id === t.id,
-                          );
-
-                          return (
-                            <div
-                              key={t.id}
-                              className={`group p-4 md:p-6 rounded-2xl border transition-all ${
-                                isSelected
-                                  ? "bg-emerald-50 border-emerald-300 shadow-lg"
-                                  : "bg-slate-50 border-transparent hover:border-slate-200"
-                              }`}
-                            >
-                              <div className="space-y-4">
-                                {/* Верхняя панель */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                                    № {index + 1}
-                                  </span>
-                                  <span className="text-[9px] text-slate-400">
-                                    ID: {t.id}
-                                  </span>
-
-                                  {t.topic && MAIN_TOPICS[t.topic] && (
-                                    <span className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">
-                                      {MAIN_TOPICS[t.topic]}
-                                    </span>
-                                  )}
-
-                                  <div
-                                    className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}
-                                  >
-                                    LVL {t.difficulty}
-                                  </div>
-
-                                  <span className="text-[9px] text-slate-400">
-                                    {t.is_open_answer ? "Открытый" : "Тест"}
-                                  </span>
-                                </div>
-
-                                {/* Условие */}
-                                <MarkdownPreview
-                                  text={t.content}
-                                  title="Условие"
-                                />
-
-                                {/* Варианты ответов */}
-                                {!t.is_open_answer && t.options && (
-                                  <div className="pl-4 border-l-2 border-emerald-100">
-                                    <MarkdownPreview
-                                      text={
-                                        Array.isArray(t.options)
-                                          ? t.options
-                                              .map(
-                                                (opt, i) =>
-                                                  `**${i + 1}.** ${opt}`,
-                                              )
-                                              .join("\n\n")
-                                          : t.options
-                                      }
-                                      title="Варианты"
-                                    />
-                                  </div>
-                                )}
-
-                                {/* Ответ и кнопки */}
-                                <div className="flex flex-wrap gap-2 items-center">
-                                  <div className="bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl flex items-center gap-2">
-                                    <span className="text-[10px] font-black text-emerald-600">
-                                      Ответ:
-                                    </span>
-                                    <span className="text-sm font-black text-emerald-700">
-                                      {t.answer}
-                                    </span>
-                                  </div>
-
-                                  {t.hint && (
-                                    <button
-                                      onClick={() =>
-                                        setOpenHints((prev) => ({
-                                          ...prev,
-                                          [t.id]: !prev[t.id],
-                                        }))
-                                      }
-                                      className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black hover:bg-amber-100 transition-all"
-                                    >
-                                      Подсказка
-                                    </button>
-                                  )}
-
-                                  {t.solution && (
-                                    <button
-                                      onClick={() =>
-                                        setOpenSolutions((prev) => ({
-                                          ...prev,
-                                          [t.id]: !prev[t.id],
-                                        }))
-                                      }
-                                      className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black hover:bg-blue-100 transition-all"
-                                    >
-                                      Решение
-                                    </button>
-                                  )}
-
-                                  {/* Кнопка добавления в тест */}
-                                  <button
-                                    onClick={() => toggleTaskSelection(t)}
-                                    className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
-                                      isSelected
-                                        ? "bg-emerald-600 text-white"
-                                        : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"
-                                    }`}
-                                  >
-                                    {isSelected ? "✓ В тесте" : "+ В тест"}
-                                  </button>
-                                </div>
-
-                                {/* Подсказка и решение */}
-                                {isHintOpen && (
-                                  <MarkdownPreview
-                                    text={t.hint}
-                                    title="ПОДСКАЗКА"
-                                    type="hint"
-                                  />
-                                )}
-                                {isSolOpen && (
-                                  <MarkdownPreview
-                                    text={t.solution}
-                                    title="РЕШЕНИЕ"
-                                    type="solution"
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-center py-16 space-y-3">
-                        <div className="w-16 h-16 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto">
-                          <Search size={32} className="text-slate-200" />
+                      {!t.is_open_answer && t.options && (
+                        <div className="pl-4 border-l-2 border-emerald-100 mt-3">
+                          <MarkdownPreview text={Array.isArray(t.options) ? t.options.map((opt, i) => `**${i+1}.** ${opt}`).join("\n\n") : t.options} title="Варианты" />
                         </div>
-                        <p className="font-black text-slate-400 uppercase">
-                          {taskSearch ? "Ничего не найдено" : "Нет заданий"}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-300 uppercase">
-                          {taskSearch
-                            ? "Попробуйте другой запрос"
-                            : "В этой теме пока пусто"}
-                        </p>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 items-center mt-3">
+                        <div className="bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl">
+                          <span className="text-[10px] font-black text-emerald-600">Ответ: </span>
+                          <span className="text-sm font-black text-emerald-700">{t.answer}</span>
+                        </div>
+                        {t.hint && <button onClick={() => setOpenHints(prev => ({...prev, [t.id]: !prev[t.id]}))} className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black hover:bg-amber-100">Подсказка</button>}
+                        {t.solution && <button onClick={() => setOpenSolutions(prev => ({...prev, [t.id]: !prev[t.id]}))} className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black hover:bg-blue-100">Решение</button>}
+                        <button onClick={() => toggleTaskSelection(t)} className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black ${isSelected ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"}`}>
+                          {isSelected ? "✓ В тесте" : "+ В тест"}
+                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
-              </main>
-            </div>
+
+                      {isHintOpen && <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />}
+                      {isSolOpen && <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
-
+      </main>
+    </div>
+  </div>
+)}
         {/* ==================== ВКЛАДКА: КОНСТРУКТОР ТЕСТОВ ==================== */}
         {activeTab === "constructor" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
