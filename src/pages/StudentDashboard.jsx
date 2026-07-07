@@ -1153,12 +1153,12 @@ const typeFilteredTests = testTypeFilter === 'all'
       </main>
 
 {/* ========== КНОПКА AI ГЕНЕРАЦИИ ========== */}
-      <button
+      {!theoryContent &&(<button
         onClick={() => setShowAiModal(true)}
         className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-full shadow-2xl shadow-purple-200 flex items-center justify-center hover:scale-105 transition-all active:scale-95 group"
       >
         <Sparkles size={24} className="group-hover:rotate-12 transition-transform" />
-      </button>
+      </button>)}
 
       {/* ========== МОДАЛЬНОЕ ОКНО AI ГЕНЕРАЦИИ ========== */}
       {showAiModal && (
