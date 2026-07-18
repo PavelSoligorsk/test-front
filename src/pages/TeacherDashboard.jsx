@@ -374,8 +374,7 @@ const TheoryBank = ({
           {filteredSections.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {filteredSections.map((section, index) => {
-  const taskCount = availableTopics[activeTopic]?.count || 0;
-  return (
+const taskCount = tasksMeta?.[activeTopic]?.[section] ?? 0;  return (
     <button
       key={index}
       onClick={() => setActiveSection(section)}
