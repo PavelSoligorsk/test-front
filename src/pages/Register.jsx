@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../shared/config';
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -11,7 +12,7 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('https://tests-production-46d5.up.railway.app/register', form);
+      await axios.post(`${API_URL}/register`, form);
       alert('Успех!');
       navigate('/login');
     } catch (err) {

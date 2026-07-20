@@ -1,3 +1,4 @@
+import { API_URL } from '../shared/config';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, CheckCircle, Loader2, X, MapPin, XCircle, Lightbulb, Sparkles, Pencil, Eraser, RotateCcw, Palette, Download } from 'lucide-react';
@@ -182,7 +183,7 @@ export default function TestPassing() {
         const token = session ? JSON.parse(session)?.token : null;
         if (!token) return navigate('/login');
 
-        const res = await axios.get(`https://tests-production-46d5.up.railway.app/student/tests/${testId}`, {
+        const res = await axios.get(`${API_URL}/student/tests/${testId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -250,7 +251,7 @@ const dataUrl = canvasRef.current.save();      setDrawings(prev => ({ ...prev, [
     try {
       const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
       const res = await axios.post(
-        `https://tests-production-46d5.up.railway.app/student/tasks/${taskId}/hint`,
+        `${API_URL}/student/tasks/${taskId}/hint`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -296,7 +297,7 @@ const dataUrl = canvasRef.current.save();      setDrawings(prev => ({ ...prev, [
         task_id: parseInt(id),
         user_answer: Array.isArray(userAnswers[id]) ? userAnswers[id].sort((a, b) => a - b).join(',') : String(userAnswers[id])
       }));
-      await axios.post(`https://tests-production-46d5.up.railway.app/student/tests/${testId}/submit`, payload, {
+      await axios.post(`${API_URL}/student/tests/${testId}/submit`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       localStorage.removeItem(`test_progress_${testId}`);

@@ -1,3 +1,4 @@
+import { API_URL } from '../shared/config';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3, MapPin } from 'lucide-react';
@@ -487,7 +488,7 @@ export default function TestResultDetail() {
     try {
       const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
       const response = await axios.post(
-        `https://tests-production-46d5.up.railway.app/student/tasks/${taskId}/hint`,
+        `${API_URL}/student/tasks/${taskId}/hint`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -520,7 +521,7 @@ export default function TestResultDetail() {
     try {
       const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
       const response = await axios.post(
-        `https://tests-production-46d5.up.railway.app/student/tasks/${taskId}/ai-solve`,
+        `${API_URL}/student/tasks/${taskId}/ai-solve`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -550,7 +551,7 @@ export default function TestResultDetail() {
     const fetchResult = async () => {
       try {
         const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
-        const res = await axios.get(`https://tests-production-46d5.up.railway.app/student/results/${resultId}`, {
+        const res = await axios.get(`${API_URL}/student/results/${resultId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setData(res.data);

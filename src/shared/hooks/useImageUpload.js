@@ -1,7 +1,7 @@
-// src/hooks/useImageUpload.js
 import { useState } from 'react';
+import apiClient from '../api';
 
-export const useImageUpload = () => {
+export function useImageUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -18,27 +18,11 @@ export const useImageUpload = () => {
         reader.readAsDataURL(file);
       });
 
-      // Получаем токен из localStorage
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.token;
-
-      // Отправляем на сервер
-      const response = await fetch('https://tests-production-46d5.up.railway.app/admin/upload-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ image_data: base64 }),
+      const response = await apiClient.post('/admin/upload-image', {
+        image_data: base64,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Upload failed');
-      }
-
-      const data = await response.json();
-      return data.url;
+      return response.data.url;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Ошибка загрузки изображения';
       setError(message);
@@ -50,4 +34,4 @@ export const useImageUpload = () => {
   };
 
   return { uploadImage, isUploading, error };
-};
+}

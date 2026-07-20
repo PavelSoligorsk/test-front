@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 
-const API_URL = 'https://tests-production-46d5.up.railway.app';
+import { API_URL } from '../shared/config';
 
 export default function Login() {
   const [formData, setFormData] = useState({ username: '', password: '' });

@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = 'https://tests-production-46d5.up.railway.app';
+import { API_URL } from '../shared/config';
+const API_BASE = API_URL;
 
 export default function TeacherStudentProfile() {
   const { userId } = useParams();

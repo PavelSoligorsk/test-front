@@ -1,3 +1,4 @@
+import { API_URL } from '../shared/config';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -49,8 +50,8 @@ const filteredHistory = history.filter(item =>
         
         // Загружаем профиль и историю параллельно
         const [profileRes, historyRes] = await Promise.all([
-          axios.get(`https://tests-production-46d5.up.railway.app/admin/users/${userId}/profile`, { headers }),
-          axios.get(`https://tests-production-46d5.up.railway.app/admin/users/${userId}/history`, { headers })
+          axios.get(`${API_URL}/admin/users/${userId}/profile`, { headers }),
+          axios.get(`${API_URL}/admin/users/${userId}/history`, { headers })
         ]);
 
         setData(profileRes.data);
