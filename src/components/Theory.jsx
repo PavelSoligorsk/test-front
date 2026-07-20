@@ -14,30 +14,30 @@ const SectionBlock = ({ id, title, children, isHard }) => {
   const [isOpen, setIsOpen] = useState(true);
   
   return (
-    <section id={id} className="scroll-mt-20 border-b border-slate-100 pb-12 last:border-0">
+    <section id={id} className="scroll-mt-20 border-b border-slate-100 dark:border-slate-700 pb-12 last:border-0">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 group"
       >
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <h2 className="text-xl font-medium text-slate-950 tracking-tight">
+          <h2 className="text-xl font-medium text-slate-950 dark:text-white tracking-tight">
             {title}
           </h2>
           {isHard && (
-            <span className="self-start sm:self-auto px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase rounded bg-rose-50 text-rose-600 border border-rose-100">
+            <span className="self-start sm:self-auto px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase rounded bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 border border-rose-100 dark:border-rose-800">
               Повышенная сложность
             </span>
           )}
         </div>
         {isOpen ? (
-          <ChevronUp size={20} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+          <ChevronUp size={20} className="text-slate-400 dark:text-slate-500 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
         ) : (
-          <ChevronDown size={20} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+          <ChevronDown size={20} className="text-slate-400 dark:text-slate-500 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
         )}
       </button>
       
       {isOpen && (
-        <div className="space-y-6 text-slate-700 dynamic-markdown text-left">
+        <div className="space-y-6 text-slate-700 dark:text-slate-300 dark:text-slate-300 dynamic-markdown text-left">
           {children}
         </div>
       )}
@@ -46,11 +46,11 @@ const SectionBlock = ({ id, title, children, isHard }) => {
 };
 
 const Def = ({ title = "Определение", children }) => (
-  <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-indigo-500 bg-indigo-50/40 text-left">
+  <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-900/30 text-left">
     <div className="mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700">📖 {title}</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">📖 {title}</span>
     </div>
-    <div className="text-slate-800 text-sm sm:text-base leading-relaxed">
+    <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
       {children}
     </div>
   </div>
@@ -60,14 +60,14 @@ const Ex = ({ title, children, isHard }) => {
   const resolvedTitle = title || (isHard ? "Сложный пример" : "Пример");
   return (
     <div className={`my-6 p-4 sm:p-5 rounded-r-xl border-l-4 text-left ${
-      isHard ? 'border-rose-400 bg-rose-50/40' : 'border-emerald-500 bg-emerald-50/40'
+      isHard ? 'border-rose-400 bg-rose-50/40 dark:bg-rose-900/30' : 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/30'
     }`}>
       <div className="mb-2">
         <span className={`text-xs font-semibold uppercase tracking-wider ${
-          isHard ? 'text-rose-700' : 'text-emerald-700'
+          isHard ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'
         }`}>📝 {resolvedTitle}</span>
       </div>
-      <div className="text-slate-800 text-sm sm:text-base leading-relaxed">
+      <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
         {children}
       </div>
     </div>
@@ -75,11 +75,11 @@ const Ex = ({ title, children, isHard }) => {
 };
 
 const Explanation = ({ children }) => (
-  <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-amber-500 bg-amber-50/40 text-left">
+  <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-amber-500 bg-amber-50/40 dark:bg-amber-900/30 text-left">
     <div className="mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-amber-800">💡 Пояснение</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">💡 Пояснение</span>
     </div>
-    <div className="text-slate-800 text-sm sm:text-base leading-relaxed">
+    <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
       {children}
     </div>
   </div>
@@ -307,7 +307,7 @@ const GeoGebra = ({ id, setup, height = "400" }) => {
   }, [id, setup, height]);
 
   return (
-    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative">
+    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-800 relative">
       <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/80 z-10"></div>
       <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }}></div>
     </div>
@@ -335,28 +335,28 @@ const markdownComponents = {
     <img 
       src={src} 
       alt={alt} 
-      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-100 mx-auto shadow-sm" 
+      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-100 dark:border-slate-700 mx-auto shadow-sm" 
     />
   ),
   table: ({ children }) => (
-    <div className="overflow-x-auto my-6 rounded-lg border border-slate-200">
+    <div className="overflow-x-auto my-6 rounded-lg border border-slate-200 dark:border-slate-700">
       <table className="min-w-full text-left text-sm">{children}</table>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-slate-50 border-b border-slate-200">{children}</thead>,
-  th: ({ children }) => <th className="py-2.5 px-4 font-semibold text-slate-900 whitespace-nowrap">{children}</th>,
-  td: ({ children }) => <td className="border-b border-slate-100 py-2.5 px-4 text-slate-600 align-top">{children}</td>,
+  thead: ({ children }) => <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">{children}</thead>,
+  th: ({ children }) => <th className="py-2.5 px-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">{children}</th>,
+  td: ({ children }) => <td className="border-b border-slate-100 py-2.5 px-4 text-slate-600 dark:text-slate-300 align-top">{children}</td>,
   code: ({ children }) => (
-    <code className="bg-slate-100 border border-slate-200/60 text-slate-800 px-1.5 py-0.5 rounded text-xs font-mono break-words">
+    <code className="bg-slate-100 border border-slate-200 dark:border-slate-700/60 text-slate-800 px-1.5 py-0.5 rounded text-xs font-mono break-words">
       {children}
     </code>
   ),
   // Поддержка списков
   ul: ({ children }) => (
-    <ul className="list-disc pl-6 my-4 space-y-2 text-slate-700">{children}</ul>
+    <ul className="list-disc pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300">{children}</ul>
   ),
   ol: ({ children }) => (
-    <ol className="list-decimal pl-6 my-4 space-y-2 text-slate-700">{children}</ol>
+    <ol className="list-decimal pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300">{children}</ol>
   ),
   li: ({ children }) => (
     <li className="pl-1 leading-relaxed">{children}</li>
@@ -708,10 +708,10 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       <main>
         {/* Оверлей загрузки */}
         {isLoading && (
-          <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-              <p className="text-gray-600">Загрузка...</p>
+              <p className="text-gray-600 dark:text-slate-300">Загрузка...</p>
             </div>
           </div>
         )}
@@ -737,7 +737,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         <div className="fixed bottom-6 right-6 z-50">
           <button
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 transition-all active:scale-95"
+            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 dark:bg-slate-700 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 transition-all active:scale-95"
           >
             {isNavOpen ? <X size={18} className="md:w-4 md:h-4" /> : <Menu size={18} className="md:w-4 md:h-4" />}
           </button>
@@ -748,12 +748,12 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                 className="fixed inset-0 bg-black/20 backdrop-blur-sm"
                 onClick={() => setIsNavOpen(false)}
               />
-              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white rounded-xl md:rounded-lg shadow-xl border border-slate-200 overflow-hidden">
-                <div className="p-3 md:p-2.5 bg-slate-50 border-b border-slate-100">
-                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400">
+              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-slate-800 rounded-xl md:rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 dark:border-slate-700 overflow-hidden">
+                <div className="p-3 md:p-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     Содержание урока
                   </div>
-                  <div className="text-xs md:text-[10px] font-semibold text-slate-800 mt-0.5">
+                  <div className="text-xs md:text-[10px] font-semibold text-slate-800 dark:text-white mt-0.5">
                     {components.length} разделов
                   </div>
                 </div>
@@ -764,12 +764,12 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                       onClick={() => scrollToSection(section.id)}
                       className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs transition-all border-b border-slate-50 last:border-0 ${
                         activeId === section.id
-                          ? 'bg-slate-100 text-slate-900 font-medium'
-                          : 'text-slate-600 hover:bg-slate-50'
+                          ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-medium'
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                       }`}
                     >
                       <div className="flex items-start gap-2">
-                        <span className={`text-[10px] md:text-[9px] font-mono ${activeId === section.id ? 'text-slate-900' : 'text-slate-400'}`}>
+                        <span className={`text-[10px] md:text-[9px] font-mono ${activeId === section.id ? 'text-slate-900' : 'text-slate-400 dark:text-slate-500'}`}>
                           {String(idx + 1).padStart(2, '0')}
                         </span>
                         <span className="flex-1 leading-tight line-clamp-2">{section.title}</span>
@@ -780,10 +780,10 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                     </button>
                   ))}
                 </div>
-                <div className="p-2 md:p-1.5 bg-slate-50 border-t border-slate-100">
+                <div className="p-2 md:p-1.5 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
                   <button
                     onClick={() => setIsNavOpen(false)}
-                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 dark:text-slate-300 transition-colors"
                   >
                     Закрыть
                   </button>
