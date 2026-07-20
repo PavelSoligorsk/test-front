@@ -1,11 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOut, User, Shield, GraduationCap, Menu, X } from 'lucide-react';
+import { LogOut, User, Shield, GraduationCap, Menu, X, Moon, Sun } from 'lucide-react';
 import { useState } from 'react';
+import { useTheme } from '../../shared/hooks';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('edu_session'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { dark, toggle } = useTheme();
 
   const logout = () => {
     localStorage.removeItem('edu_session');
@@ -54,7 +56,11 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                <div className="h-8 w-px bg-slate-200"></div>
+                <div className="h-8 w-px bg-slate-200 dark:bg-slate-700"></div>
+
+                <button onClick={toggle} className="p-2 rounded-2xl text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-slate-800 transition-all" title={dark ? 'Светлая тема' : 'Тёмная тема'}>
+                  {dark ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
 
                 {user.role === 'admin' && (
                   <Link 
@@ -128,6 +134,11 @@ export default function Navbar() {
                     Админ-панель
                   </Link>
                 )}
+
+                <button onClick={toggle} className="flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-400 hover:text-amber-500 font-bold text-sm w-full">
+                  {dark ? <Sun size={16} /> : <Moon size={16} />}
+                  {dark ? 'Светлая тема' : 'Тёмная тема'}
+                </button>
 
                 <button 
                   onClick={() => { logout(); setMobileOpen(false); }} 

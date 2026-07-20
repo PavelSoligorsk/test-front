@@ -5,8 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Платформа тестирования</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
+    <style>
+      * { transition: background-color .2s, border-color .2s; }
+    </style>
   </head>
-  <body class="bg-gray-100 min-h-screen">
+  <body class="bg-gray-100 min-h-screen dark:bg-slate-900">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
