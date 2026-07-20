@@ -666,7 +666,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   };
 
   return (
-    <div className={`relative bg-white dark:bg-slate-700 ${isFullWidth ? '' : 'min-h-screen'} transition-colors`}>
+    <div className={`relative bg-white dark:bg-slate-800 ${isFullWidth ? '' : 'min-h-screen'} transition-colors`}>
       <style>{`
         .dynamic-markdown .katex-display {
           overflow-x: auto;
