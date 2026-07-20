@@ -579,6 +579,8 @@ const renderBlocks = (blocks) => {
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
+// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
+
 export const TheoryViewer = ({ content, isFullWidth = false }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
@@ -664,7 +666,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   };
 
   return (
-    <div className={`relative bg-white dark:bg-slate-950 ${isFullWidth ? '' : 'min-h-screen'} transition-colors`}>
+    <div className={`relative bg-white dark:bg-slate-700 ${isFullWidth ? '' : 'min-h-screen'} transition-colors`}>
       <style>{`
         .dynamic-markdown .katex-display {
           overflow-x: auto;
@@ -707,27 +709,26 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         .dynamic-markdown ol ol ol {
           list-style-type: lower-roman;
         }
-        /* Стили скроллбара для тёмной темы */
         .dark .dynamic-markdown ::-webkit-scrollbar {
           width: 8px;
           height: 8px;
         }
         .dark .dynamic-markdown ::-webkit-scrollbar-track {
-          background: #1e293b;
-          border-radius: 4px;
-        }
-        .dark .dynamic-markdown ::-webkit-scrollbar-thumb {
           background: #475569;
           border-radius: 4px;
         }
-        .dark .dynamic-markdown ::-webkit-scrollbar-thumb:hover {
+        .dark .dynamic-markdown ::-webkit-scrollbar-thumb {
           background: #64748b;
+          border-radius: 4px;
+        }
+        .dark .dynamic-markdown ::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
         }
       `}</style>
 
       <main>
         {isLoading && (
-          <div className="fixed inset-0 bg-white/80 dark:bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center transition-colors">
+          <div className="fixed inset-0 bg-white/80 dark:bg-slate-700/90 backdrop-blur-sm z-50 flex items-center justify-center transition-colors">
             <div className="flex flex-col items-center gap-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 dark:border-white transition-colors"></div>
               <p className="text-slate-600 dark:text-slate-300 transition-colors">Загрузка...</p>
@@ -755,7 +756,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         <div className="fixed bottom-6 right-6 z-50">
           <button
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 dark:bg-slate-700 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 dark:hover:bg-slate-600 transition-all active:scale-95"
+            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 dark:bg-slate-600 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 dark:hover:bg-slate-500 transition-all active:scale-95"
           >
             {isNavOpen ? <X size={18} className="md:w-4 md:h-4" /> : <Menu size={18} className="md:w-4 md:h-4" />}
           </button>
@@ -766,9 +767,9 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                 className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm transition-colors"
                 onClick={() => setIsNavOpen(false)}
               />
-              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-slate-800 rounded-xl md:rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
-                <div className="p-3 md:p-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700 transition-colors">
-                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 transition-colors">
+              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-slate-600 rounded-xl md:rounded-lg shadow-xl border border-slate-200 dark:border-slate-500 overflow-hidden transition-colors">
+                <div className="p-3 md:p-2.5 bg-slate-50 dark:bg-slate-600 border-b border-slate-100 dark:border-slate-500 transition-colors">
+                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-300 transition-colors">
                     Содержание урока
                   </div>
                   <div className="text-xs md:text-[10px] font-semibold text-slate-800 dark:text-white mt-0.5 transition-colors">
@@ -782,15 +783,15 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                       onClick={() => scrollToSection(section.id)}
                       className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs transition-all border-b last:border-0 ${
                         activeId === section.id
-                          ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-medium'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                      } border-slate-50 dark:border-slate-700/50`}
+                          ? 'bg-slate-100 dark:bg-slate-500 text-slate-900 dark:text-white font-medium'
+                          : 'text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-500/50'
+                      } border-slate-50 dark:border-slate-500`}
                     >
                       <div className="flex items-start gap-2">
                         <span className={`text-[10px] md:text-[9px] font-mono transition-colors ${
                           activeId === section.id 
                             ? 'text-slate-900 dark:text-white' 
-                            : 'text-slate-400 dark:text-slate-500'
+                            : 'text-slate-400 dark:text-slate-400'
                         }`}>
                           {String(idx + 1).padStart(2, '0')}
                         </span>
@@ -802,10 +803,10 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                     </button>
                   ))}
                 </div>
-                <div className="p-2 md:p-1.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-700 transition-colors">
+                <div className="p-2 md:p-1.5 bg-slate-50 dark:bg-slate-600 border-t border-slate-100 dark:border-slate-500 transition-colors">
                   <button
                     onClick={() => setIsNavOpen(false)}
-                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white transition-colors"
                   >
                     Закрыть
                   </button>
