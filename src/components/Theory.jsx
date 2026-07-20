@@ -14,30 +14,30 @@ const SectionBlock = ({ id, title, children, isHard }) => {
   const [isOpen, setIsOpen] = useState(true);
   
   return (
-    <section id={id} className="scroll-mt-20 border-b border-slate-100 dark:border-slate-700 pb-12 last:border-0">
+    <section id={id} className="scroll-mt-20 border-b border-slate-200/70 dark:border-slate-700/70 pb-12 last:border-0 transition-colors">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 group"
       >
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <h2 className="text-xl font-medium text-slate-950 dark:text-white tracking-tight">
+          <h2 className="text-xl font-medium text-slate-900 dark:text-white tracking-tight transition-colors">
             {title}
           </h2>
           {isHard && (
-            <span className="self-start sm:self-auto px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase rounded bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 border border-rose-100 dark:border-rose-800">
+            <span className="self-start sm:self-auto px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/50 transition-colors">
               Повышенная сложность
             </span>
           )}
         </div>
         {isOpen ? (
-          <ChevronUp size={20} className="text-slate-400 dark:text-slate-500 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
+          <ChevronUp size={20} className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
         ) : (
-          <ChevronDown size={20} className="text-slate-400 dark:text-slate-500 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
+          <ChevronDown size={20} className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
         )}
       </button>
       
       {isOpen && (
-        <div className="space-y-6 text-slate-700 dark:text-slate-300 dark:text-slate-300 dynamic-markdown text-left">
+        <div className="space-y-6 text-slate-700 dark:text-slate-300 dynamic-markdown text-left">
           {children}
         </div>
       )}
@@ -46,7 +46,7 @@ const SectionBlock = ({ id, title, children, isHard }) => {
 };
 
 const Def = ({ title = "Определение", children }) => (
-  <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-900/30 text-left">
+  <div className="my-6 p-4 sm:p-5 rounded-xl border-l-4 border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/40 text-left transition-colors">
     <div className="mb-2">
       <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">📖 {title}</span>
     </div>
@@ -59,11 +59,13 @@ const Def = ({ title = "Определение", children }) => (
 const Ex = ({ title, children, isHard }) => {
   const resolvedTitle = title || (isHard ? "Сложный пример" : "Пример");
   return (
-    <div className={`my-6 p-4 sm:p-5 rounded-r-xl border-l-4 text-left ${
-      isHard ? 'border-rose-400 bg-rose-50/40 dark:bg-rose-900/30' : 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-900/30'
+    <div className={`my-6 p-4 sm:p-5 rounded-xl border-l-4 text-left transition-colors ${
+      isHard 
+        ? 'border-rose-400 bg-rose-50/60 dark:bg-rose-950/40' 
+        : 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40'
     }`}>
       <div className="mb-2">
-        <span className={`text-xs font-semibold uppercase tracking-wider ${
+        <span className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
           isHard ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'
         }`}>📝 {resolvedTitle}</span>
       </div>
@@ -75,9 +77,9 @@ const Ex = ({ title, children, isHard }) => {
 };
 
 const Explanation = ({ children }) => (
-  <div className="my-6 p-4 sm:p-5 rounded-r-xl border-l-4 border-amber-500 bg-amber-50/40 dark:bg-amber-900/30 text-left">
+  <div className="my-6 p-4 sm:p-5 rounded-xl border-l-4 border-amber-500 bg-amber-50/60 dark:bg-amber-950/40 text-left transition-colors">
     <div className="mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">💡 Пояснение</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">💡 Пояснение</span>
     </div>
     <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
       {children}
@@ -108,13 +110,11 @@ const GeoGebra = ({ id, setup, height = "400" }) => {
         "useBrowserForJS": false,
         ...(id ? { "material_id": id } : {}),
         "appletOnLoad": (api) => {
-          // Базовые настройки если нет готового материала
           if (!id) {
             api.evalCommand('ShowAxes(true)');
             api.evalCommand('ShowGrid(true)');
           }
 
-          // Обработка setup команд
           if (setup) {
             const commands = setup
               .split('\n')
@@ -307,8 +307,8 @@ const GeoGebra = ({ id, setup, height = "400" }) => {
   }, [id, setup, height]);
 
   return (
-    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-800 relative">
-      <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/80 z-10"></div>
+    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-800/80 relative transition-colors">
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 z-10"></div>
       <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }}></div>
     </div>
   );
@@ -335,52 +335,81 @@ const markdownComponents = {
     <img 
       src={src} 
       alt={alt} 
-      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-100 dark:border-slate-700 mx-auto shadow-sm" 
+      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-200 dark:border-slate-700 mx-auto shadow-sm transition-colors" 
     />
   ),
   table: ({ children }) => (
-    <div className="overflow-x-auto my-6 rounded-lg border border-slate-200 dark:border-slate-700">
+    <div className="overflow-x-auto my-6 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
       <table className="min-w-full text-left text-sm">{children}</table>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">{children}</thead>,
-  th: ({ children }) => <th className="py-2.5 px-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">{children}</th>,
-  td: ({ children }) => <td className="border-b border-slate-100 py-2.5 px-4 text-slate-600 dark:text-slate-300 align-top">{children}</td>,
+  thead: ({ children }) => (
+    <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 transition-colors">
+      {children}
+    </thead>
+  ),
+  th: ({ children }) => (
+    <th className="py-2.5 px-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap transition-colors">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border-b border-slate-100 dark:border-slate-700/50 py-2.5 px-4 text-slate-600 dark:text-slate-300 align-top transition-colors">
+      {children}
+    </td>
+  ),
   code: ({ children }) => (
-    <code className="bg-slate-100 border border-slate-200 dark:border-slate-700/60 text-slate-800 px-1.5 py-0.5 rounded text-xs font-mono break-words">
+    <code className="bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded text-xs font-mono break-words transition-colors">
       {children}
     </code>
   ),
-  // Поддержка списков
   ul: ({ children }) => (
-    <ul className="list-disc pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300">{children}</ul>
+    <ul className="list-disc pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300 transition-colors">
+      {children}
+    </ul>
   ),
   ol: ({ children }) => (
-    <ol className="list-decimal pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300">{children}</ol>
+    <ol className="list-decimal pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300 transition-colors">
+      {children}
+    </ol>
   ),
   li: ({ children }) => (
     <li className="pl-1 leading-relaxed">{children}</li>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="pl-4 py-2 my-4 border-l-4 border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300 transition-colors">
+      {children}
+    </blockquote>
+  ),
+  hr: () => (
+    <hr className="my-8 border-slate-200 dark:border-slate-700 transition-colors" />
+  ),
+  a: ({ href, children }) => (
+    <a 
+      href={href} 
+      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
   ),
 };
 
 // ========== ПАРСЕР MDX ==========
 
-// Функция для преобразования markdown списков в HTML для ReactMarkdown
 const convertMarkdownLists = (content) => {
   if (!content) return content;
   
-  // Обрабатываем ненумерованные списки (начинающиеся с - или *)
   content = content.replace(
     /^([ \t]*)([-*])\s+(.+)$/gm,
     (match, indent, marker, text) => {
-      // Определяем уровень вложенности (каждые 2 пробела = 1 уровень)
       const level = Math.floor(indent.length / 2);
       const prefix = '  '.repeat(level);
       return `${prefix}- ${text}`;
     }
   );
   
-  // Обрабатываем нумерованные списки
   content = content.replace(
     /^([ \t]*)(\d+)[.)]\s+(.+)$/gm,
     (match, indent, number, text) => {
@@ -393,11 +422,9 @@ const convertMarkdownLists = (content) => {
   return content;
 };
 
-// Рекурсивная функция для парсинга вложенных блоков
 const parseBlocks = (content) => {
   const allTags = [];
   
-  // Регулярки для всех типов блоков
   const defRegex = /<Def(?:\s+title="([^"]+)")?>([\s\S]*?)<\/Def>/g;
   const exRegex = /<Ex(?:\s+title="([^"]+)")?(?:\s+isHard)?>([\s\S]*?)<\/Ex>/g;
   const expRegex = /<Explanation>([\s\S]*?)<\/Explanation>/g;
@@ -405,7 +432,6 @@ const parseBlocks = (content) => {
   
   let match;
   
-  // Находим все Def
   while ((match = defRegex.exec(content)) !== null) {
     const innerContent = match[2];
     const innerBlocks = parseBlocks(innerContent);
@@ -420,7 +446,6 @@ const parseBlocks = (content) => {
     });
   }
   
-  // Находим все Ex
   while ((match = exRegex.exec(content)) !== null) {
     const innerContent = match[2];
     const innerBlocks = parseBlocks(innerContent);
@@ -436,7 +461,6 @@ const parseBlocks = (content) => {
     });
   }
   
-  // Находим все Explanation
   while ((match = expRegex.exec(content)) !== null) {
     const innerContent = match[1];
     const innerBlocks = parseBlocks(innerContent);
@@ -450,7 +474,6 @@ const parseBlocks = (content) => {
     });
   }
   
-  // Находим все GeoGebra
   while ((match = geoRegex.exec(content)) !== null) {
     const attrsStr = match[1];
     const idMatch = attrsStr.match(/id="([^"]+)"/);
@@ -467,10 +490,8 @@ const parseBlocks = (content) => {
     });
   }
   
-  // Сортируем по индексу
   allTags.sort((a, b) => a.index - b.index);
   
-  // Собираем результат
   const blocks = [];
   let pointer = 0;
   
@@ -478,12 +499,10 @@ const parseBlocks = (content) => {
     if (tag.index > pointer) {
       const betweenText = content.substring(pointer, tag.index).trim();
       if (betweenText) {
-        // Конвертируем списки в тексте между блоками
         blocks.push({ type: 'text', content: convertMarkdownLists(betweenText) });
       }
     }
     
-    // Для блоков с innerBlocks, добавляем их в блок
     if (tag.type === 'def' || tag.type === 'ex' || tag.type === 'explanation') {
       blocks.push({
         ...tag,
@@ -507,7 +526,6 @@ const parseBlocks = (content) => {
   return blocks;
 };
 
-// Рендеринг блоков
 const renderBlocks = (blocks) => {
   if (!blocks) return null;
   
@@ -567,7 +585,6 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Парсинг MDX структуры
   useEffect(() => {
     const parseContent = () => {
       const sections = [];
@@ -590,22 +607,15 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       
       setComponents(sections);
 
-      // Функция для запуска загрузки на 1500ms
       const triggerLoading = () => {
-        // 1. Сохраняем текущую позицию скролла
         const scrollY = window.scrollY;
-        
-        // 2. Блокируем скролл
         document.body.style.position = 'fixed';
         document.body.style.top = `-${scrollY}px`;
         document.body.style.width = '100%';
         
-        // 3. Показываем оверлей загрузки
         setIsLoading(true);
         
-        // 4. Через 1500ms восстанавливаем скролл и скрываем оверлей
         setTimeout(() => {
-          // Восстанавливаем скролл
           const currentScrollY = document.body.style.top;
           document.body.style.position = '';
           document.body.style.top = '';
@@ -613,8 +623,6 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
           if (currentScrollY) {
             window.scrollTo(0, parseInt(currentScrollY || '0', 10) * -1);
           }
-          
-          // Скрываем оверлей
           setIsLoading(false);
         }, 1500);
       };
@@ -624,10 +632,8 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
     };
 
     parseContent();
-    
   }, [content]);
 
-  // Подсветка активной секции при скролле
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY + 120;
@@ -658,7 +664,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   };
 
   return (
-    <div className={`relative bg-white ${isFullWidth ? '' : 'min-h-screen'}`}>
+    <div className={`relative bg-white dark:bg-slate-950 ${isFullWidth ? '' : 'min-h-screen'} transition-colors`}>
       <style>{`
         .dynamic-markdown .katex-display {
           overflow-x: auto;
@@ -675,7 +681,6 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
           margin-bottom: 1em;
           line-height: 1.625;
         }
-        /* Стили для списков */
         .dynamic-markdown ul {
           list-style-type: disc;
           padding-left: 1.5rem;
@@ -702,16 +707,30 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         .dynamic-markdown ol ol ol {
           list-style-type: lower-roman;
         }
+        /* Стили скроллбара для тёмной темы */
+        .dark .dynamic-markdown ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .dark .dynamic-markdown ::-webkit-scrollbar-track {
+          background: #1e293b;
+          border-radius: 4px;
+        }
+        .dark .dynamic-markdown ::-webkit-scrollbar-thumb {
+          background: #475569;
+          border-radius: 4px;
+        }
+        .dark .dynamic-markdown ::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
       `}</style>
 
-      {/* ========== ОСНОВНОЙ КОНТЕНТ ========== */}
       <main>
-        {/* Оверлей загрузки */}
         {isLoading && (
-          <div className="fixed inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-white/80 dark:bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center transition-colors">
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-              <p className="text-gray-600 dark:text-slate-300">Загрузка...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 dark:border-white transition-colors"></div>
+              <p className="text-slate-600 dark:text-slate-300 transition-colors">Загрузка...</p>
             </div>
           </div>
         )}
@@ -732,12 +751,11 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
         </div>
       </main>
 
-      {/* ========== ПЛАВАЮЩАЯ КНОПКА НАВИГАЦИИ ========== */}
       {!isFullWidth && components.length > 0 && (
         <div className="fixed bottom-6 right-6 z-50">
           <button
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 dark:bg-slate-700 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 transition-all active:scale-95"
+            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 dark:bg-slate-700 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 dark:hover:bg-slate-600 transition-all active:scale-95"
           >
             {isNavOpen ? <X size={18} className="md:w-4 md:h-4" /> : <Menu size={18} className="md:w-4 md:h-4" />}
           </button>
@@ -745,15 +763,15 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
           {isNavOpen && (
             <>
               <div 
-                className="fixed inset-0 bg-black/20 backdrop-blur-sm"
+                className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm transition-colors"
                 onClick={() => setIsNavOpen(false)}
               />
-              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-slate-800 rounded-xl md:rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 dark:border-slate-700 overflow-hidden">
-                <div className="p-3 md:p-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
-                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-slate-800 rounded-xl md:rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
+                <div className="p-3 md:p-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700 transition-colors">
+                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 transition-colors">
                     Содержание урока
                   </div>
-                  <div className="text-xs md:text-[10px] font-semibold text-slate-800 dark:text-white mt-0.5">
+                  <div className="text-xs md:text-[10px] font-semibold text-slate-800 dark:text-white mt-0.5 transition-colors">
                     {components.length} разделов
                   </div>
                 </div>
@@ -762,14 +780,18 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                     <button
                       key={section.id}
                       onClick={() => scrollToSection(section.id)}
-                      className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs transition-all border-b border-slate-50 last:border-0 ${
+                      className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs transition-all border-b last:border-0 ${
                         activeId === section.id
                           ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-medium'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                      }`}
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                      } border-slate-50 dark:border-slate-700/50`}
                     >
                       <div className="flex items-start gap-2">
-                        <span className={`text-[10px] md:text-[9px] font-mono ${activeId === section.id ? 'text-slate-900' : 'text-slate-400 dark:text-slate-500'}`}>
+                        <span className={`text-[10px] md:text-[9px] font-mono transition-colors ${
+                          activeId === section.id 
+                            ? 'text-slate-900 dark:text-white' 
+                            : 'text-slate-400 dark:text-slate-500'
+                        }`}>
                           {String(idx + 1).padStart(2, '0')}
                         </span>
                         <span className="flex-1 leading-tight line-clamp-2">{section.title}</span>
@@ -780,10 +802,10 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
                     </button>
                   ))}
                 </div>
-                <div className="p-2 md:p-1.5 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
+                <div className="p-2 md:p-1.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-700 transition-colors">
                   <button
                     onClick={() => setIsNavOpen(false)}
-                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 dark:text-slate-300 transition-colors"
+                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                   >
                     Закрыть
                   </button>
@@ -796,4 +818,3 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
     </div>
   );
 };
-
