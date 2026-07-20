@@ -256,7 +256,7 @@ export default function StudentDashboardContent() {
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1.5 rounded-[1.25rem] border border-slate-100 dark:border-slate-700">
             {['theory', 'tests', 'history', 'profile'].map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`relative px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab ? 'text-white' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'}`}>
+                className={`relative px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab ? 'text-white' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-slate-700/50'}`}>
                 {activeTab === tab && <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300" />}
                 <span className="relative z-10 whitespace-nowrap">{tab === 'theory' ? 'Теория' : tab === 'tests' ? 'Тесты' : tab === 'history' ? 'История' : 'Профиль'}</span>
               </button>
@@ -333,3 +333,4 @@ export default function StudentDashboardContent() {
     </div>
   );
 }
+
