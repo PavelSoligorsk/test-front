@@ -17,15 +17,15 @@ export default function TheoryTab({
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100">
+      <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100 dark:border-slate-700">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center"><Library size={20} className="text-white" /></div>
-          <div><h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">Теоретический материал</h2></div>
+          <div><h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Теоретический материал</h2></div>
         </div>
       </div>
 
       {selectedSection && theoryContent ? (
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
           <div className="p-4 md:p-6">
             {loadingTheoryByTopicSection ? (
               <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>
@@ -44,8 +44,8 @@ export default function TheoryTab({
             </div>
           )}
           {theoryTopics.length === 0 && !theoryLoading && (
-            <div className="bg-white rounded-[2.5rem] p-12 text-center">
-              <div className="w-20 h-20 bg-slate-100 rounded-[2rem] flex items-center justify-center mx-auto mb-4"><Library size={40} className="text-slate-300" /></div>
+            <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] p-12 text-center">
+              <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700 rounded-[2rem] flex items-center justify-center mx-auto mb-4"><Library size={40} className="text-slate-300" /></div>
               <p className="font-black text-slate-400 uppercase">Теория пока не добавлена</p>
             </div>
           )}
@@ -69,7 +69,7 @@ export default function TheoryTab({
       {/* Section chooser modal */}
       {showSectionModal && selectedTopic && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-300 dark:border dark:border-slate-700">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
               <div className="flex justify-between items-start">
                 <div>
@@ -82,7 +82,7 @@ export default function TheoryTab({
             <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
               {sectionsForModal.map(section => (
                 <button key={section.section} onClick={() => { fetchTheoryByTopicSection(selectedTopic.topic, section.section); setShowSectionModal(false); }}
-                  className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all font-bold text-slate-700">
+                  className="w-full text-left p-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-xl transition-all font-bold text-slate-700 dark:text-white">
                   {section.section}
                 </button>
               ))}
@@ -93,3 +93,4 @@ export default function TheoryTab({
     </div>
   );
 }
+

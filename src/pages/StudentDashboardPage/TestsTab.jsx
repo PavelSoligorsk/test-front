@@ -16,10 +16,10 @@ export default function TestsTab({
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6 max-w-7xl mx-auto px-2 sm:px-4 md:px-0">
       {/* Top panel */}
-      <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 shadow-sm border border-slate-100/80">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-[2.5rem] p-4 md:p-6 shadow-sm border border-slate-100/80 dark:border-slate-700">
         <div className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-0.5 md:space-y-1">
-            <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">
               Доступные тесты
             </h2>
             <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -46,20 +46,20 @@ export default function TestsTab({
       </div>
 
       {/* Main */}
-      <div className="bg-white rounded-2xl md:rounded-[2.5rem] shadow-sm border border-slate-100/80 overflow-hidden flex flex-col md:flex-row min-h-[450px] md:min-h-[550px]">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-[2.5rem] shadow-sm border border-slate-100/80 dark:border-slate-700 overflow-hidden flex flex-col md:flex-row min-h-[450px] md:min-h-[550px]">
         {/* Sidebar */}
-        <aside className={`w-full md:w-64 bg-slate-50/60 border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-5 flex flex-col gap-3 ${selectedClass ? 'hidden md:flex' : 'flex'}`}>
+        <aside className={`w-full md:w-64 bg-slate-50/60 dark:bg-slate-900/60 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-700 p-4 md:p-5 flex flex-col gap-3 ${selectedClass ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Filter size={14} /> Разделы
             </h3>
-            <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-100 shadow-sm">{uniqueClasses.length}</span>
+            <span className="text-[10px] font-bold text-slate-500 bg-white dark:bg-slate-700 px-2 py-0.5 rounded-md border border-slate-100 dark:border-slate-600 shadow-sm">{uniqueClasses.length}</span>
           </div>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" placeholder="Поиск раздела..." value={classSearch}
               onChange={e => setClassSearch(e.target.value)}
-              className="w-full bg-white border border-slate-200 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400 placeholder:font-normal" />
+              className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 py-2.5 pl-9 pr-4 rounded-xl text-xs font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 transition-all placeholder:text-slate-400 placeholder:font-normal dark:placeholder:text-slate-500" />
           </div>
           <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[350px] md:max-h-[550px] pr-1 scrollbar-thin">
             {uniqueClasses.length > 0 ? uniqueClasses.map(cls => {
@@ -67,7 +67,7 @@ export default function TestsTab({
               const isActive = selectedClass === cls;
               return (
                 <button key={cls} onClick={() => { setSelectedClass(cls); setSelectedSubject('Все'); setTestSearch(''); }}
-                  className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all border ${isActive ? 'bg-slate-800 text-white border-transparent shadow-md shadow-slate-700/20' : 'bg-white text-slate-600 border-slate-100 hover:border-slate-200 hover:bg-slate-50/50'}`}>
+                  className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all border ${isActive ? 'bg-slate-800 dark:bg-slate-700 text-white border-transparent shadow-md shadow-slate-700/20' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-700 hover:border-slate-200 hover:bg-slate-50/50 dark:hover:bg-slate-700/50'}`}>
                   <span className="font-extrabold text-xs uppercase truncate mr-2">{cls}</span>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-md shrink-0 ${isActive ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'}`}>{count}</span>
                 </button>
@@ -79,10 +79,10 @@ export default function TestsTab({
         </aside>
 
         {/* Content */}
-        <main className={`flex-1 p-4 md:p-6 lg:p-8 bg-white overflow-y-auto ${!selectedClass ? 'hidden md:flex flex-col justify-center' : 'block'}`}>
+        <main className={`flex-1 p-4 md:p-6 lg:p-8 bg-white dark:bg-slate-800 overflow-y-auto ${!selectedClass ? 'hidden md:flex flex-col justify-center' : 'block'}`}>
           {!selectedClass ? (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12">
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[2rem] bg-slate-50 flex items-center justify-center border border-slate-100">
+              <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[2rem] bg-slate-50 dark:bg-slate-700 flex items-center justify-center border border-slate-100 dark:border-slate-600">
                 <BookOpen size={32} className="text-blue-400/70" />
               </div>
               <div>
@@ -92,7 +92,7 @@ export default function TestsTab({
             </div>
           ) : (
             <div className="space-y-4 md:space-y-6 animate-in fade-in duration-300">
-              <div className="flex flex-col gap-3 pb-4 border-b border-slate-100">
+              <div className="flex flex-col gap-3 pb-4 border-b border-slate-100 dark:border-slate-700">
                 <div className="flex items-center gap-1.5 flex-wrap text-[10px] md:text-xs font-black uppercase text-slate-400">
                   <button onClick={() => { setSelectedClass(null); setSelectedSubject('Все'); }}
                     className="flex items-center gap-1 bg-slate-100 text-slate-700 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all md:hidden mr-1">
@@ -110,7 +110,7 @@ export default function TestsTab({
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="text" placeholder="Поиск теста по названию..." value={testSearch}
                     onChange={e => setTestSearch(e.target.value)}
-                    className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-100 focus:border-blue-400 focus:bg-white rounded-xl text-xs font-bold uppercase tracking-wide outline-none transition-all placeholder:text-slate-400 placeholder:font-normal" />
+                    className="w-full pl-9 pr-9 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 focus:border-blue-400 focus:bg-white dark:focus:bg-slate-600 rounded-xl text-xs font-bold uppercase tracking-wide outline-none transition-all placeholder:text-slate-400 placeholder:font-normal dark:placeholder:text-slate-500" />
                   {testSearch && (
                     <button onClick={() => setTestSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><XCircle size={14} /></button>
                   )}
@@ -121,7 +121,7 @@ export default function TestsTab({
                   <div className="flex gap-1.5">
                     {subjects.map(subject => (
                       <button key={subject} onClick={() => setSelectedSubject(subject)}
-                        className={`px-3.5 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase whitespace-nowrap transition-all border ${selectedSubject === subject ? 'bg-slate-800 text-white border-transparent shadow-sm' : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100'}`}>
+                        className={`px-3.5 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase whitespace-nowrap transition-all border ${selectedSubject === subject ? 'bg-slate-800 dark:bg-slate-600 text-white border-transparent shadow-sm' : 'bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-300 border-slate-100 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600'}`}>
                         {subject === 'Все' ? '📚 Все темы' : subject}
                       </button>
                     ))}
@@ -150,3 +150,4 @@ export default function TestsTab({
     </div>
   );
 }
+

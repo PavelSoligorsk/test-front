@@ -13,7 +13,7 @@ export default function TestCard({ test, type, onStart, disabled }) {
 
   return (
     <div onClick={() => !disabled && onStart?.(test)}
-      className={`group relative bg-white rounded-[2rem] border-2 transition-all overflow-hidden ${disabled ? 'border-slate-100 opacity-60 cursor-not-allowed' : 'border-slate-100 hover:shadow-2xl cursor-pointer hover:-translate-y-1'}`}>
+      className={`group relative bg-white dark:bg-slate-800 rounded-[2rem] border-2 transition-all overflow-hidden ${disabled ? 'border-slate-100 dark:border-slate-700 opacity-60 cursor-not-allowed' : 'border-slate-100 dark:border-slate-700 hover:shadow-2xl cursor-pointer hover:-translate-y-1'}`}>
       <div className={`h-1.5 bg-gradient-to-r ${styles.gradient}`} />
       <div className="p-5 md:p-6">
         <div className="flex justify-between items-start mb-3">
@@ -23,7 +23,7 @@ export default function TestCard({ test, type, onStart, disabled }) {
           <span className={`text-[7px] font-black uppercase px-2 py-1 rounded-lg ${styles.badge} tracking-wider`}>{styles.label}</span>
         </div>
         <div className="space-y-1 mb-4">
-          <h3 className="text-base font-black text-slate-900 uppercase leading-tight line-clamp-2">
+          <h3 className="text-base font-black text-slate-900 dark:text-white uppercase leading-tight line-clamp-2">
             {test.title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim() || 'Без названия'}
           </h3>
           {test.subject && <p className="text-[9px] font-bold text-slate-400 uppercase">{test.subject}</p>}
@@ -33,13 +33,13 @@ export default function TestCard({ test, type, onStart, disabled }) {
             <LayoutGrid size={12} /> <span className="text-[9px] font-black uppercase text-slate-600">{test.tasks?.length || 0} задач</span>
           </div>
           {test.duration && (
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg">
-              <Clock size={12} className="text-slate-400" /> <span className="text-[9px] font-black uppercase text-slate-500">{test.duration} мин</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg">
+              <Clock size={12} className="text-slate-400" /> <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">{test.duration} мин</span>
             </div>
           )}
           {test.difficulty && (
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg">
-              <Target size={12} /> <span className="text-[9px] font-black uppercase text-slate-500">Ур. {test.difficulty}</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg">
+              <Target size={12} /> <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">Ур. {test.difficulty}</span>
             </div>
           )}
         </div>
@@ -55,7 +55,7 @@ export default function TestCard({ test, type, onStart, disabled }) {
             <span className="text-[9px] font-black text-emerald-700 uppercase">Выполнено</span>
           </div>
         )}
-        <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
+        <div className="pt-3 border-t border-slate-50 dark:border-slate-700 flex items-center justify-between">
           <span className={`text-[9px] font-black uppercase tracking-[0.2em] group-hover:tracking-[0.25em] transition-all`}>
             {disabled ? 'Недоступно' : test.started ? 'Продолжить' : 'Начать'}
           </span>
@@ -65,3 +65,4 @@ export default function TestCard({ test, type, onStart, disabled }) {
     </div>
   );
 }
+

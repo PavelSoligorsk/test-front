@@ -237,23 +237,23 @@ export default function StudentDashboardContent() {
   );
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
       <div className="text-center space-y-4">
-        <div className="w-16 h-16 border-8 border-slate-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
+        <div className="w-16 h-16 border-8 border-slate-200 dark:border-slate-700 border-t-blue-600 rounded-full animate-spin mx-auto" />
         <p className="font-black uppercase tracking-widest text-slate-400 text-[10px]">Загрузка тестов...</p>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 md:px-6 py-3">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-900">
+      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 dark:bg-slate-900/80 dark:border-slate-800 px-4 md:px-6 py-3">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
             <GraduationCap size={20} className="text-blue-600" />
-            <span className="text-sm font-black uppercase text-slate-800 hidden md:inline">{profile?.user.first_name} {profile?.user.last_name}</span>
+            <span className="text-sm font-black uppercase text-slate-800 dark:text-white hidden md:inline">{profile?.user.first_name} {profile?.user.last_name}</span>
           </div>
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100">
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1.5 rounded-[1.25rem] border border-slate-100 dark:border-slate-700">
             {['theory', 'tests', 'history', 'profile'].map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`relative px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab ? 'text-white' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/50'}`}>

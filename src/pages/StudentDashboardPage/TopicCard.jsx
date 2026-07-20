@@ -7,7 +7,7 @@ export default function TopicCard({ topic, onClick }) {
 
   return (
     <button onClick={() => onClick(topic)}
-      className="group relative bg-white rounded-[2rem] border-2 border-slate-100 hover:border-slate-200 hover:shadow-xl transition-all overflow-hidden text-left w-full">
+      className="group relative bg-white dark:bg-slate-800 rounded-[2rem] border-2 border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-xl transition-all overflow-hidden text-left w-full">
       <div className={`h-1.5 bg-gradient-to-r ${styles.gradient}`} />
       <div className="p-6">
         <div className="flex items-center gap-4 mb-4">
@@ -15,11 +15,11 @@ export default function TopicCard({ topic, onClick }) {
             {styles.icon}
           </div>
           <div className="flex-1">
-            <h3 className="font-black text-slate-800 text-sm uppercase">{styles.label}</h3>
+            <h3 className="font-black text-slate-800 dark:text-white text-sm uppercase">{styles.label}</h3>
             <p className="text-[9px] font-bold text-slate-400 mt-1">{topic.sections_count} разделов</p>
           </div>
         </div>
-        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-50 dark:border-slate-700">
           <span className="text-[9px] font-black uppercase text-slate-400">Изучить</span>
           <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
         </div>
@@ -27,3 +27,4 @@ export default function TopicCard({ topic, onClick }) {
     </button>
   );
 }
+
