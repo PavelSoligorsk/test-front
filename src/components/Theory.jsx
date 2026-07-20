@@ -708,7 +708,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       <main>
         {/* Оверлей загрузки */}
         {isLoading && (
-          <div className="fixed inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
               <p className="text-gray-600 dark:text-slate-300">Загрузка...</p>
@@ -796,3 +796,4 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
     </div>
   );
 };
+
