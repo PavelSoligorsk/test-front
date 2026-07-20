@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { Download, Sparkles } from 'lucide-react';
-import { MarkdownRenderer as MarkdownViewer  } from '../pages/TestResultDetail'; // или путь к вашему компоненту
+import { MarkdownRenderer as MarkdownViewer  } from '../shared/ui';
 
 export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId }) => {
   const [isGenerating, setIsGenerating] = useState(false);

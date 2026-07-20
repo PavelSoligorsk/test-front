@@ -1,2 +1,2 @@
-import TestPassing from '../TestPassing';
-export default TestPassing;
+import TestPassingContent from './TestPassingContent';
+export default TestPassingContent;

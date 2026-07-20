@@ -7,3 +7,7 @@ export { default as Spinner } from './Spinner';
 export { default as ProgressBar } from './ProgressBar';
 export { default as RingChart } from './RingChart';
 export { default as MarkdownRenderer } from './MarkdownRenderer';
+export { default as DifficultyBadge } from './DifficultyBadge';
+export { default as QuestionMap } from './QuestionMap';
+export { default as MathHintPreview } from './MathHintPreview';
+export { default as AISolutionPreview } from './AISolutionPreview';

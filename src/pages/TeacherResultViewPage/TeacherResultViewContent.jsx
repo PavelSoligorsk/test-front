@@ -1,77 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3, MapPin } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3 } from 'lucide-react';
 import axios from 'axios';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import remarkGfm from 'remark-gfm';
-import 'katex/dist/katex.min.css';
 import { API_BASE } from '../../shared/api';
-
-const MarkdownRenderer = ({ children, className = "" }) => (
-  <div className={`prose prose-slate max-w-none ${className}`}>
-    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}
-      components={{
-        table: ({ node, ...props }) => <div className="overflow-x-auto my-4"><table className="min-w-full border-collapse border border-slate-200 rounded-lg" {...props} /></div>,
-        th: ({ node, ...props }) => <th className="border border-slate-200 bg-slate-50 px-4 py-2 text-left font-bold" {...props} />,
-        td: ({ node, ...props }) => <td className="border border-slate-200 px-4 py-2" {...props} />,
-        img: ({ node, src, alt, ...props }) => <div className="my-6 overflow-hidden rounded-2xl bg-slate-100"><img src={src} alt={alt || ''} className="w-full h-auto object-contain max-h-[400px]" loading="lazy" {...props} /></div>
-      }}
-    >{children}</ReactMarkdown>
-  </div>
-);
-
-const DifficultyBadge = ({ level, correct, total }) => {
-  const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
-  return (
-    <div className="flex-1 bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center min-w-[120px] transition-transform hover:scale-105">
-      <div className="flex gap-1 mb-2">{[...Array(5)].map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < level ? 'bg-emerald-600' : 'bg-slate-100'}`} />)}</div>
-      <div className="text-2xl font-black text-slate-950">{percent}%</div>
-      <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Lvl {level} ({correct}/{total})</div>
-    </div>
-  );
-};
-
-const QuestionMap = ({ details, onScroll }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const correctCount = details?.filter(d => d.is_correct).length || 0;
-  const wrongCount = details?.filter(d => !d.is_correct && d.user_answer !== "Нет ответа" && d.user_answer).length || 0;
-  const skippedCount = details?.filter(d => d.user_answer === "Нет ответа" || !d.user_answer).length || 0;
-
-  return (
-    <>
-      <div className="fixed bottom-6 right-6 z-50">
-        <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white border border-slate-700 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-800 transition-all shadow-2xl">
-          <MapPin size={14} /> Карта <span className="bg-white/20 px-2 py-0.5 rounded-full text-[9px]">{details?.length || 0}</span>
-        </button>
-      </div>
-      {isExpanded && (
-        <>
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={() => setIsExpanded(false)} />
-          <div className="fixed bottom-24 right-6 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-2xl z-50 w-80 max-h-[70vh] overflow-y-auto">
-            <div className="grid grid-cols-5 gap-2">
-              {details?.map((item, idx) => {
-                const hasNoAnswer = item.user_answer === "Нет ответа" || !item.user_answer;
-                return (
-                  <button key={item.task_id} onClick={() => { onScroll(item.task_id); setIsExpanded(false); }}
-                    className={`aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all hover:scale-110 ${hasNoAnswer ? 'bg-slate-200 text-slate-400' : item.is_correct ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-4 mt-4 text-[9px] font-bold text-slate-400 flex-wrap">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-100 rounded-md"></span> Верно ({correctCount})</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-100 rounded-md"></span> Ошибки ({wrongCount})</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-slate-200 rounded-md"></span> Пропущено ({skippedCount})</span>
-            </div>
-          </div>
-        </>
-      )}
-    </>
-  );
-};
+import { MarkdownRenderer, DifficultyBadge, QuestionMap } from '../../shared/ui';
 
 export default function TeacherResultViewContent() {
   const { resultId } = useParams();

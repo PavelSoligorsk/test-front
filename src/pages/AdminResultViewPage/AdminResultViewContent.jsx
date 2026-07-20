@@ -2,8 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
 import { fetchAdminResult } from '../AdminDashboardPage/api';
-import { QuestionMap } from './QuestionMap';
-import { DifficultyBadge } from './DifficultyBadge';
+import { MarkdownRenderer, DifficultyBadge, QuestionMap } from '../../shared/ui';
 import ResultTaskCard from './ResultTaskCard';
 
 export default function AdminResultViewContent() {
