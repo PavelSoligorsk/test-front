@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { XCircle, CheckCircle2, Clock, BookOpen, Users, GraduationCap, Trophy, FileText, AlertCircle } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { restoreSession } from '../../shared/lib/session';

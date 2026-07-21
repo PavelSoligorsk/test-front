@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_URL } from '../../shared/config';
+import { API_BASE } from '../../shared/api';
 import React, { useState, useMemo } from 'react';
 import { Search, BookOpen, ChevronRight } from 'lucide-react';
 import { MarkdownRenderer } from '../../shared/ui';
@@ -81,16 +81,21 @@ export default function TheoryBank({
     );
   }, [sectionTasks, activeTopic, activeSection, taskSearch]);
 
+  const getAuthHeaders = () => {
+    try {
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.access_token || session?.token;
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    } catch { return {}; }
+  };
+
   const loadSectionTasks = async (topic, section) => {
     setLoadingTasks(true);
     setTaskSearch("");
     try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.access_token || session?.token;
-      
       const res = await axios.get(
-        `${API_URL}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+        getAuthHeaders()
       );
       setSectionTasks((prev) => ({ ...prev, [`${topic}/${section}`]: res.data }));
     } catch (e) {

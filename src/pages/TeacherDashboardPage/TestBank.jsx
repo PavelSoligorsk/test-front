@@ -1,7 +1,7 @@
 import axios from 'axios';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, ChevronRight, GraduationCap } from 'lucide-react';
-import { API_URL } from '../../shared/config';
+import { API_BASE } from '../../shared/api';
 import { MarkdownRenderer } from '../../shared/ui';
 
 const getDifficultyColor = (lvl) => {
@@ -30,7 +30,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
   const authHeaders = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 
   useEffect(() => {
-    axios.get(`${API_URL}/teacher/tasks-meta`, authHeaders())
+    axios.get(`${API_BASE}/teacher/tasks-meta`, authHeaders())
       .then(res => setMeta(res.data))
       .catch(console.error);
   }, []);
@@ -82,7 +82,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
     setLoading(true);
     try {
       const res = await axios.get(
-        `${API_URL}/teacher/tasks/by-class/`,
+        `${API_BASE}/teacher/tasks/by-class/`,
         { params: { task_class: cls, topic_number: topic }, ...authHeaders() }
       );
       setTasks(res.data);
