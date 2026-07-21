@@ -82,7 +82,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
     setLoading(true);
     try {
       const res = await axios.get(
-        `${API_URL}/teacher/tasks/by-class/${cls}/topic/${topic}`,
+        `${API_URL}/teacher/tasks/by-class/${encodeURIComponent(cls)}/topic/${encodeURIComponent(topic)}`,
         authHeaders()
       );
       setTasks(res.data);
