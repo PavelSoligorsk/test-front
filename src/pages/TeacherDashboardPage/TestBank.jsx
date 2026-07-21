@@ -154,7 +154,6 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
                 <button key={cls} onClick={() => handleSelectClass(cls)}
                   className="w-full bg-white rounded-2xl border border-slate-200 hover:border-emerald-300 hover:shadow-lg transition-all p-5 text-left">
                   <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center text-emerald-600 font-black text-lg shrink-0">{cls}</div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-black text-slate-800 text-sm uppercase truncate">{cls} раздел</h3>
                       <div className="flex items-center gap-2 mt-0.5">
