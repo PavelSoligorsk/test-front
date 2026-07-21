@@ -10,7 +10,13 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${API_URL}/login`, form);
+      const params = new URLSearchParams();
+      params.append('username', form.username);
+      params.append('password', form.password);
+
+      const res = await axios.post(`${API_URL}/login`, params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
       const data = res.data;
       localStorage.setItem('edu_session', JSON.stringify(data));
       if (data.role === 'student') navigate('/student');
