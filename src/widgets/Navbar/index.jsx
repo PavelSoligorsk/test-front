@@ -2,7 +2,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User, Shield, GraduationCap, Menu, X, Moon, Sun } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from '../../shared/hooks';
-import { clearSession, getCurrentUser } from '../../shared/lib/session';
+// 1. Добавлен импорт SESSION_EVENT
+import { clearSession, getCurrentUser, SESSION_EVENT } from '../../shared/lib/session';
 
 export default function Navbar() {
   const navigate = useNavigate();
