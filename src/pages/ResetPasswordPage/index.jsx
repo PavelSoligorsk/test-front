@@ -1,4 +1,3 @@
-```jsx tsst/src/pages/ResetPasswordPage/index.jsx
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -139,4 +138,3 @@ export default function ResetPassword() {
     </div>
   );
 }
-```
