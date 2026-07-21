@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, BookOpen, ChevronRight, GraduationCap, Filter, ArrowRight, XCircle } from 'lucide-react';
+import { Search, ChevronRight, GraduationCap } from 'lucide-react';
 import { API_URL } from '../../shared/config';
 import { MarkdownPreview } from './MarkdownPreview';
 
@@ -8,15 +8,6 @@ const getDifficultyColor = (lvl) => {
   if (lvl >= 4) return "text-red-500 bg-red-50 border-red-100";
   if (lvl >= 3) return "text-amber-500 bg-amber-50 border-amber-100";
   return "text-emerald-500 bg-emerald-50 border-emerald-100";
-};
-
-const getClassColor = (cls) => {
-  const colors = {
-    '9': 'from-orange-500 to-red-500',
-    '10': 'from-blue-500 to-cyan-500',
-    '11': 'from-purple-500 to-pink-500',
-  };
-  return colors[cls] || 'from-slate-500 to-slate-600';
 };
 
 export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, openHints, onToggleSolution, onToggleHint }) {
@@ -124,8 +115,8 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter">Банк заданий</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                 {selectedClass
-                  ? `${selectedClass} класс${selectedTopic ? ` → ${selectedTopic}` : ' → выберите тему'}`
-                  : `${classes.length} классов доступно`}
+                  ? `${selectedClass} раздел${selectedTopic ? ` → ${selectedTopic}` : ' → выберите подраздел'}`
+                  : `${classes.length} разделов доступно`}
               </p>
             </div>
           </div>
@@ -136,7 +127,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
             }}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-black uppercase text-slate-600 transition-all">
               <ChevronRight size={14} className="rotate-180" />
-              {selectedTopic ? 'К темам' : 'Ко всем классам'}
+              {selectedTopic ? 'К подразделам' : 'Ко всем разделам'}
             </button>
           )}
         </div>
@@ -146,7 +137,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
         <div className="space-y-4">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Поиск класса..." value={classSearch}
+            <input type="text" placeholder="Поиск раздела..." value={classSearch}
               onChange={e => setClassSearch(e.target.value)}
               className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-400" />
           </div>
@@ -161,26 +152,18 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
                 : 0;
               return (
                 <button key={cls} onClick={() => handleSelectClass(cls)}
-                  className="group relative bg-white rounded-[2rem] border-2 border-slate-100 hover:border-slate-200 hover:shadow-xl transition-all overflow-hidden text-left w-full">
-                  <div className={`h-1.5 bg-gradient-to-r ${getClassColor(cls)}`} />
-                  <div className="p-6">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className={`w-12 h-12 bg-gradient-to-br ${getClassColor(cls)} rounded-xl flex items-center justify-center text-white shadow-lg text-xl font-black`}>
-                        {cls}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-black text-slate-800 text-sm uppercase">{cls} класс</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[9px] font-bold text-slate-400">{topicsCount} тем</span>
-                          <span className="text-[9px] text-slate-300">•</span>
-                          <span className="text-[9px] font-bold text-slate-400">{totalTasks} заданий</span>
-                        </div>
+                  className="w-full bg-white rounded-2xl border border-slate-200 hover:border-emerald-300 hover:shadow-lg transition-all p-5 text-left">
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 font-black text-lg shrink-0">{cls}</div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-black text-slate-800 text-sm uppercase truncate">{cls} раздел</h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-bold text-slate-400">{topicsCount} подразделов</span>
+                        <span className="text-[10px] text-slate-300">•</span>
+                        <span className="text-[10px] font-bold text-slate-400">{totalTasks} заданий</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                      <span className="text-[9px] font-black uppercase text-slate-400">Открыть</span>
-                      <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
-                    </div>
+                    <ChevronRight size={18} className="text-slate-300 shrink-0" />
                   </div>
                 </button>
               );
@@ -193,7 +176,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
         <div className="space-y-4">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Поиск темы..." value={topicSearch}
+            <input type="text" placeholder="Поиск подраздела..." value={topicSearch}
               onChange={e => setTopicSearch(e.target.value)}
               className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-400" />
           </div>
@@ -204,12 +187,12 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
                 <button key={topic} onClick={() => handleSelectTopic(selectedClass, topic)}
                   className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 font-black text-sm shrink-0">{index + 1}</div>
+                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm shrink-0">{index + 1}</div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-slate-700 text-sm leading-tight truncate">{topic}</p>
                       <p className="text-[9px] font-bold text-slate-400 mt-0.5">{count} заданий</p>
                     </div>
-                    <ChevronRight size={16} className="text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all shrink-0" />
+                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
                   </div>
                 </button>
               );
