@@ -217,13 +217,17 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
             {filteredTasks.map((t, index) => {
               const isSelected = selectedTasks.some((st) => st.id === t.id);
               return (
-                <div key={t.id} className={`group p-4 md:p-6 rounded-2xl border transition-all ${isSelected ? "bg-emerald-50 border-emerald-300 shadow-lg" : "bg-slate-50 border-transparent hover:border-slate-200"}`}>
-                  <div className="space-y-4">
+                <div key={t.id} className={`rounded-[2rem] border transition-all ${isSelected ? "bg-emerald-50 border-emerald-300 shadow-lg" : "bg-white border-slate-200 shadow-sm hover:border-slate-300"}`}>
+                  <div className="p-6 space-y-6">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-black text-slate-600">№ {index + 1}</span>
-                      <span className="text-[9px] text-slate-400">ID: {t.id}</span>
-                      <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || "?"}</div>
-                      <span className="text-[9px] text-slate-400">{t.is_open_answer ? "Открытый" : "Тест"}</span>
+                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                        Задание №{index + 1}
+                      </h4>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">ID: {t.id}</span>
+                        <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || "?"}</div>
+                        <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">{t.is_open_answer ? "Открытый" : "Тест"}</span>
+                      </div>
                     </div>
 
                     <MarkdownRenderer>{t.content}</MarkdownRenderer>
@@ -237,14 +241,28 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
                     <div className="flex flex-wrap gap-2 items-center">
                       <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
                       <span className="text-sm font-black text-slate-700">{t.answer}</span>
-                      {t.hint && <button onClick={() => onToggleHint(t.id)} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-black hover:bg-slate-200">Подсказка</button>}
-                      {t.solution && <button onClick={() => onToggleSolution(t.id)} className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-black hover:bg-slate-200">Решение</button>}
-                      <button onClick={() => onTaskToggle(t)} className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${isSelected ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"}`}>
+                      {t.hint && <button onClick={() => onToggleHint(t.id)} className="px-4 py-2 rounded-2xl bg-slate-100 text-slate-600 text-[10px] font-black hover:bg-slate-200 transition-all">Подсказка</button>}
+                      {t.solution && <button onClick={() => onToggleSolution(t.id)} className="px-4 py-2 rounded-2xl bg-slate-100 text-slate-600 text-[10px] font-black hover:bg-slate-200 transition-all">Решение</button>}
+                      <button onClick={() => onTaskToggle(t)} className={`ml-auto px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all active:scale-95 ${isSelected ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"}`}>
                         {isSelected ? "✓ В тесте" : "+ В тест"}
                       </button>
                     </div>
-                    {openHints[t.id] && <div className="mt-2"><MarkdownRenderer>{t.hint}</MarkdownRenderer></div>}
-                    {openSolutions[t.id] && <div className="mt-2"><MarkdownRenderer>{t.solution}</MarkdownRenderer></div>}
+                    {openHints[t.id] && (
+                      <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-200/40">
+                        <span className="text-[9px] font-black uppercase text-amber-600 tracking-widest flex items-center gap-2 mb-3">
+                          <span>Подсказка</span>
+                        </span>
+                        <MarkdownRenderer>{t.hint}</MarkdownRenderer>
+                      </div>
+                    )}
+                    {openSolutions[t.id] && (
+                      <div className="p-5 rounded-[2rem] bg-blue-50/50 border border-blue-200/40">
+                        <span className="text-[9px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-2 mb-3">
+                          <span>Решение</span>
+                        </span>
+                        <MarkdownRenderer>{t.solution}</MarkdownRenderer>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import React, { useState, useMemo } from 'react';
-import { Search, BookOpen, ArrowRight, ChevronRight } from 'lucide-react';
-import { MarkdownPreview } from './MarkdownPreview';
+import { Search, BookOpen, ChevronRight } from 'lucide-react';
+import { MarkdownRenderer } from '../../shared/ui';
 
 const MAIN_TOPICS = {
   numbers: "Числа и вычисления",
@@ -22,40 +22,8 @@ const getDifficultyColor = (lvl) => {
   return "text-emerald-500 bg-emerald-50 border-emerald-100";
 };
 
-const getTopicColor = (topicKey) => {
-  const colors = {
-    numbers: "from-orange-500 to-red-500",
-    expressions: "from-purple-500 to-pink-500",
-    equations: "from-blue-500 to-cyan-500",
-    inequalities: "from-yellow-500 to-amber-500",
-    functions: "from-emerald-500 to-teal-500",
-    text: "from-sky-500 to-blue-500",
-    planim: "from-green-500 to-lime-500",
-    stereo: "from-indigo-500 to-violet-500",
-    geometry: "from-rose-500 to-orange-500",
-  };
-  return colors[topicKey] || "from-slate-500 to-slate-600";
-};
-
-const getTopicIcon = (topicKey) => {
-  const icons = {
-    numbers: "🔢", 
-    expressions: "📝", 
-    equations: "⚖️",
-    inequalities: "≷", 
-    functions: "📈", 
-    text: "📖",
-    planim: "📐", 
-    stereo: "🧊", 
-    geometry: "📏",
-  };
-  return icons[topicKey] || "📚";
-};
-
-// Компонент для рендеринга Markdown (если у вас нет отдельного компонента)
-const MarkdownRenderer = ({ children }) => {
-  return <div className="prose prose-sm max-w-none">{children}</div>;
-};
+// Компонент для рендеринга Markdown
+// (используем MarkdownRenderer из shared/ui)
 
 export default function TheoryBank({ 
   tasksMeta, 
@@ -200,27 +168,18 @@ export default function TheoryBank({
               <button 
                 key={topic.key} 
                 onClick={() => setActiveTopic(topic.key)}
-                className="group relative bg-white rounded-[2rem] border-2 border-slate-100 hover:border-slate-200 hover:shadow-xl transition-all overflow-hidden text-left w-full"
+                className="w-full bg-white rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all p-5 text-left"
               >
-                <div className={`h-1.5 bg-gradient-to-r ${getTopicColor(topic.key)}`} />
-                <div className="p-6">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className={`w-12 h-12 bg-gradient-to-br ${getTopicColor(topic.key)} rounded-xl flex items-center justify-center text-white shadow-lg text-2xl`}>
-                      {getTopicIcon(topic.key)}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-black text-slate-800 text-sm uppercase">{topic.label}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[9px] font-bold text-slate-400">{topic.sections.length} разделов</span>
-                        <span className="text-[9px] text-slate-300">•</span>
-                        <span className="text-[9px] font-bold text-slate-400">{topic.count} заданий</span>
-                      </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-black text-slate-800 text-sm uppercase truncate">{topic.label}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] font-bold text-slate-400">{topic.sections.length} разделов</span>
+                      <span className="text-[10px] text-slate-300">•</span>
+                      <span className="text-[10px] font-bold text-slate-400">{topic.count} заданий</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                    <span className="text-[9px] font-black uppercase text-slate-400">Открыть</span>
-                    <ArrowRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
-                  </div>
+                  <ChevronRight size={18} className="text-slate-300 shrink-0" />
                 </div>
               </button>
             ))}
@@ -314,42 +273,43 @@ export default function TheoryBank({
                 return (
                   <div 
                     key={t.id} 
-                    className={`group p-4 md:p-6 rounded-2xl border transition-all ${
-                      isSelected ? "bg-emerald-50 border-emerald-300 shadow-lg" : "bg-slate-50 border-transparent hover:border-slate-200"
+                    className={`rounded-[2rem] border transition-all ${
+                      isSelected ? "bg-emerald-50 border-emerald-300 shadow-lg" : "bg-white border-slate-200 shadow-sm hover:border-slate-300"
                     }`}
                   >
-                    <div className="space-y-4">
+                    <div className="p-6 space-y-6">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                          № {index + 1}
-                        </span>
-                        <span className="text-[9px] text-slate-400">ID: {t.id}</span>
-                        <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>
-                          LVL {t.difficulty || "?"}
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          Задание №{index + 1}
+                        </h4>
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">ID: {t.id}</span>
+                          <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>
+                            LVL {t.difficulty || "?"}
+                          </div>
+                          <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg">
+                            {t.is_open_answer ? "Открытый" : "Тест"}
+                          </span>
                         </div>
-                        <span className="text-[9px] text-slate-400">
-                          {t.is_open_answer ? "Открытый" : "Тест"}
-                        </span>
                       </div>
 
                       <MarkdownRenderer>{t.content}</MarkdownRenderer>
                       
                       {!t.is_open_answer && t.options && (
-                        <div className="pl-4 border-l-2 border-emerald-100">
-                          <MarkdownPreview 
-                            text={Array.isArray(t.options) ? t.options.map((opt, i) => `**${i+1}.** ${opt}`).join("\n\n") : t.options} 
-                            title="Варианты" 
-                          />
+                        <div className="pl-4 border-l-2 border-slate-200">
+                          <MarkdownRenderer>
+                            {Array.isArray(t.options) ? t.options.map((opt, i) => `**${i+1}.** ${opt}`).join("\n\n") : t.options}
+                          </MarkdownRenderer>
                         </div>
                       )}
                       
                       <div className="flex flex-wrap gap-2 items-center">
                         <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
-                        <span className="text-sm font-black text-emerald-700">{t.answer}</span>
+                        <span className="text-sm font-black text-slate-700">{t.answer}</span>
                         {t.hint && (
                           <button 
                             onClick={() => onToggleHint(t.id)} 
-                            className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black hover:bg-amber-100"
+                            className="px-4 py-2 rounded-2xl bg-slate-100 text-slate-600 text-[10px] font-black hover:bg-slate-200 transition-all"
                           >
                             Подсказка
                           </button>
@@ -357,27 +317,37 @@ export default function TheoryBank({
                         {t.solution && (
                           <button 
                             onClick={() => onToggleSolution(t.id)} 
-                            className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black hover:bg-blue-100"
+                            className="px-4 py-2 rounded-2xl bg-slate-100 text-slate-600 text-[10px] font-black hover:bg-slate-200 transition-all"
                           >
                             Решение
                           </button>
                         )}
                         <button 
                           onClick={() => onTaskToggle(t)} 
-                          className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${
-                            isSelected ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"
+                          className={`ml-auto px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all active:scale-95 ${
+                            isSelected ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"
                           }`}
                         >
                           {isSelected ? "✓ В тесте" : "+ В тест"}
                         </button>
                       </div>
                       
-                      {openHints?.[t.id] && t.hint && (
-                        <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />
+                      {openHints?.[t.id] && (
+                        <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-200/40">
+                          <span className="text-[9px] font-black uppercase text-amber-600 tracking-widest flex items-center gap-2 mb-3">
+                            <span>Подсказка</span>
+                          </span>
+                          <MarkdownRenderer>{t.hint}</MarkdownRenderer>
+                        </div>
                       )}
                       
-                      {openSolutions?.[t.id] && t.solution && (
-                        <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />
+                      {openSolutions?.[t.id] && (
+                        <div className="p-5 rounded-[2rem] bg-blue-50/50 border border-blue-200/40">
+                          <span className="text-[9px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-2 mb-3">
+                            <span>Решение</span>
+                          </span>
+                          <MarkdownRenderer>{t.solution}</MarkdownRenderer>
+                        </div>
                       )}
                     </div>
                   </div>
