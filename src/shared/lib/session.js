@@ -1,10 +1,9 @@
 import axios from 'axios';
 
-
 const STORAGE_KEY = 'edu_session';
+export const SESSION_EVENT = 'edu_session_change';
 
 function getStorage() {
-  // В SSR окружении localStorage может быть недоступен
   if (typeof window === 'undefined') return null;
   return window.localStorage;
 }
@@ -15,49 +14,47 @@ function getSessionStorage() {
 }
 
 /**
- * Надёжное восстановление сессии из всех доступных источников
+ * Вспомогательное событие для уведомления React-компонентов
+ */
+function notifySessionChange() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(SESSION_EVENT));
+  }
+}
+
+/**
+ * Надежное восстановление сессии из всех источников
  */
 export function restoreSession() {
   let userData = null;
 
   // 1. Пробуем из localStorage
-  const ls = getStorage();
-  if (ls) {
-    const saved = ls.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        userData = JSON.parse(saved);
-      } catch (e) {}
-    }
-  }
+  try {
+    const saved = getStorage()?.getItem(STORAGE_KEY);
+    if (saved) userData = JSON.parse(saved);
+  } catch (e) {}
 
   // 2. Если нет — пробуем из sessionStorage
   if (!userData) {
-    const ss = getSessionStorage();
-    if (ss) {
-      const saved = ss.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          userData = JSON.parse(saved);
-        } catch (e) {}
-      }
-    }
-  }
-
-  // 3. Если есть токен — восстанавливаем заголовок
-  if (userData?.token) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
-    // Дублируем в sessionStorage для надёжности на телефонах
     try {
-      getSessionStorage()?.setItem(STORAGE_KEY, JSON.stringify(userData));
+      const saved = getSessionStorage()?.getItem(STORAGE_KEY);
+      if (saved) userData = JSON.parse(saved);
     } catch (e) {}
   }
 
-  return userData;
+  // 3. Устанавливаем заголовок axios
+  const token = userData?.token || userData?.access_token;
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete axios.defaults.headers.common['Authorization'];
+  }
+
+  return userData && userData.role ? userData : null;
 }
 
 /**
- * Сохранение сессии во все доступные хранилища
+ * Сохранение сессии
  */
 export function saveSession(userData) {
   if (!userData) return;
@@ -68,18 +65,22 @@ export function saveSession(userData) {
     getStorage()?.setItem(STORAGE_KEY, data);
     getSessionStorage()?.setItem(STORAGE_KEY, data);
 
-    // Пробуем сохранить в куку (самый надёжный способ на телефонах)
     const expires = new Date(Date.now() + 7 * 864e5).toUTCString();
     document.cookie = `${STORAGE_KEY}=${encodeURIComponent(data)}; expires=${expires}; path=/; samesite=lax`;
   } catch (e) {
-    console.log('Не удалось сохранить сессию:', e);
+    console.error('Не удалось сохранить сессию:', e);
   }
 
-  axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+  const token = userData.token || userData.access_token;
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
+
+  notifySessionChange();
 }
 
 /**
- * Удаление сессии (выход)
+ * Удаление сессии
  */
 export function clearSession() {
   try {
@@ -89,27 +90,21 @@ export function clearSession() {
   } catch (e) {}
 
   delete axios.defaults.headers.common['Authorization'];
+  notifySessionChange();
 }
 
 /**
- * Получение текущего токена
- */
-export function getToken() {
-  try {
-    const session = JSON.parse(getStorage()?.getItem(STORAGE_KEY) || '{}');
-    return session?.token || session?.access_token || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Получение данных текущего пользователя
+ * Получение текущего пользователя (исправлено)
  */
 export function getCurrentUser() {
-  try {
-    return JSON.parse(getStorage()?.getItem(STORAGE_KEY) || '{}');
-  } catch {
-    return null;
-  }
+  const user = restoreSession();
+  return user && user.role ? user : null;
+}
+
+/**
+ * Получение текущего токена (исправлено)
+ */
+export function getToken() {
+  const user = getCurrentUser();
+  return user?.token || user?.access_token || null;
 }

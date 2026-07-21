@@ -10,10 +10,19 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { dark, toggle } = useTheme();
 
+  // Реакция на изменение сессии (логин / логаут)
+  useEffect(() => {
+    const handleSessionChange = () => {
+      setUser(getCurrentUser());
+    };
+
+    window.addEventListener(SESSION_EVENT, handleSessionChange);
+    return () => window.removeEventListener(SESSION_EVENT, handleSessionChange);
+  }, []);
+
   const logout = () => {
     clearSession();
-    setUser(null);
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const getRoleBadge = (role) => {

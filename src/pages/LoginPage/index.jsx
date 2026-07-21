@@ -9,27 +9,30 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const params = new URLSearchParams();
-      params.append('grant_type', 'password');
-      params.append('username', form.username);
-      params.append('password', form.password);
-      params.append('scope', '');
+  e.preventDefault();
+  try {
+    const params = new URLSearchParams();
+    params.append('grant_type', 'password');
+    params.append('username', form.username);
+    params.append('password', form.password);
+    params.append('scope', '');
 
-      const res = await axios.post(`${API_URL}/login`, params, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
-      const data = res.data;
-      saveSession(data);  // <-- используем saveSession вместо localStorage.setItem
-      if (data.role === 'student') navigate('/student');
-      else if (data.role === 'teacher') navigate('/teacher');
-      else if (data.role === 'admin') navigate('/admin');
-      else navigate('/');
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Ошибка входа');
-    }
-  };
+    const res = await axios.post(`${API_URL}/login`, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    saveSession(res.data); // Автоматически вызовет SESSION_EVENT
+
+    const role = res.data?.role;
+    if (role === 'student') navigate('/student', { replace: true });
+    else if (role === 'teacher') navigate('/teacher', { replace: true });
+    else if (role === 'admin') navigate('/admin', { replace: true });
+    else navigate('/', { replace: true });
+
+  } catch (err) {
+    alert(err.response?.data?.detail || 'Ошибка входа');
+  }
+};
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
