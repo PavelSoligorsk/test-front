@@ -220,24 +220,21 @@ export default function TheoryBank({ tasksMeta, onTaskToggle, selectedTasks, ope
                       <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || "?"}</div>
                       <span className="text-[9px] text-slate-400">{t.is_open_answer ? "Открытый" : "Тест"}</span>
                     </div>
-                    <MarkdownPreview text={t.content} title="Условие" />
+
+                    <MarkdownRenderer>{t.content}</MarkdownRenderer>
                     {!t.is_open_answer && t.options && (
                       <div className="pl-4 border-l-2 border-emerald-100">
                         <MarkdownPreview text={Array.isArray(t.options) ? t.options.map((opt, i) => `**${i+1}.** ${opt}`).join("\n\n") : t.options} title="Варианты" />
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2 items-center">
-                      <div className="bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl flex items-center gap-2">
-                        <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
-                        <span className="text-sm font-black text-emerald-700">{t.answer}</span>
-                      </div>
+                      <span className="text-[10px] font-black text-emerald-600">Ответ:</span>
+                      <span className="text-sm font-black text-emerald-700">{t.answer}</span>
                       {t.hint && <button onClick={() => onToggleHint(t.id)} className="px-3 py-2 rounded-xl bg-amber-50 text-amber-600 text-[10px] font-black hover:bg-amber-100">Подсказка</button>}
                       {t.solution && <button onClick={() => onToggleSolution(t.id)} className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black hover:bg-blue-100">Решение</button>}
                       <button onClick={() => onTaskToggle(t)} className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${isSelected ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"}`}>
                         {isSelected ? "✓ В тесте" : "+ В тест"}
                       </button>
-                    </div>
-                    {openHints[t.id] && <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />}
                     {openSolutions[t.id] && <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />}
                   </div>
                 </div>
@@ -247,6 +244,18 @@ export default function TheoryBank({ tasksMeta, onTaskToggle, selectedTasks, ope
           {(!sectionTasks[`${activeTopic}/${activeSection}`] || sectionTasks[`${activeTopic}/${activeSection}`].length === 0) && (
             <div className="text-center py-16 space-y-3">
               <p className="font-black text-slate-400 uppercase">{loadingTasks ? "Загрузка..." : "Нет заданий"}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+            </div>
+          )}
+          {loading && (
+            <div className="text-center py-16 space-y-3">
+              <p className="font-black text-slate-400 uppercase">Загрузка...</p>
             </div>
           )}
         </div>

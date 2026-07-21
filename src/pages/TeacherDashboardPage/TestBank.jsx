@@ -2,7 +2,7 @@ import axios from 'axios';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, ChevronRight, GraduationCap } from 'lucide-react';
 import { API_URL } from '../../shared/config';
-import { MarkdownPreview } from './MarkdownPreview';
+import { MarkdownRenderer } from '../../shared/ui';
 
 const getDifficultyColor = (lvl) => {
   if (lvl >= 4) return "text-red-500 bg-red-50 border-red-100";
@@ -226,7 +226,8 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
                       <div className={`px-2 py-1 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || "?"}</div>
                       <span className="text-[9px] text-slate-400">{t.is_open_answer ? "Открытый" : "Тест"}</span>
                     </div>
-                    <MarkdownPreview text={t.content} title="Условие" />
+
+                    <MarkdownRenderer>{t.content}</MarkdownRenderer>
                     {!t.is_open_answer && t.options && (
                       <div className="pl-4 border-l-2 border-emerald-100">
                         <MarkdownPreview text={Array.isArray(t.options) ? t.options.map((opt, i) => `**${i+1}.** ${opt}`).join("\n\n") : t.options} title="Варианты" />
@@ -242,8 +243,6 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
                       <button onClick={() => onTaskToggle(t)} className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black transition-all ${isSelected ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"}`}>
                         {isSelected ? "✓ В тесте" : "+ В тест"}
                       </button>
-                    </div>
-                    {openHints[t.id] && <MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" />}
                     {openSolutions[t.id] && <MarkdownPreview text={t.solution} title="РЕШЕНИЕ" type="solution" />}
                   </div>
                 </div>
