@@ -16,6 +16,7 @@ import {
 
 // Импортируем подкомпоненты
 import TheoryBank from "./TheoryBank";
+import TestBank from "./TestBank";
 import TestConstructor from "./TestConstructor";
 import StudentsTab from "./StudentsTab";
 import TestsListTab from "./TestsListTab";
@@ -227,8 +228,7 @@ export default function TeacherDashboardContent() {
         )}
 
         {activeTab === "bank" && (
-          <TheoryBank
-            tasksMeta={topicSectionMeta}
+          <TestBank
             onTaskToggle={toggleTaskSelection}
             selectedTasks={selectedTasks}
             openSolutions={openSolutions}

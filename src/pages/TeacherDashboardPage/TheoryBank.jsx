@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import React, { useState, useMemo } from 'react';
 import { Search, BookOpen, ArrowRight, ChevronRight, XCircle } from 'lucide-react';
