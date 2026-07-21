@@ -9,7 +9,7 @@ import { API_BASE } from "../../shared/api";
       setAssignGroupModal(null);
     } catch (e) {
       console.error('Ошибка назначения теста группе:', e);
-      alert('Ошибка при назначении теста');
+      alert('Ошибка при назначении теста ');
     }
   };
 
