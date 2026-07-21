@@ -1,20 +1,35 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { restoreSession, getCurrentUser } from '../../shared/lib/session';
 import Navbar from '../../widgets/Navbar';
 
-// Вызываем один раз при загрузке скрипта для установки axios заголовка
+// Lazy load pages
+const LoginPage = React.lazy(() => import('../../pages/LoginPage'));
+const RegisterPage = React.lazy(() => import('../../pages/RegisterPage'));
+const ResetPasswordPage = React.lazy(() => import('../../pages/ResetPasswordPage'));
+
+const StudentDashboard = React.lazy(() => import('../../pages/StudentDashboardPage'));
+const TeacherDashboard = React.lazy(() => import('../../pages/TeacherDashboardPage'));
+const AdminDashboard = React.lazy(() => import('../../pages/AdminDashboardPage'));
+const TestPassing = React.lazy(() => import('../../pages/TestPassingPage'));
+const TestResultDetail = React.lazy(() => import('../../pages/TestResultDetailPage'));
+const AdminResultView = React.lazy(() => import('../../pages/AdminResultViewPage'));
+const TeacherResultView = React.lazy(() => import('../../pages/TeacherResultViewPage'));
+const TeacherStudentProfile = React.lazy(() => import('../../pages/TeacherStudentProfilePage'));
+const StatsPage = React.lazy(() => import('../../pages/StatsPageDir'));
+const UserProfile = React.lazy(() => import('../../pages/UserProfilePage'));
+const HomePage = React.lazy(() => import('../../pages/HomePage'));
+
+// Инициализируем сессию для установки токена в axios headers
 restoreSession();
 
 function PrivateRoute({ children, allowedRoles }) {
   const user = getCurrentUser();
 
-  // 1. Не авторизован
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // 2. Авторизован, но нет доступа к роту -> редирект на свой дашборд
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     const roleRoutes = {
       student: '/student',
@@ -39,9 +54,9 @@ export default function AppRoutes() {
           <Navbar />
           <Routes>
             {/* Публичные страницы */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Защищенные страницы */}
             <Route path="/student" element={
