@@ -283,6 +283,7 @@ export default function TeacherDashboardContent() {
             onNavigateToTests={() => setActiveTab("tests_list")}
             editingTest={editingTest}
             onClearEditing={() => setEditingTest(null)}
+            onClearTasks={() => setSelectedTasks([])}
           />
         )}
 

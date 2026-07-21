@@ -11,8 +11,9 @@ const getDifficultyColor = (lvl) => {
   return "text-emerald-400 bg-emerald-900/30 border-emerald-800";
 };
 
-export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests, editingTest, onClearEditing }) {
-  const [testForm, setTestForm] = useState({ id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true });
+export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests, editingTest, onClearEditing, onClearTasks }) {
+  const EMPTY_FORM = { id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true };
+  const [testForm, setTestForm] = useState(EMPTY_FORM);
 
   // Автозаполнение формы при редактировании теста
   useEffect(() => {
@@ -26,6 +27,9 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
         task_ids: editingTest.task_ids || [],
         is_active: editingTest.is_active !== undefined ? editingTest.is_active : true,
       });
+    } else {
+      // Если editingTest=null (сброс после редактирования) — очищаем форму
+      setTestForm(EMPTY_FORM);
     }
   }, [editingTest]);
 
@@ -44,8 +48,9 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
       } else {
         await axios.post(`${API_BASE}/teacher/tests`, payload, { headers: getAuthHeaders() });
       }
-      setTestForm({ id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true });
+      setTestForm(EMPTY_FORM);
       if (onClearEditing) onClearEditing();
+      if (onClearTasks) onClearTasks();
       onTestsUpdate();
     } catch (e) { alert('Ошибка при сохранении теста'); }
   };
@@ -101,7 +106,7 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
               <Send size={18} /> {testForm.id ? 'ОБНОВИТЬ ТЕСТ' : 'СОЗДАТЬ ТЕСТ'}
             </button>
             {testForm.id && (
-              <button type="button" onClick={() => { setTestForm({ id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true }); if (onClearEditing) onClearEditing(); }}
+              <button type="button" onClick={() => { setTestForm(EMPTY_FORM); if (onClearEditing) onClearEditing(); if (onClearTasks) onClearTasks(); }}
                 className="w-full bg-slate-100 text-slate-600 py-3 rounded-[2rem] font-black hover:bg-slate-200 transition-all text-xs uppercase">
                 Новый тест
               </button>
