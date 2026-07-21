@@ -70,7 +70,7 @@ export default function GroupsTab({ groups, groupForm, setGroupForm, onSubmit, o
                   <button onClick={() => onManageStudents(group)} className="flex-1 p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 transition-all flex items-center justify-center gap-1"><Users size={12} /> Студенты</button>
                   <button onClick={() => onAssignTest(group)} className="flex-1 p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black hover:bg-emerald-50 dark:hover:bg-emerald-500 hover:text-emerald-600 dark:hover:text-white transition-all flex items-center justify-center gap-1"><Send size={12} /> Тест</button>
                   <button onClick={() => onEdit(group)} className="p-2 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 transition-all"><Edit3 size={12} /></button>
-                  <button onClick={() => onDelete(group.id)} className="p-2 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-all"><Trash2 size={12} /></button>
+                  <button onClick={() => onDelete(group.id, group.name)} className="p-2 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-all"><Trash2 size={12} /></button>
                 </div>
               </div>
             ))}

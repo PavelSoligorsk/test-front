@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { XCircle, Send, Database, BookOpen } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
@@ -11,8 +11,23 @@ const getDifficultyColor = (lvl) => {
   return "text-emerald-400 bg-emerald-900/30 border-emerald-800";
 };
 
-export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests }) {
+export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests, editingTest, onClearEditing }) {
   const [testForm, setTestForm] = useState({ id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true });
+
+  // Автозаполнение формы при редактировании теста
+  useEffect(() => {
+    if (editingTest) {
+      setTestForm({
+        id: editingTest.id || null,
+        title: editingTest.title || '',
+        target_class: editingTest.target_class || '',
+        target_topic: editingTest.target_topic || '',
+        is_autocompile: editingTest.is_autocompile || false,
+        task_ids: editingTest.task_ids || [],
+        is_active: editingTest.is_active !== undefined ? editingTest.is_active : true,
+      });
+    }
+  }, [editingTest]);
 
   const getAuthHeaders = () => {
     const user = restoreSession();
@@ -30,6 +45,7 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
         await axios.post(`${API_BASE}/teacher/tests`, payload, { headers: getAuthHeaders() });
       }
       setTestForm({ id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true });
+      if (onClearEditing) onClearEditing();
       onTestsUpdate();
     } catch (e) { alert('Ошибка при сохранении теста'); }
   };
@@ -84,6 +100,12 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
             <button className="w-full bg-emerald-600 text-white py-5 rounded-[2rem] font-black hover:bg-emerald-700 transition-all shadow-lg flex items-center justify-center gap-2">
               <Send size={18} /> {testForm.id ? 'ОБНОВИТЬ ТЕСТ' : 'СОЗДАТЬ ТЕСТ'}
             </button>
+            {testForm.id && (
+              <button type="button" onClick={() => { setTestForm({ id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true }); if (onClearEditing) onClearEditing(); }}
+                className="w-full bg-slate-100 text-slate-600 py-3 rounded-[2rem] font-black hover:bg-slate-200 transition-all text-xs uppercase">
+                Новый тест
+              </button>
+            )}
           </form>
         </div>
 

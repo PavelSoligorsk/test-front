@@ -70,6 +70,7 @@ export default function TeacherDashboardContent() {
   const [groupForm, setGroupForm] = useState({ id: null, name: "", description: "" });
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
+  const [editingTest, setEditingTest] = useState(null); // данные редактируемого теста
 
   const getAuthHeaders = () => {
     const user = restoreSession();
@@ -126,8 +127,8 @@ export default function TeacherDashboardContent() {
     } catch (e) { alert(e.response?.data?.detail || "Ошибка при сохранении группы"); }
   };
 
-  const handleDeleteGroup = async (groupId) => {
-    if (!confirm("Удалить группу?")) return;
+  const handleDeleteGroup = async (groupId, groupName) => {
+    if (!confirm(`Удалить группу "${groupName || groupId}"? Это действие нельзя отменить.`)) return;
     try {
       await axios.delete(`${API_BASE}/teacher/groups/${groupId}`, { headers: getAuthHeaders() });
       fetchGroups();
@@ -186,6 +187,7 @@ export default function TeacherDashboardContent() {
       const res = await axios.get(`${API_BASE}/teacher/tests/${test.id}`, { headers: getAuthHeaders() });
       const fullTest = res.data;
       setSelectedTasks(fullTest.tasks || []);
+      setEditingTest(fullTest); // сохраняем данные теста для автозаполнения формы
       setActiveTab("constructor");
     } catch (e) {
       console.error("Ошибка загрузки теста для редактирования:", e);
@@ -279,6 +281,8 @@ export default function TeacherDashboardContent() {
             onTestsUpdate={fetchTests}
             onNavigateToBank={() => setActiveTab("bank")}
             onNavigateToTests={() => setActiveTab("tests_list")}
+            editingTest={editingTest}
+            onClearEditing={() => setEditingTest(null)}
           />
         )}
 
