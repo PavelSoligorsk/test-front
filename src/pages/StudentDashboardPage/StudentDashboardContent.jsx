@@ -86,7 +86,8 @@ export default function StudentDashboardContent() {
   useEffect(() => {
     const sessionData = localStorage.getItem('edu_session');
     if (!sessionData) return navigate('/login');
-    const { token } = JSON.parse(sessionData);
+    const parsed = JSON.parse(sessionData);
+    const token = parsed?.token || parsed?.access_token;
     if (!token) return navigate('/login');
 
     Promise.all([
