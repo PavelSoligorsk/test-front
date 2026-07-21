@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import axios from 'axios';
 import { XCircle, Send } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { restoreSession } from '../../shared/lib/session';

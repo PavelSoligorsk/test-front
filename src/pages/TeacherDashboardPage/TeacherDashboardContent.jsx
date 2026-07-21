@@ -2,6 +2,25 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { API_BASE } from "../../shared/api";
+
+  const handleAssignTestToGroup = async (testId, groupId) => {
+    try {
+      await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId }, { headers: getAuthHeaders() });
+      setAssignGroupModal(null);
+    } catch (e) {
+      console.error('Ошибка назначения теста группе:', e);
+      alert('Ошибка при назначении теста');
+    }
+  };
+
+  const handleAssignTest = async (data) => {
+    try {
+      await axios.post(`${API_BASE}/teacher/assign-test`, data, { headers: getAuthHeaders() });
+    } catch (e) {
+      console.error('Ошибка назначения теста:', e);
+      throw e;
+    }
+  };
 import { restoreSession } from "../../shared/lib/session";
 import {
   Database,
@@ -158,13 +177,19 @@ export default function TeacherDashboardContent() {
     try {
       await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId }, { headers: getAuthHeaders() });
       setAssignGroupModal(null);
-    } catch (e) { alert("Ошибка при назначении теста"); }
+    } catch (e) {
+      console.error('Ошибка назначения теста группе:', e);
+      alert('Ошибка при назначении теста');
+    }
   };
 
   const handleAssignTest = async (data) => {
     try {
       await axios.post(`${API_BASE}/teacher/assign-test`, data, { headers: getAuthHeaders() });
-    } catch (e) { throw e; }
+    } catch (e) { 
+      console.error('Ошибка назначения теста:', e);
+      throw e; 
+    }
   };
 
   const toggleTaskSelection = (task) => {
