@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
+import { saveSession } from '../../shared/lib/session';
 
 export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -20,11 +21,11 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       const data = res.data;
-      localStorage.setItem('edu_session', JSON.stringify(data));
-      if (data.role === 'student') window.location.href = '/student';
-      else if (data.role === 'teacher') window.location.href = '/teacher';
-      else if (data.role === 'admin') window.location.href = '/admin';
-      else window.location.href = '/';
+      saveSession(data);  // <-- используем saveSession вместо localStorage.setItem
+      if (data.role === 'student') navigate('/student');
+      else if (data.role === 'teacher') navigate('/teacher');
+      else if (data.role === 'admin') navigate('/admin');
+      else navigate('/');
     } catch (err) {
       alert(err.response?.data?.detail || 'Ошибка входа');
     }
@@ -55,3 +56,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
