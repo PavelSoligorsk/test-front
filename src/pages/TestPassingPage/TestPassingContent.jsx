@@ -76,9 +76,15 @@ export default function TestPassingContent() {
     const fetchTest = async () => {
       try {
         const session = localStorage.getItem('edu_session');
+        console.log('[DEBUG] session raw:', session);
         const parsed = session ? JSON.parse(session) : null;
+        console.log('[DEBUG] parsed:', parsed);
         const token = parsed?.token || parsed?.access_token;
-        if (!token) return navigate('/login');
+        console.log('[DEBUG] token:', token);
+        if (!token) {
+          console.log('[DEBUG] token is null, redirecting to login');
+          return navigate('/login');
+        }
 
         const res = await axios.get(`${API_URL}/student/tests/${testId}`, {
           headers: { Authorization: `Bearer ${token}` }
