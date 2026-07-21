@@ -688,7 +688,8 @@ const TheoryAIChat = ({
     setError(null);
 
     try {
-      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token || session?.access_token;
       const res = await axios.post(
         'https://tests-production-46d5.up.railway.app/student/theory/ask-ai',
         {

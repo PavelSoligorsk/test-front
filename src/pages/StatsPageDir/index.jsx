@@ -18,7 +18,8 @@ export default function StatsPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const token = JSON.parse(localStorage.getItem('edu_session') || '{}')?.token;
+        const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+      const token = session?.token || session?.access_token;
         const url = userId
           ? `${API_URL}/admin/users/${userId}/stats`
           : `${API_URL}/student/stats`;

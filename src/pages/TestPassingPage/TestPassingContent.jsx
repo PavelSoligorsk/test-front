@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
@@ -75,7 +76,8 @@ export default function TestPassingContent() {
     const fetchTest = async () => {
       try {
         const session = localStorage.getItem('edu_session');
-        const token = session ? JSON.parse(session)?.token : null;
+        const parsed = session ? JSON.parse(session) : null;
+        const token = parsed?.token || parsed?.access_token;
         if (!token) return navigate('/login');
 
         const res = await axios.get(`${API_URL}/student/tests/${testId}`, {
@@ -128,7 +130,9 @@ export default function TestPassingContent() {
     setHintUsed(prev => ({ ...prev, [taskId]: true }));
     setHintLoading(prev => ({ ...prev, [taskId]: true }));
     try {
-      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const session = localStorage.getItem('edu_session');
+      const parsed = session ? JSON.parse(session) : null;
+      const token = parsed?.token || parsed?.access_token;
       const res = await axios.post(
         `${API_URL}/student/tasks/${taskId}/hint`,
         {},
@@ -177,7 +181,9 @@ export default function TestPassingContent() {
     saveCurrentDrawing();
     setIsSubmitting(true);
     try {
-      const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+      const session = localStorage.getItem('edu_session');
+      const parsed = session ? JSON.parse(session) : null;
+      const token = parsed?.token || parsed?.access_token;
       const payload = Object.keys(userAnswers).map(id => ({
         task_id: parseInt(id),
         user_answer: Array.isArray(userAnswers[id]) ? userAnswers[id].sort((a, b) => a - b).join(',') : String(userAnswers[id])

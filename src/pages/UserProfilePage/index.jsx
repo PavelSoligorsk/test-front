@@ -13,7 +13,8 @@ export default function UserProfile() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+        const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+        const token = session?.token || session?.access_token;
         const headers = { Authorization: `Bearer ${token}` };
         const [profileRes, historyRes] = await Promise.all([
           axios.get(`${API_URL}/admin/users/${userId}/profile`, { headers }),

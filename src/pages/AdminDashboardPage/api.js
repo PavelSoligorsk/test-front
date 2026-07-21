@@ -117,7 +117,8 @@ export const uploadImage = async (base64) => {
 
 // Results
 export const fetchAdminResult = async (resultId) => {
-  const token = JSON.parse(localStorage.getItem('edu_session'))?.token;
+  const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+  const token = session?.token || session?.access_token;
   const res = await axios.get(`${API_BASE}/admin/results/${resultId}`, { headers: { Authorization: `Bearer ${token}` } });
   return res.data;
 };
