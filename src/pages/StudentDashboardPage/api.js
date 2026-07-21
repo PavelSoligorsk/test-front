@@ -4,7 +4,11 @@ import { API_URL } from '../../shared/config';
 const API_BASE = API_URL;
 const getToken = () => {
   const session = localStorage.getItem('edu_session');
-  return session ? JSON.parse(session)?.token : null;
+  if (!session) return null;
+  try {
+    const parsed = JSON.parse(session);
+    return parsed?.token || parsed?.access_token || null;
+  } catch { return null; }
 };
 
 const authConfig = () => ({
