@@ -124,7 +124,7 @@ export default function StudentDashboardContent() {
       });
       setLoading(false);
     })
-    .catch(err => { if (err.response?.status === 401) navigate('/login'); });
+    .catch(err => { if (err.response?.status === 401 && window.location.pathname !== '/login') navigate('/login'); });
   }, [navigate]);
 
   // Theory fetch
