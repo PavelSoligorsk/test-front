@@ -2,25 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { API_BASE } from "../../shared/api";
-
-  const handleAssignTestToGroup = async (testId, groupId) => {
-    try {
-      await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId }, { headers: getAuthHeaders() });
-      setAssignGroupModal(null);
-    } catch (e) {
-      console.error('Ошибка назначения теста группе:', e);
-      alert('Ошибка при назначении теста ');
-    }
-  };
-
-  const handleAssignTest = async (data) => {
-    try {
-      await axios.post(`${API_BASE}/teacher/assign-test`, data, { headers: getAuthHeaders() });
-    } catch (e) {
-      console.error('Ошибка назначения теста:', e);
-      throw e;
-    }
-  };
 import { restoreSession } from "../../shared/lib/session";
 import {
   Database,
@@ -199,6 +180,30 @@ export default function TeacherDashboardContent() {
     });
   };
 
+  const handleEditTest = async (test) => {
+    // Загружаем полные данные теста и переходим в конструктор
+    try {
+      const res = await axios.get(`${API_BASE}/teacher/tests/${test.id}`, { headers: getAuthHeaders() });
+      const fullTest = res.data;
+      setSelectedTasks(fullTest.tasks || []);
+      setActiveTab("constructor");
+    } catch (e) {
+      console.error("Ошибка загрузки теста для редактирования:", e);
+      alert("Не удалось загрузить тест для редактирования");
+    }
+  };
+
+  const handleDeleteTest = async (testId) => {
+    if (!confirm('Удалить тест? Это действие нельзя отменить.')) return;
+    try {
+      await axios.delete(`${API_BASE}/teacher/tests/${testId}`, { headers: getAuthHeaders() });
+      fetchTests();
+    } catch (e) {
+      alert('Ошибка при удалении теста');
+      console.error(e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans pb-20">
       {/* HEADER */}
@@ -272,6 +277,8 @@ export default function TeacherDashboardContent() {
             onToggleSolution={(id) => setOpenSolutions((p) => ({ ...p, [id]: !p[id] }))}
             onToggleHint={(id) => setOpenHints((p) => ({ ...p, [id]: !p[id] }))}
             onTestsUpdate={fetchTests}
+            onNavigateToBank={() => setActiveTab("bank")}
+            onNavigateToTests={() => setActiveTab("tests_list")}
           />
         )}
 
@@ -282,8 +289,8 @@ export default function TeacherDashboardContent() {
         {activeTab === "tests_list" && (
           <TestsListTab
             tests={tests}
-            onEdit={(test) => {}}
-            onDelete={(id) => {}}
+            onEdit={handleEditTest}
+            onDelete={handleDeleteTest}
             onManage={(test) => setManageTestModal(test)}
             onCreateClick={() => setActiveTab("constructor")}
           />
