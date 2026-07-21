@@ -25,16 +25,16 @@ export default function Navbar() {
   const RoleIcon = badge?.icon;
 
   return (
-    <nav className="bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-50">
+        <nav className="bg-slate-900/95 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex justify-between items-center h-16 sm:h-20">
           {/* Логотип */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-500 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform">
               <span className="text-white font-black text-sm sm:text-base italic">E</span>
             </div>
-            <span className="text-lg sm:text-xl font-black text-slate-900 italic tracking-tight">
-              EDU<span className="text-blue-600">.CORE</span>
+            <span className="text-lg sm:text-xl font-black text-white italic tracking-tight">
+              EDU<span className="text-emerald-400">.CORE</span>
             </span>
           </Link>
           
@@ -42,24 +42,24 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-4">
             {user ? (
               <>
-                <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl">
-                  <div className="w-8 h-8 bg-slate-200 rounded-xl flex items-center justify-center">
-                    <User size={14} className="text-slate-500" />
+                <div className="flex items-center gap-3 bg-slate-800 px-4 py-2 rounded-2xl">
+                  <div className="w-8 h-8 bg-slate-700 rounded-xl flex items-center justify-center">
+                    <User size={14} className="text-slate-300" />
                   </div>
                   <div className="text-left leading-tight">
-                    <div className="text-sm font-bold text-slate-800">{user.username}</div>
+                    <div className="text-sm font-bold text-slate-100">{user.username}</div>
                     <div className={`text-[9px] font-black uppercase ${badge?.color}`}>
                       {badge?.label}
                     </div>
                   </div>
                 </div>
 
-                <div className="h-8 w-px bg-slate-200"></div>
+                <div className="h-8 w-px bg-slate-700"></div>
 
                 {user.role === 'admin' && (
                   <Link 
                     to="/admin" 
-                    className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all font-bold text-sm"
+                    className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-purple-900/50 text-purple-300 hover:bg-purple-800/70 transition-all font-bold text-sm"
                   >
                     <Shield size={14} />
                     Админ-панель
@@ -68,7 +68,7 @@ export default function Navbar() {
 
                 <button 
                   onClick={logout} 
-                  className="flex items-center gap-2 px-4 py-2 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all font-bold text-sm"
+                  className="flex items-center gap-2 px-4 py-2 rounded-2xl text-slate-500 hover:text-red-400 hover:bg-red-900/30 transition-all font-bold text-sm"
                 >
                   <LogOut size={14} />
                   Выйти
@@ -78,13 +78,13 @@ export default function Navbar() {
               <div className="flex items-center gap-3">
                 <Link 
                   to="/login" 
-                  className="px-5 py-2.5 rounded-2xl font-bold text-sm text-slate-600 hover:bg-slate-50 transition-all"
+                  className="px-5 py-2.5 rounded-2xl font-bold text-sm text-slate-300 hover:bg-slate-800 transition-all"
                 >
                   Вход
                 </Link>
                 <Link 
                   to="/register" 
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                  className="px-5 py-2.5 bg-emerald-500 text-white rounded-2xl font-bold text-sm hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
                 >
                   Регистрация
                 </Link>
@@ -95,7 +95,7 @@ export default function Navbar() {
           {/* Мобильная кнопка */}
           <button 
             onClick={() => setMobileOpen(!mobileOpen)} 
-            className="md:hidden p-2 rounded-xl hover:bg-slate-50 transition-all"
+            className="md:hidden p-2 rounded-xl hover:bg-slate-800 transition-all text-slate-300"
           >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -103,15 +103,15 @@ export default function Navbar() {
 
         {/* Мобильное меню */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-slate-100 py-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
+          <div className="md:hidden border-t border-slate-800 py-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
             {user ? (
               <>
-                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl">
-                  <div className="w-10 h-10 bg-slate-200 rounded-xl flex items-center justify-center">
-                    <User size={18} className="text-slate-500" />
+                <div className="flex items-center gap-3 bg-slate-800 p-3 rounded-2xl">
+                  <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center">
+                    <User size={18} className="text-slate-300" />
                   </div>
                   <div className="text-left leading-tight">
-                    <div className="text-sm font-bold text-slate-800">{user.username}</div>
+                    <div className="text-sm font-bold text-slate-100">{user.username}</div>
                     <div className={`text-[9px] font-black uppercase ${badge?.color}`}>
                       {badge?.label}
                     </div>
@@ -122,7 +122,7 @@ export default function Navbar() {
                   <Link 
                     to="/admin" 
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple-50 text-purple-600 font-bold text-sm"
+                    className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple-900/50 text-purple-300 font-bold text-sm"
                   >
                     <Shield size={16} />
                     Админ-панель
@@ -131,7 +131,7 @@ export default function Navbar() {
 
                 <button 
                   onClick={() => { logout(); setMobileOpen(false); }} 
-                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-red-500 font-bold text-sm w-full"
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-red-400 font-bold text-sm w-full"
                 >
                   <LogOut size={16} />
                   Выйти
@@ -142,14 +142,14 @@ export default function Navbar() {
                 <Link 
                   to="/login" 
                   onClick={() => setMobileOpen(false)}
-                  className="px-5 py-3 rounded-2xl font-bold text-sm text-center text-slate-600 bg-slate-50"
+                  className="px-5 py-3 rounded-2xl font-bold text-sm text-center text-slate-300 bg-slate-800"
                 >
                   Вход
                 </Link>
                 <Link 
                   to="/register" 
                   onClick={() => setMobileOpen(false)}
-                  className="px-5 py-3 bg-blue-600 text-white rounded-2xl font-bold text-sm text-center shadow-lg shadow-blue-200"
+                  className="px-5 py-3 bg-emerald-500 text-white rounded-2xl font-bold text-sm text-center shadow-lg shadow-emerald-500/20"
                 >
                   Регистрация
                 </Link>

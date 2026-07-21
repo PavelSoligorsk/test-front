@@ -175,35 +175,35 @@ export default function TeacherDashboardContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-20">
+    <div className="min-h-screen bg-slate-900 font-sans pb-20">
       {/* HEADER */}
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        <div className="bg-gradient-to-br from-emerald-700 to-teal-800 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col gap-6 border-b-4 border-emerald-400">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col gap-6 border-b-4 border-emerald-500/30">
           <div className="flex justify-between items-center gap-4 flex-wrap">
             <div className="flex items-center gap-3 md:gap-4">
-              <div className="p-3 md:p-4 bg-white/20 rounded-2xl md:rounded-3xl text-white backdrop-blur-sm">
+              <div className="p-3 md:p-4 bg-emerald-500/20 rounded-2xl md:rounded-3xl text-emerald-400 backdrop-blur-sm">
                 <GraduationCap size={24} className="md:w-7 md:h-7" />
               </div>
               <div>
                 <h1 className="text-xl md:text-3xl font-black text-white italic tracking-tighter uppercase">
                   Учительская
                 </h1>
-                <p className="text-emerald-200 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em]">
+                <p className="text-emerald-300/70 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em]">
                   Банк заданий и конструктор тестов
                 </p>
               </div>
             </div>
           </div>
 
-          <nav className="flex flex-wrap gap-1.5 bg-white/10 backdrop-blur-sm p-1.5 rounded-2xl w-full">
+          <nav className="flex flex-wrap gap-1.5 bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-2xl w-full">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center justify-center gap-1 px-1 py-1.5 rounded-xl font-black text-[9px] transition-all flex-[1_0_calc(33.333%-0.5rem)] sm:flex-1 sm:px-3 sm:py-2 sm:text-xs sm:rounded-2xl ${
                   activeTab === tab.id
-                    ? "bg-white text-emerald-700 shadow-lg scale-[0.97] sm:scale-105"
-                    : "text-white/70 hover:text-white"
+                    ? "bg-emerald-500 text-white shadow-lg scale-[0.97] sm:scale-105"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                 }`}
               >
                 <tab.icon size={12} className="sm:w-4 sm:h-4 flex-shrink-0" />
