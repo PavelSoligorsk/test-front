@@ -11,18 +11,20 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       const params = new URLSearchParams();
+      params.append('grant_type', 'password');
       params.append('username', form.username);
       params.append('password', form.password);
+      params.append('scope', '');
 
       const res = await axios.post(`${API_URL}/login`, params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       const data = res.data;
       localStorage.setItem('edu_session', JSON.stringify(data));
-      if (data.role === 'student') navigate('/student');
-      else if (data.role === 'teacher') navigate('/teacher');
-      else if (data.role === 'admin') navigate('/admin');
-      else navigate('/');
+      if (data.role === 'student') window.location.href = '/student';
+      else if (data.role === 'teacher') window.location.href = '/teacher';
+      else if (data.role === 'admin') window.location.href = '/admin';
+      else window.location.href = '/';
     } catch (err) {
       alert(err.response?.data?.detail || 'Ошибка входа');
     }
