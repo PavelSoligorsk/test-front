@@ -19,14 +19,16 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Интерцептор для обработки 401
+// Интерцептор для обработки 401 — только очищаем сессию,
+// редирект обрабатывается в компонентах через navigate
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('edu_session');
       sessionStorage.removeItem('edu_session');
-      window.location.href = '/login';
+      // Не делаем window.location.href — это ломает SPA навигацию
+      // Редирект обрабатывается в PrivateRoute и компонентах
     }
     return Promise.reject(error);
   }

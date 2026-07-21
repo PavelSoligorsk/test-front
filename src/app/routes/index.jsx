@@ -1,6 +1,6 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { restoreSession, getCurrentUser } from '../../shared/lib/session';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { restoreSession, getCurrentUser, SESSION_EVENT } from '../../shared/lib/session';
 import Navbar from '../../widgets/Navbar';
 
 // Lazy load pages
@@ -19,15 +19,47 @@ const TeacherStudentProfile = React.lazy(() => import('../../pages/TeacherStuden
 const StatsPage = React.lazy(() => import('../../pages/StatsPageDir'));
 const UserProfile = React.lazy(() => import('../../pages/UserProfilePage'));
 const HomePage = React.lazy(() => import('../../pages/HomePage'));
+const NotFoundPage = React.lazy(() => import('../../pages/NotFoundPage'));
 
 // Инициализируем сессию для установки токена в axios headers
 restoreSession();
 
-function PrivateRoute({ children, allowedRoles }) {
+/**
+ * Компонент для редиректа авторизованных пользователей
+ * Используется для страниц входа/регистрации
+ */
+function RedirectIfAuth({ children }) {
   const user = getCurrentUser();
+  if (user) {
+    const roleRoutes = {
+      student: '/student',
+      teacher: '/teacher',
+      admin: '/admin',
+    };
+    return <Navigate to={roleRoutes[user.role] || '/student'} replace />;
+  }
+  return children;
+}
+
+function PrivateRoute({ children, allowedRoles }) {
+  const [user, setUser] = useState(() => getCurrentUser());
+  const location = useLocation();
+
+  // Реактивно следим за изменениями сессии
+  useEffect(() => {
+    const handleChange = () => setUser(getCurrentUser());
+    window.addEventListener(SESSION_EVENT, handleChange);
+    return () => window.removeEventListener(SESSION_EVENT, handleChange);
+  }, []);
+
+  // Проверка при смене маршрута
+  useEffect(() => {
+    setUser(getCurrentUser());
+  }, [location.pathname]);
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Сохраняем текущий URL, чтобы после логина вернуться
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
@@ -53,9 +85,13 @@ export default function AppRoutes() {
         <div className="min-h-screen bg-slate-50">
           <Navbar />
           <Routes>
-            {/* Публичные страницы */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
+            {/* Публичные страницы — редирект на дашборд если уже залогинен */}
+            <Route path="/login" element={
+              <RedirectIfAuth><LoginPage /></RedirectIfAuth>
+            } />
+            <Route path="/register" element={
+              <RedirectIfAuth><RegisterPage /></RedirectIfAuth>
+            } />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Защищенные страницы */}
@@ -81,14 +117,26 @@ export default function AppRoutes() {
               <PrivateRoute allowedRoles={['admin', 'teacher']}><UserProfile /></PrivateRoute>
             } />
 
-            <Route path="/test/:testId" element={<TestPassing />} />
-            <Route path="/result/:resultId" element={<TestResultDetail />} />
+            {/* Тесты и результаты — тоже под защитой */}
+            <Route path="/test/:testId" element={
+              <PrivateRoute><TestPassing /></PrivateRoute>
+            } />
+            <Route path="/result/:resultId" element={
+              <PrivateRoute><TestResultDetail /></PrivateRoute>
+            } />
 
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="/stats/:userId" element={<StatsPage />} />
-            <Route path="/stats/me" element={<StatsPage />} />
+            {/* Статистика */}
+            <Route path="/stats" element={
+              <PrivateRoute><StatsPage /></PrivateRoute>
+            } />
+            <Route path="/stats/:userId" element={
+              <PrivateRoute><StatsPage /></PrivateRoute>
+            } />
+            {/* /stats/me убран — он будет обрабатываться через /stats/:userId с userId="me" */}
 
+            {/* Главная и 404 */}
             <Route path="/" element={<HomePage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
       </React.Suspense>

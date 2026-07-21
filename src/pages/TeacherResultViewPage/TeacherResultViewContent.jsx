@@ -45,7 +45,7 @@ export default function TeacherResultViewContent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
       <div className="max-w-3xl mx-auto p-6 space-y-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold uppercase text-[10px] tracking-widest"><ArrowLeft size={14} /> Назад</button>
+        <button onClick={() => navigate('/teacher')} className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold uppercase text-[10px] tracking-widest"><ArrowLeft size={14} /> Назад в учительскую</button>
 
         <header className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
           <div>

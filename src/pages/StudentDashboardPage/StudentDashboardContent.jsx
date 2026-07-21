@@ -135,7 +135,7 @@ export default function StudentDashboardContent() {
   }, [activeTab]);
 
   // Handlers
-  const handleLogout = () => { localStorage.clear(); navigate('/login'); };
+  const handleLogout = () => { localStorage.clear(); sessionStorage.clear(); navigate('/login', { replace: true }); };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();

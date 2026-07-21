@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import { saveSession } from '../../shared/lib/session';
@@ -7,6 +7,7 @@ import { saveSession } from '../../shared/lib/session';
 export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const handleSubmit = async (e) => {
   e.preventDefault();
@@ -22,6 +23,12 @@ export default function LoginPage() {
     });
 
     saveSession(res.data); // Автоматически вызовет SESSION_EVENT
+
+    // Редирект на сохранённый URL или на дашборд по роли
+    const redirect = searchParams.get('redirect');
+    if (redirect && redirect.startsWith('/')) {
+      return navigate(redirect, { replace: true });
+    }
 
     const role = res.data?.role;
     if (role === 'student') navigate('/student', { replace: true });
@@ -59,4 +66,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

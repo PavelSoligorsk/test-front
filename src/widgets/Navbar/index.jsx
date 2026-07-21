@@ -1,4 +1,4 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User, Shield, GraduationCap, Menu, X, Moon, Sun } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTheme } from '../../shared/hooks';
@@ -7,15 +7,9 @@ import { clearSession, getCurrentUser, SESSION_EVENT } from '../../shared/lib/se
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [user, setUser] = useState(() => getCurrentUser());
   const [mobileOpen, setMobileOpen] = useState(false);
   const { dark, toggle } = useTheme();
-
-  // Скрываем Navbar на страницах логина/регистрации
-  if (['/login', '/register', '/reset-password'].includes(location.pathname)) {
-    return null;
-  }
 
   // Реакция на изменение сессии (логин / логаут)
   useEffect(() => {
