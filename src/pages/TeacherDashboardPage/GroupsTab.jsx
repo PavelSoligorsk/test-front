@@ -1,43 +1,27 @@
 import React, { useState } from 'react';
-import { Search, LayoutDashboard, Users, Send, Edit3, Trash2 } from 'lucide-react';
+import { Search, LayoutDashboard, Users, Send, Edit3, Trash2, PlusCircle } from 'lucide-react';
 
-export default function GroupsTab({ groups, groupForm, setGroupForm, onSubmit, onEdit, onDelete, onManageStudents, onAssignTest, onDetail, navigate }) {
+export default function GroupsTab({ groups, onOpenCreate, onEdit, onDelete, onManageStudents, onAssignTest, onDetail, navigate }) {
   const [groupSearch, setGroupSearch] = useState('');
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="bg-white dark:bg-slate-800/50 rounded-[2.5rem] p-5 md:p-8 shadow-sm border border-slate-100 dark:border-slate-700">
-        <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase mb-4">{groupForm.id ? 'Редактировать группу' : 'Создать группу'}</h3>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase block mb-1">Название группы</label>
-            <input required type="text" value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-              placeholder="9А, Олимпиадники, Отстающие..." className="w-full p-4 bg-slate-50 dark:bg-slate-700 rounded-2xl font-bold text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase block mb-1">Описание (опционально)</label>
-            <textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
-              placeholder="Описание группы..." rows={3} className="w-full p-4 bg-slate-50 dark:bg-slate-700 rounded-2xl font-medium text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-400 dark:focus:ring-emerald-500 resize-none placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-          </div>
-          <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-4 bg-emerald-600 dark:bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-all">
-              {groupForm.id ? 'Обновить' : 'Создать'}
-            </button>
-            {groupForm.id && (
-              <button type="button" onClick={() => setGroupForm({ id: null, name: '', description: '' })}
-                className="px-6 py-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm uppercase hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">Отмена</button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800/50 rounded-[2.5rem] p-5 md:p-8 shadow-sm border border-slate-100 dark:border-slate-700">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase">Мои группы</h3>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" />
-            <input type="text" placeholder="Поиск..." value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onOpenCreate}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 dark:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-all shadow-sm"
+            >
+              <PlusCircle size={14} />
+              Создать
+            </button>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-500" />
+              <input type="text" placeholder="Поиск..." value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+            </div>
           </div>
         </div>
 

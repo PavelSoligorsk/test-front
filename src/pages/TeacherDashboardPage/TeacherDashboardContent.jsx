@@ -25,6 +25,7 @@ import TestManageModal from "./TestManageModal";
 import GroupStudentsModal from "./GroupStudentsModal";
 import AssignTestToGroupModal from "./AssignTestToGroupModal";
 import GroupDetailModal from "./GroupDetailModal";
+import CreateGroupModal from "./CreateGroupModal";
 
 const TABS = [
   { id: "bank", icon: Database, label: "Банк заданий" },
@@ -67,7 +68,7 @@ export default function TeacherDashboardContent() {
   const [groupStudentsModal, setGroupStudentsModal] = useState(null);
   const [assignGroupModal, setAssignGroupModal] = useState(null);
   const [groupDetailModal, setGroupDetailModal] = useState(null);
-  const [groupForm, setGroupForm] = useState({ id: null, name: "", description: "" });
+  const [groupCreateModal, setGroupCreateModal] = useState(null); // null | { id, name, description, students? }
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
   const [editingTest, setEditingTest] = useState(null); // данные редактируемого теста
@@ -114,17 +115,27 @@ export default function TeacherDashboardContent() {
   }, []);
 
   // CRUD группы
-  const handleCreateGroup = async (e) => {
-    e.preventDefault();
+  const handleSaveGroupFromModal = async (data) => {
     try {
-      if (groupForm.id) {
-        await axios.put(`${API_BASE}/teacher/groups/${groupForm.id}`, { name: groupForm.name, description: groupForm.description }, { headers: getAuthHeaders() });
+      let groupId = data.id;
+      if (data.id) {
+        // Редактирование
+        await axios.put(`${API_BASE}/teacher/groups/${data.id}`, { name: data.name, description: data.description }, { headers: getAuthHeaders() });
       } else {
-        await axios.post(`${API_BASE}/teacher/groups/`, { name: groupForm.name, description: groupForm.description }, { headers: getAuthHeaders() });
+        // Создание
+        const res = await axios.post(`${API_BASE}/teacher/groups/`, { name: data.name, description: data.description }, { headers: getAuthHeaders() });
+        groupId = res.data.id;
       }
-      setGroupForm({ id: null, name: "", description: "" });
+      // Добавляем студентов если выбраны
+      if (data.student_ids && data.student_ids.length > 0 && groupId) {
+        await axios.post(`${API_BASE}/teacher/groups/${groupId}/students`, { student_ids: data.student_ids }, { headers: getAuthHeaders() });
+      }
+      setGroupCreateModal(null);
       fetchGroups();
-    } catch (e) { alert(e.response?.data?.detail || "Ошибка при сохранении группы"); }
+    } catch (e) {
+      alert(e.response?.data?.detail || "Ошибка при сохранении группы");
+      throw e;
+    }
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
@@ -133,10 +144,6 @@ export default function TeacherDashboardContent() {
       await axios.delete(`${API_BASE}/teacher/groups/${groupId}`, { headers: getAuthHeaders() });
       fetchGroups();
     } catch (e) { alert("Ошибка при удалении группы"); }
-  };
-
-  const handleEditGroup = (group) => {
-    setGroupForm({ id: group.id, name: group.name, description: group.description || "" });
   };
 
   const handleAddStudentsToGroup = async (groupId, studentIds) => {
@@ -304,10 +311,8 @@ export default function TeacherDashboardContent() {
         {activeTab === "groups" && (
           <GroupsTab
             groups={groups}
-            groupForm={groupForm}
-            setGroupForm={setGroupForm}
-            onSubmit={handleCreateGroup}
-            onEdit={handleEditGroup}
+            onOpenCreate={() => setGroupCreateModal({ id: null, name: '', description: '', students: [] })}
+            onEdit={(g) => setGroupCreateModal(g)}
             onDelete={handleDeleteGroup}
             onManageStudents={(g) => setGroupStudentsModal(g)}
             onAssignTest={(g) => setAssignGroupModal(g)}
@@ -356,6 +361,16 @@ export default function TeacherDashboardContent() {
           students={students}
           onClose={() => setGroupDetailModal(null)}
           onRemoveStudent={handleRemoveStudentFromGroup}
+          navigate={navigate}
+        />
+      )}
+
+      {groupCreateModal !== null && (
+        <CreateGroupModal
+          groupForm={groupCreateModal}
+          allStudents={students}
+          onClose={() => setGroupCreateModal(null)}
+          onSave={handleSaveGroupFromModal}
           navigate={navigate}
         />
       )}
