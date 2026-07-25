@@ -1,8 +1,15 @@
 import axios from 'axios';
 import { API_BASE } from '../../shared/api';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, BookOpen, ChevronRight } from 'lucide-react';
 import { MarkdownRenderer } from '../../shared/ui';
+
+const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
+
+const hasExamKeyword = (text) => {
+  if (!text) return false;
+  return EXAM_KEYWORDS.some((kw) => text.includes(kw));
+};
 
 const MAIN_TOPICS = {
   numbers: "Числа и вычисления",
@@ -36,6 +43,9 @@ export default function TheoryBank({
   const [topicSearch, setTopicSearch] = useState("");
   const [sectionSearch, setSectionSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
+  const [examFilter, setExamFilter] = useState(false);
+  const [examCache, setExamCache] = useState({});  // { "topicKey::section": true/false }
+  const [loadingExamCache, setLoadingExamCache] = useState(false);
   const [sectionTasks, setSectionTasks] = useState({});
   const [loadingTasks, setLoadingTasks] = useState(false);
 
@@ -56,30 +66,93 @@ export default function TheoryBank({
     return topicsMap;
   }, [tasksMeta]);
 
-  const filteredTopics = Object.values(availableTopics).filter(
-    (topic) => topic.label.toLowerCase().includes(topicSearch.toLowerCase()) || 
-               topic.key.toLowerCase().includes(topicSearch.toLowerCase())
-  );
+  // При включении фильтра загружаем задания для всех topic/section чтобы знать где есть ЦТ/ЦЭ/РТ
+  useEffect(() => {
+    if (!examFilter || !tasksMeta) return;
+    let cancelled = false;
+    const fetchExamData = async () => {
+      setLoadingExamCache(true);
+      const cache = {};
+      const entries = [];
+      for (const topicKey of Object.keys(tasksMeta)) {
+        const sectionsData = tasksMeta[topicKey];
+        for (const section of Object.keys(sectionsData)) {
+          entries.push({ topicKey, section });
+        }
+      }
+      const BATCH = 5;
+      for (let i = 0; i < entries.length; i += BATCH) {
+        if (cancelled) break;
+        const batch = entries.slice(i, i + BATCH);
+        const results = await Promise.allSettled(
+          batch.map(({ topicKey, section }) =>
+            axios.get(
+              `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topicKey)}/section/${encodeURIComponent(section)}`,
+              getAuthHeaders()
+            )
+          )
+        );
+        results.forEach((r, idx) => {
+          const { topicKey, section } = batch[idx];
+          const key = `${topicKey}::${section}`;
+          cache[key] = r.status === 'fulfilled'
+            ? r.value.data.some(t => hasExamKeyword(t.content))
+            : false;
+        });
+      }
+      if (!cancelled) {
+        setExamCache(cache);
+        setLoadingExamCache(false);
+      }
+    };
+    fetchExamData();
+    return () => { cancelled = true; };
+  }, [examFilter, tasksMeta]);
+
+  const filteredTopics = useMemo(() => {
+    let result = Object.values(availableTopics).filter(
+      (topic) => topic.label.toLowerCase().includes(topicSearch.toLowerCase()) || 
+                 topic.key.toLowerCase().includes(topicSearch.toLowerCase())
+    );
+    if (examFilter && Object.keys(examCache).length > 0) {
+      result = result.filter(topic =>
+        topic.sections.some(section => examCache[`${topic.key}::${section}`])
+      );
+    }
+    return result;
+  }, [availableTopics, topicSearch, examFilter, examCache]);
 
   const sections = useMemo(() => {
     if (!activeTopic || !availableTopics[activeTopic]) return [];
     return availableTopics[activeTopic].sections.sort();
   }, [activeTopic, availableTopics]);
 
-  const filteredSections = sections.filter((section) =>
-    section.toLowerCase().includes(sectionSearch.toLowerCase())
-  );
+  const filteredSections = useMemo(() => {
+    let result = sections.filter((section) =>
+      section.toLowerCase().includes(sectionSearch.toLowerCase())
+    );
+    if (examFilter && Object.keys(examCache).length > 0) {
+      result = result.filter(section => examCache[`${activeTopic}::${section}`]);
+    }
+    return result;
+  }, [sections, sectionSearch, examFilter, examCache, activeTopic]);
 
   const filteredTasks = useMemo(() => {
     const tasks = sectionTasks[`${activeTopic}/${activeSection}`] || [];
-    if (!taskSearch) return tasks;
-    const q = taskSearch.toLowerCase();
-    return tasks.filter((t) => 
-      t.content?.toLowerCase().includes(q) || 
-      t.answer?.toLowerCase().includes(q) || 
-      t.id?.toString().includes(q)
-    );
-  }, [sectionTasks, activeTopic, activeSection, taskSearch]);
+    let result = tasks;
+    if (taskSearch) {
+      const q = taskSearch.toLowerCase();
+      result = result.filter((t) => 
+        t.content?.toLowerCase().includes(q) || 
+        t.answer?.toLowerCase().includes(q) || 
+        t.id?.toString().includes(q)
+      );
+    }
+    if (examFilter) {
+      result = result.filter(t => hasExamKeyword(t.content));
+    }
+    return result;
+  }, [sectionTasks, activeTopic, activeSection, taskSearch, examFilter]);
 
   const getAuthHeaders = () => {
     try {
@@ -138,15 +211,27 @@ export default function TheoryBank({
               </p>
             </div>
           </div>
-          {(activeTopic || activeSection) && (
-            <button 
-              onClick={activeSection ? handleBackToSections : handleBackToTopics}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl text-xs font-black uppercase text-slate-600 dark:text-slate-300 transition-all"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setExamFilter(!examFilter)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                examFilter
+                  ? "bg-amber-500 dark:bg-amber-600 text-white shadow-lg"
+                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-300 dark:hover:border-amber-500/50"
+              }`}
             >
-              <ChevronRight size={14} className="rotate-180" />
-              {activeSection ? "К разделам" : "Ко всем темам"}
+              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
             </button>
-          )}
+            {(activeTopic || activeSection) && (
+              <button 
+                onClick={activeSection ? handleBackToSections : handleBackToTopics}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl text-xs font-black uppercase text-slate-600 dark:text-slate-300 transition-all"
+              >
+                <ChevronRight size={14} className="rotate-180" />
+                {activeSection ? "К разделам" : "Ко всем темам"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -163,7 +248,14 @@ export default function TheoryBank({
               className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-blue-400 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" 
             />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {examFilter && loadingExamCache ? (
+            <div className="text-center py-16 space-y-3">
+              <div className="w-10 h-10 border-4 border-slate-200 dark:border-slate-700 border-t-blue-600 dark:border-t-emerald-500 rounded-full animate-spin mx-auto" />
+              <p className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs">Анализ заданий...</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTopics.map((topic) => (
               <button 
                 key={topic.key} 
@@ -188,6 +280,8 @@ export default function TheoryBank({
             <div className="text-center py-8">
               <p className="text-slate-400 dark:text-slate-500 text-sm">Темы не найдены</p>
             </div>
+          )}
+          </>
           )}
         </div>
       )}
@@ -241,15 +335,27 @@ export default function TheoryBank({
       {/* Список заданий */}
       {activeTopic && activeSection && (
         <div className="space-y-4">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <input 
-              type="text" 
-              placeholder="Поиск по тексту задания..." 
-              value={taskSearch} 
-              onChange={(e) => setTaskSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-blue-400 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" 
-            />
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <input 
+                type="text" 
+                placeholder="Поиск по тексту задания..." 
+                value={taskSearch} 
+                onChange={(e) => setTaskSearch(e.target.value)}
+                className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-blue-400 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" 
+              />
+            </div>
+            <button
+              onClick={() => setExamFilter(!examFilter)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                examFilter
+                  ? "bg-amber-500 dark:bg-amber-600 text-white shadow-lg"
+                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-300 dark:hover:border-amber-500/50"
+              }`}
+            >
+              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
+            </button>
           </div>
           
           <div className="flex items-center justify-between">

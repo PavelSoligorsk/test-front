@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Search, Filter, XCircle, ChevronRight } from 'lucide-react';
+import { BookOpen, Search, Filter, XCircle, ChevronRight, ScanSearch } from 'lucide-react';
 import TestCard from './TestCard';
 
 export default function TestsTab({
@@ -12,6 +12,7 @@ export default function TestsTab({
   testSearch, setTestSearch,
   handleStartTest,
   typeFilteredTests,
+  examFilter, setExamFilter,
 }) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6 max-w-7xl mx-auto px-2 sm:px-4 md:px-0">
@@ -27,11 +28,16 @@ export default function TestsTab({
               {typeFilteredTests.length} тестов доступно
             </p>
           </div>
-          <button onClick={() => {
-            const filters = ['all', 'public', 'teacher', 'ai'];
-            const ci = filters.indexOf(testTypeFilter);
-            setTestTypeFilter(filters[(ci + 1) % filters.length]);
-          }} className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 ${
+          <div className="flex items-center gap-2">
+            <button onClick={() => setExamFilter(!examFilter)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-1.5 border select-none shrink-0 ${examFilter ? 'bg-amber-500 text-white border-transparent shadow-lg shadow-amber-500/20' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+              <ScanSearch size={14} /> ЦТ/ЦЭ/РТ
+            </button>
+            <button onClick={() => {
+              const filters = ['all', 'public', 'teacher', 'ai'];
+              const ci = filters.indexOf(testTypeFilter);
+              setTestTypeFilter(filters[(ci + 1) % filters.length]);
+            }} className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 ${
             testTypeFilter === 'all' ? 'bg-slate-900 text-white border-transparent shadow-lg shadow-slate-900/20'
             : testTypeFilter === 'public' ? 'bg-blue-600 text-white border-transparent shadow-lg shadow-blue-600/20'
             : testTypeFilter === 'teacher' ? 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-600/20'
@@ -42,6 +48,7 @@ export default function TestsTab({
             {testTypeFilter === 'teacher' && <span>Учительские ({teacherTests.length})</span>}
             {testTypeFilter === 'ai' && <span>AI ({aiTestsMapped.length})</span>}
           </button>
+          </div>
         </div>
       </div>
 

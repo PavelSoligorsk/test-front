@@ -321,8 +321,10 @@ export default function TeacherDashboardContent() {
         <TestManageModal
           test={manageTestModal}
           students={students}
+          groups={groups}
           onClose={() => setManageTestModal(null)}
           onAssign={handleAssignTest}
+          onAssignToGroup={handleAssignTestToGroup}
         />
       )}
 

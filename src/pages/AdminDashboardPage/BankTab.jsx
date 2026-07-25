@@ -5,9 +5,17 @@ import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
 
+const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
+
+const hasExamKeyword = (text) => {
+  if (!text) return false;
+  return EXAM_KEYWORDS.some((kw) => text.includes(kw));
+};
+
 export default function BankTab({ tasks, groupedTasks, availableClasses, bankClass, setBankClass, bankTopic, setBankTopic, onEditTask, onTasksUpdate }) {
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
+  const [examFilter, setExamFilter] = useState(false);
 
   const handleDelete = async (taskId) => {
     if (!window.confirm(`Удалить задание #${taskId}?`)) return;
@@ -91,14 +99,37 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
           <div className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 md:mb-8 border-b border-slate-50 pb-4 md:pb-6">
               <h3 className="text-xl md:text-2xl font-black text-slate-800 uppercase italic break-words">{bankTopic}</h3>
-              <span className="bg-slate-100 text-slate-500 px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap">
-                Найдено: {groupedTasks[bankClass][bankTopic].length}
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setExamFilter(!examFilter)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                    examFilter
+                      ? "bg-amber-500 text-white shadow-lg"
+                      : "bg-white border border-slate-200 text-slate-500 hover:border-amber-300"
+                  }`}
+                >
+                  {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
+                </button>
+                <span className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap ${
+                  examFilter ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"
+                }`}>
+                  Найдено: {(() => {
+                    const allTasks = groupedTasks[bankClass][bankTopic];
+                    const filtered = examFilter ? allTasks.filter(t => hasExamKeyword(t.content)) : allTasks;
+                    return filtered.length;
+                  })()}
+                </span>
+              </div>
             </div>
-            {groupedTasks[bankClass][bankTopic].slice().sort((a, b) => {
-              if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-              return (a.difficulty || 0) - (b.difficulty || 0);
-            }).map((t, index) => {
+            {(() => {
+              let taskList = groupedTasks[bankClass][bankTopic];
+              if (examFilter) {
+                taskList = taskList.filter(t => hasExamKeyword(t.content));
+              }
+              return taskList.slice().sort((a, b) => {
+                if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+                return (a.difficulty || 0) - (b.difficulty || 0);
+              }).map((t, index) => {
               const isSolOpen = openSolutions[t.id];
               const isHintOpen = openHints[t.id];
               return (
@@ -179,7 +210,8 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
                   </div>
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
         )}
       </main>

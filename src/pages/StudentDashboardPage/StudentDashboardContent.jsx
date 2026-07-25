@@ -64,6 +64,7 @@ export default function StudentDashboardContent() {
   const [classSearch, setClassSearch] = useState('');
   const [testSearch, setTestSearch] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [examFilter, setExamFilter] = useState(false);
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', telegram: '' });
   const [saving, setSaving] = useState(false);
 
@@ -229,9 +230,16 @@ export default function StudentDashboardContent() {
   const subjects = selectedClass ? ['Все', ...new Set(classTests.map(t => t.subject || t.target_topic || 'Общее').filter(Boolean))] : [];
   const displayTests = (selectedSubject === 'Все' || !selectedSubject) ? classTests
     : classTests.filter(t => (t.subject || t.target_topic || 'Общее') === selectedSubject);
-  const searchedTests = testSearch.trim()
-    ? displayTests.filter(t => t.title?.toLowerCase().includes(testSearch.toLowerCase()) || t.subject?.toLowerCase().includes(testSearch.toLowerCase()))
-    : displayTests;
+  const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
+  const hasExamKeyword = (title) => EXAM_KEYWORDS.some(kw => (title || '').includes(kw));
+
+  const searchedTests = (() => {
+    let result = testSearch.trim()
+      ? displayTests.filter(t => t.title?.toLowerCase().includes(testSearch.toLowerCase()) || t.subject?.toLowerCase().includes(testSearch.toLowerCase()))
+      : displayTests;
+    if (examFilter) result = result.filter(t => hasExamKeyword(t.title));
+    return result;
+  })();
 
   const filteredHistory = history.filter(item =>
     item.test_title?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -288,6 +296,8 @@ export default function StudentDashboardContent() {
             setTestSearch={setTestSearch}
             handleStartTest={handleStartTest}
             typeFilteredTests={typeFilteredTests}
+            examFilter={examFilter}
+            setExamFilter={setExamFilter}
           />
         )}
         {activeTab === 'history' && <HistoryTab filteredHistory={filteredHistory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}

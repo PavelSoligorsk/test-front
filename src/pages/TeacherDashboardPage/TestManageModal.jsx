@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, XCircle, CheckCircle2, Clock, Users, BookOpen, CheckSquare, Square, Send, Calendar, FileText, Trash2, ArrowRight } from 'lucide-react';
+import { Search, XCircle, CheckCircle2, Clock, Users, BookOpen, CheckSquare, Square, Send, Calendar, FileText, Trash2, ArrowRight, Layers } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { restoreSession } from '../../shared/lib/session';
 
-export default function TestManageModal({ test, students, onClose, onAssign }) {
+export default function TestManageModal({ test, students, groups, onClose, onAssign, onAssignToGroup }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState("view");
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [assigningGroups, setAssigningGroups] = useState(false);
+  const [groupAssignResults, setGroupAssignResults] = useState(null);
 
   const getAuthHeaders = () => {
     const user = restoreSession();
@@ -36,6 +40,30 @@ export default function TestManageModal({ test, students, onClose, onAssign }) {
   const filteredAssigned = assignedStudents.filter((s) => `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const toggleStudent = (id) => setSelectedStudents((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+
+  const toggleGroup = (id) => setSelectedGroups((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+
+  const handleAssignToGroups = async () => {
+    if (selectedGroups.length === 0) { alert('Выберите хотя бы одну группу'); return; }
+    setAssigningGroups(true);
+    setGroupAssignResults(null);
+    const results = [];
+    for (const gid of selectedGroups) {
+      try {
+        await onAssignToGroup(test.id, gid);
+        results.push({ groupId: gid, ok: true });
+      } catch (e) {
+        results.push({ groupId: gid, ok: false, err: e.response?.data?.detail || 'Ошибка' });
+      }
+    }
+    setGroupAssignResults(results);
+    setSelectedGroups([]);
+    setAssigningGroups(false);
+  };
+
+  const filteredGroups = (groups || []).filter(g =>
+    g.name.toLowerCase().includes(groupSearch.toLowerCase())
+  );
 
   const handleAssign = async () => {
     if (selectedStudents.length === 0) { alert('Выберите хотя бы одного ученика'); return; }
@@ -68,7 +96,8 @@ export default function TestManageModal({ test, students, onClose, onAssign }) {
           </div>
           <div className="flex gap-2 mt-4 bg-slate-50 p-1.5 rounded-xl">
             <button onClick={() => { setMode("view"); setSearchTerm(""); }} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${mode === "view" ? "bg-white text-slate-800 shadow-sm" : "text-slate-400"}`}>Назначено ({assignments.length})</button>
-            <button onClick={() => { setMode("assign"); setSearchTerm(""); }} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${mode === "assign" ? "bg-white text-slate-800 shadow-sm" : "text-slate-400"}`}>Назначить</button>
+            <button onClick={() => { setMode("assign"); setSearchTerm(""); setGroupAssignResults(null); }} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${mode === "assign" ? "bg-white text-slate-800 shadow-sm" : "text-slate-400"}`}>Ученики</button>
+            <button onClick={() => { setMode("groups"); setGroupSearch(""); setGroupAssignResults(null); }} className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase transition-all ${mode === "groups" ? "bg-white text-slate-800 shadow-sm" : "text-slate-400"}`}>Группы</button>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
@@ -120,10 +149,45 @@ export default function TestManageModal({ test, students, onClose, onAssign }) {
               </div>
             </div>
           )}
+          {mode === "groups" && (
+            <div className="space-y-6">
+              {groupAssignResults && (
+                <div className={`p-3 rounded-xl text-xs font-bold ${groupAssignResults.every(r => r.ok) ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                  {groupAssignResults.every(r => r.ok)
+                    ? `✅ Тест назначен в ${groupAssignResults.length} групп(ы)`
+                    : `⚠️ Назначено: ${groupAssignResults.filter(r => r.ok).length}, ошибок: ${groupAssignResults.filter(r => !r.ok).length}`}
+                </div>
+              )}
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2"><Layers size={14} className="text-slate-400" /> Группы ({(groups || []).length})</h4>
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+                  <input type="text" placeholder="Поиск группы..." className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} />
+                </div>
+                <div className="space-y-1 max-h-56 overflow-y-auto">
+                  {filteredGroups.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic text-center py-4">{groupSearch ? 'Ничего не найдено' : 'Нет групп'}</p>
+                  ) : (
+                    filteredGroups.map((g) => (
+                      <button key={g.id} onClick={() => toggleGroup(g.id)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${selectedGroups.includes(g.id) ? 'bg-blue-50 border border-blue-200' : 'bg-slate-50 hover:bg-slate-100 border border-transparent'}`}>
+                        {selectedGroups.includes(g.id) ? <CheckSquare size={18} className="text-blue-600 shrink-0" /> : <Square size={18} className="text-slate-300 shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-slate-800 truncate">{g.name}</div>
+                          <div className="text-[10px] text-slate-400">{g.students?.length || 0} студентов</div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="p-6 border-t border-slate-100 flex gap-3">
           <button onClick={onClose} className="flex-1 p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200">ЗАКРЫТЬ</button>
           {mode === "assign" && <button onClick={handleAssign} disabled={selectedStudents.length === 0} className="flex-1 p-4 bg-emerald-600 text-white rounded-2xl font-black text-sm hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"><Send size={16} /> НАЗНАЧИТЬ ({selectedStudents.length})</button>}
+          {mode === "groups" && <button onClick={handleAssignToGroups} disabled={selectedGroups.length === 0 || assigningGroups} className="flex-1 p-4 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"><Send size={16} /> {assigningGroups ? 'НАЗНАЧЕНИЕ...' : `НАЗНАЧИТЬ (${selectedGroups.length})`}</button>}
         </div>
       </div>
     </div>

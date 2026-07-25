@@ -4,6 +4,13 @@ import { Search, ChevronRight, GraduationCap } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { MarkdownRenderer } from '../../shared/ui';
 
+const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
+
+const hasExamKeyword = (text) => {
+  if (!text) return false;
+  return EXAM_KEYWORDS.some((kw) => text.includes(kw));
+};
+
 const getDifficultyColor = (lvl) => {
   if (lvl >= 4) return "text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border-red-100 dark:border-red-800";
   if (lvl >= 3) return "text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-100 dark:border-amber-800";
@@ -19,6 +26,9 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
   const [classSearch, setClassSearch] = useState('');
   const [topicSearch, setTopicSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
+  const [examFilter, setExamFilter] = useState(false);
+  const [examCache, setExamCache] = useState({});  // { "class::topic": true/false }
+  const [loadingExamCache, setLoadingExamCache] = useState(false);
 
   const getToken = () => {
     try {
@@ -35,6 +45,50 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
       .catch(console.error);
   }, []);
 
+  // При включении фильтра загружаем задания для всех class/topic, чтобы знать где есть ЦТ/ЦЭ/РТ
+  useEffect(() => {
+    if (!examFilter || !meta) return;
+    let cancelled = false;
+    const fetchExamData = async () => {
+      setLoadingExamCache(true);
+      const cache = {};
+      const entries = [];
+      for (const cls of Object.keys(meta)) {
+        const classMeta = meta[cls];
+        for (const topic of Object.keys(classMeta)) {
+          entries.push({ cls, topic });
+        }
+      }
+      // Загружаем пачками по 5
+      const BATCH = 5;
+      for (let i = 0; i < entries.length; i += BATCH) {
+        if (cancelled) break;
+        const batch = entries.slice(i, i + BATCH);
+        const results = await Promise.allSettled(
+          batch.map(({ cls, topic }) =>
+            axios.get(`${API_BASE}/teacher/tasks/by-class/`, {
+              params: { task_class: cls, topic_number: topic },
+              ...authHeaders()
+            })
+          )
+        );
+        results.forEach((r, idx) => {
+          const { cls, topic } = batch[idx];
+          const key = `${cls}::${topic}`;
+          cache[key] = r.status === 'fulfilled'
+            ? r.value.data.some(t => hasExamKeyword(t.content))
+            : false;
+        });
+      }
+      if (!cancelled) {
+        setExamCache(cache);
+        setLoadingExamCache(false);
+      }
+    };
+    fetchExamData();
+    return () => { cancelled = true; };
+  }, [examFilter, meta]);
+
   const classes = useMemo(() => {
     if (!meta) return [];
     return Object.keys(meta).sort((a, b) => {
@@ -44,9 +98,20 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
     });
   }, [meta]);
 
-  const filteredClasses = classes.filter(cls =>
-    cls.toLowerCase().includes(classSearch.toLowerCase())
-  );
+  const filteredClasses = useMemo(() => {
+    let result = classes.filter(cls =>
+      cls.toLowerCase().includes(classSearch.toLowerCase())
+    );
+    if (examFilter) {
+      if (Object.keys(examCache).length === 0) return result;
+      result = result.filter(cls => {
+        const classMeta = meta?.[cls];
+        if (!classMeta) return false;
+        return Object.keys(classMeta).some(topic => examCache[`${cls}::${topic}`]);
+      });
+    }
+    return result;
+  }, [classes, classSearch, examFilter, examCache, meta]);
 
   const topics = useMemo(() => {
     if (!meta || !selectedClass) return [];
@@ -55,19 +120,31 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
     return Object.keys(classMeta).sort();
   }, [meta, selectedClass]);
 
-  const filteredTopics = topics.filter(topic =>
-    topic.toLowerCase().includes(topicSearch.toLowerCase())
-  );
+  const filteredTopics = useMemo(() => {
+    let result = topics.filter(topic =>
+      topic.toLowerCase().includes(topicSearch.toLowerCase())
+    );
+    if (examFilter && Object.keys(examCache).length > 0) {
+      result = result.filter(topic => examCache[`${selectedClass}::${topic}`]);
+    }
+    return result;
+  }, [topics, topicSearch, examFilter, examCache, selectedClass]);
 
   const filteredTasks = useMemo(() => {
-    if (!taskSearch) return tasks;
-    const q = taskSearch.toLowerCase();
-    return tasks.filter(t =>
-      t.content?.toLowerCase().includes(q) ||
-      t.answer?.toLowerCase().includes(q) ||
-      t.id?.toString().includes(q)
-    );
-  }, [tasks, taskSearch]);
+    let result = tasks;
+    if (taskSearch) {
+      const q = taskSearch.toLowerCase();
+      result = result.filter(t =>
+        t.content?.toLowerCase().includes(q) ||
+        t.answer?.toLowerCase().includes(q) ||
+        t.id?.toString().includes(q)
+      );
+    }
+    if (examFilter) {
+      result = result.filter(t => hasExamKeyword(t.content));
+    }
+    return result;
+  }, [tasks, taskSearch, examFilter]);
 
   const handleSelectClass = (cls) => {
     setSelectedClass(cls);
@@ -120,16 +197,28 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
               </p>
             </div>
           </div>
-          {(selectedClass || selectedTopic) && (
-            <button onClick={() => {
-              if (selectedTopic) { setSelectedTopic(null); setTasks([]); setTaskSearch(''); }
-              else { setSelectedClass(null); setClassSearch(''); }
-            }}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl text-xs font-black uppercase text-slate-600 dark:text-slate-300 transition-all">
-              <ChevronRight size={14} className="rotate-180" />
-              {selectedTopic ? 'К подразделам' : 'Ко всем разделам'}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setExamFilter(!examFilter)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                examFilter
+                  ? "bg-amber-500 dark:bg-amber-600 text-white shadow-lg"
+                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-300 dark:hover:border-amber-500/50"
+              }`}
+            >
+              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
             </button>
-          )}
+            {(selectedClass || selectedTopic) && (
+              <button onClick={() => {
+                if (selectedTopic) { setSelectedTopic(null); setTasks([]); setTaskSearch(''); setExamFilter(false); }
+                else { setSelectedClass(null); setClassSearch(''); }
+              }}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl text-xs font-black uppercase text-slate-600 dark:text-slate-300 transition-all">
+                <ChevronRight size={14} className="rotate-180" />
+                {selectedTopic ? 'К подразделам' : 'Ко всем разделам'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -141,7 +230,13 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
               onChange={e => setClassSearch(e.target.value)}
               className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {examFilter && loadingExamCache ? (
+            <div className="text-center py-16 space-y-3">
+              <div className="w-10 h-10 border-4 border-slate-200 dark:border-slate-700 border-t-emerald-500 rounded-full animate-spin mx-auto" />
+              <p className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs">Анализ заданий...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredClasses.map(cls => {
               const topicsCount = meta?.[cls] ? Object.keys(meta[cls]).length : 0;
               const totalTasks = meta?.[cls]
@@ -168,6 +263,7 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
               );
             })}
           </div>
+          )}
         </div>
       )}
 
@@ -202,11 +298,23 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
 
       {selectedClass && selectedTopic && (
         <div className="space-y-4">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <input type="text" placeholder="Поиск по тексту задания..." value={taskSearch}
-              onChange={e => setTaskSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <input type="text" placeholder="Поиск по тексту задания..." value={taskSearch}
+                onChange={e => setTaskSearch(e.target.value)}
+                className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+            </div>
+            <button
+              onClick={() => setExamFilter(!examFilter)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                examFilter
+                  ? "bg-amber-500 dark:bg-amber-600 text-white shadow-lg"
+                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-300 dark:hover:border-amber-500/50"
+              }`}
+            >
+              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
+            </button>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase">
