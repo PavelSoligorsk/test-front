@@ -98,6 +98,12 @@ export const deleteTheory = async (id) => {
   await axios.delete(`${API_BASE}/admin/theory/${id}`, { headers: getAuthHeaders() });
 };
 
+// Classify
+export const classifyTasks = async (payload = {}) => {
+  const res = await axios.post(`${API_BASE}/admin/classify-tasks`, payload, { headers: getAuthHeaders() });
+  return res.data;
+};
+
 // Global
 export const rebuildStaticTests = async () => {
   await axios.post(`${API_BASE}/admin/rebuild-all-static-tests`);

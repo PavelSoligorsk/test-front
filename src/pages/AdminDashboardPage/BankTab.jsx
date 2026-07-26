@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
-import { deleteTask, sendTaskToTelegram, updateTask } from './api';
+import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
@@ -25,6 +25,46 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
   const [classSearch, setClassSearch] = useState('');
   const [topicSearch, setTopicSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
+
+  // Classify state
+  const [classifyRunning, setClassifyRunning] = useState(false);
+  const [classifyResult, setClassifyResult] = useState(null);
+  const [classifyModal, setClassifyModal] = useState(false);
+  const [failedTaskIds, setFailedTaskIds] = useState(new Set());
+
+  // Derive failed IDs from classify log
+  useEffect(() => {
+    if (!classifyResult?.log) return;
+    const ids = new Set();
+    classifyResult.log.forEach(line => {
+      const match = line.match(/#(\d+)/);
+      if (match && (line.includes('❌') || line.includes('не совпал') || line.includes('пропущено') || line.includes('ошибок'))) {
+        ids.add(parseInt(match[1]));
+      }
+    });
+    // Also add IDs from lines like "не совпало" — extract all mentioned IDs on failed lines
+    const failedLines = classifyResult.log.filter(l => l.includes('❌') || l.includes('не совпал'));
+    failedLines.forEach(line => {
+      const idMatch = line.match(/#(\d+)/g);
+      if (idMatch) idMatch.forEach(m => ids.add(parseInt(m.replace('#', ''))));
+    });
+    setFailedTaskIds(ids);
+  }, [classifyResult]);
+
+  const handleClassify = async () => {
+    setClassifyRunning(true);
+    setClassifyResult(null);
+    try {
+      const res = await classifyTasks({ task_ids: [] });
+      setClassifyResult(res);
+      setClassifyModal(true);
+      if (onTasksUpdate) onTasksUpdate();
+    } catch (err) {
+      alert('Ошибка при запуске классификатора: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setClassifyRunning(false);
+    }
+  };
 
   const handleDelete = async (taskId) => {
     if (!window.confirm(`Удалить задание #${taskId}?`)) return;
@@ -125,26 +165,50 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
                             </div>
           </div>
           <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => setExamFilter(!examFilter)}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                                examFilter
-                                  ? "bg-amber-500 text-white shadow-lg"
-                                  : "bg-white border border-slate-200 text-slate-500 hover:border-amber-300"
-                              }`}
-                            >
-                              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
-                            </button>
-                            {(bankClass || bankTopic) && (
-                              <button onClick={() => {
-                                if (bankTopic) { setBankTopic(null); setTaskSearch(''); setExamFilter(false); }
-                                else { setBankClass(null); setClassSearch(''); }
-                              }}
-                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-black uppercase text-slate-600 transition-all">
-                                <ChevronRight size={14} className="rotate-180" />
-                                {bankTopic ? 'К подразделам' : 'Ко всем разделам'}
-                              </button>
-                            )}
+            <button
+              onClick={handleClassify}
+              disabled={classifyRunning}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                classifyRunning
+                  ? 'bg-slate-200 text-slate-400 cursor-wait'
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200'
+              }`}
+            >
+              {classifyRunning ? (
+                <><Clock size={14} className="animate-spin" /> Идёт...</>
+              ) : (
+                <><Sparkles size={14} /> Классифицировать</>
+              )}
+            </button>
+            {classifyResult && !classifyModal && (
+              <button
+                onClick={() => setClassifyModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-black text-amber-700 hover:bg-amber-100 transition-all"
+              >
+                <AlertTriangle size={12} />
+                {classifyResult.failed || 0} ошибок
+              </button>
+            )}
+            <button
+              onClick={() => setExamFilter(!examFilter)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                examFilter
+                  ? "bg-amber-500 text-white shadow-lg"
+                  : "bg-white border border-slate-200 text-slate-500 hover:border-amber-300"
+              }`}
+            >
+              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
+            </button>
+            {(bankClass || bankTopic) && (
+              <button onClick={() => {
+                if (bankTopic) { setBankTopic(null); setTaskSearch(''); setExamFilter(false); }
+                else { setBankClass(null); setClassSearch(''); }
+              }}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-black uppercase text-slate-600 transition-all">
+                <ChevronRight size={14} className="rotate-180" />
+                {bankTopic ? 'К подразделам' : 'Ко всем разделам'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -244,7 +308,14 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
                               const isSolOpen = openSolutions[t.id];
                               const isHintOpen = openHints[t.id];
                               return (
-                                <div key={t.id} data-task-id={t.id} className="bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:border-slate-300 transition-all">
+                                <div key={t.id} data-task-id={t.id}
+                                  className={`bg-white rounded-[2rem] border shadow-sm hover:border-slate-300 transition-all ${
+                                    failedTaskIds.has(t.id)
+                                      ? 'border-red-300 ring-2 ring-red-100 bg-red-50/30'
+                                      : (!t.topic || !t.section)
+                                        ? 'border-amber-200 bg-amber-50/20'
+                                        : 'border-slate-200'
+                                  }`}>
                                   <div className="p-6 space-y-6">
                                     {/* Meta row */}
                                     <div className="flex flex-wrap items-center gap-2">
@@ -252,6 +323,16 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
                                         Задание №{index + 1}
                                       </h4>
                                       <div className="flex items-center gap-1.5 ml-auto">
+                                        {failedTaskIds.has(t.id) && (
+                                          <span className="flex items-center gap-1 text-[9px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-lg" title="Ошибка классификации">
+                                            <AlertTriangle size={10} /> Ошибка
+                                          </span>
+                                        )}
+                                        {(!t.topic || !t.section) && !failedTaskIds.has(t.id) && (
+                                          <span className="flex items-center gap-1 text-[9px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-lg" title="Не классифицировано">
+                                            <Zap size={10} /> Без темы
+                                          </span>
+                                        )}
                                         <span className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">ID: {t.id}</span>
                                         <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || "?"}</div>
                                         <span className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{t.is_open_answer ? "Открытый" : "Тест"}</span>
@@ -325,6 +406,102 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
 
       {bankTopic && groupedTasks[bankClass]?.[bankTopic]?.length > 0 && (
         <TaskMap tasks={groupedTasks[bankClass][bankTopic]} onScroll={(taskId) => { const el = document.querySelector(`[data-task-id="${taskId}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
+      )}
+
+      {/* Classify Results Modal */}
+      {classifyModal && classifyResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setClassifyModal(false)}>
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <Sparkles size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-800 uppercase italic">Результаты классификации</h3>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                    Обработано: {classifyResult.total_processed} заданий
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setClassifyModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Stats bar */}
+            <div className="px-6 py-4 grid grid-cols-4 gap-3 shrink-0">
+              {[
+                { label: 'Сложность', value: classifyResult.difficulty_assigned, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                { label: 'Решено', value: classifyResult.solved_correctly, color: 'bg-blue-50 text-blue-700 border-blue-200' },
+                { label: 'Классиф.', value: classifyResult.classified, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+                { label: 'Ошибок', value: classifyResult.failed, color: classifyResult.failed > 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-400 border-slate-200' },
+              ].map(stat => (
+                <div key={stat.label} className={`px-3 py-2 rounded-xl border text-center ${stat.color}`}>
+                  <div className="text-[9px] font-black uppercase opacity-60">{stat.label}</div>
+                  <div className="text-2xl font-black italic">{stat.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Log */}
+            <div className="flex-1 overflow-y-auto px-6 py-2">
+              <div className="rounded-2xl bg-slate-900 p-5 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto">
+                {classifyResult.log.map((line, i) => {
+                  let lineClass = 'text-slate-300';
+                  if (line.includes('❌') || line.includes('не совпал') || line.includes('ошибок')) lineClass = 'text-red-400';
+                  else if (line.includes('✅') || line.includes('🎯') || line.includes('📊')) lineClass = 'text-emerald-400';
+                  else if (line.includes('🔍') || line.includes('📚') || line.includes('──')) lineClass = 'text-blue-400';
+                  else if (line.includes('⚠️')) lineClass = 'text-amber-400';
+
+                  // Make task IDs clickable to scroll
+                  const idMatch = line.match(/#(\d+)/);
+                  return (
+                    <div key={i} className={lineClass}>
+                      {idMatch ? (
+                        <>
+                          {line.substring(0, line.indexOf('#' + idMatch[1]))}
+                          <button
+                            onClick={() => {
+                              setClassifyModal(false);
+                              const el = document.querySelector(`[data-task-id="${idMatch[1]}"]`);
+                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              // highlight briefly
+                              if (el) {
+                                el.style.outline = '3px solid #ef4444';
+                                setTimeout(() => { el.style.outline = ''; }, 3000);
+                              }
+                            }}
+                            className="text-amber-300 underline hover:text-amber-100 font-bold"
+                          >
+                            #{idMatch[1]}
+                          </button>
+                          {line.substring(line.indexOf('#' + idMatch[1]) + idMatch[1].length + 1)}
+                        </>
+                      ) : (
+                        line
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-100 flex items-center justify-between shrink-0">
+              <p className="text-[10px] font-bold text-slate-400">
+                Проблемные задания подсвечены в банке
+                <span className="inline-block w-3 h-3 rounded-full bg-red-100 border border-red-300 ml-2 align-middle" />
+              </p>
+              <button onClick={() => setClassifyModal(false)}
+                className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase hover:bg-slate-800 transition-all">
+                Понятно
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
