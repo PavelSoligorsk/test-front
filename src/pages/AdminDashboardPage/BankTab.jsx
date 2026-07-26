@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
@@ -50,21 +50,6 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
     });
     setFailedTaskIds(ids);
   }, [classifyResult]);
-
-  const handleClassify = async () => {
-    setClassifyRunning(true);
-    setClassifyResult(null);
-    try {
-      const res = await classifyTasks({ task_ids: [] });
-      setClassifyResult(res);
-      setClassifyModal(true);
-      if (onTasksUpdate) onTasksUpdate();
-    } catch (err) {
-      alert('Ошибка при запуске классификатора: ' + (err.response?.data?.detail || err.message));
-    } finally {
-      setClassifyRunning(false);
-    }
-  };
 
   const handleDelete = async (taskId) => {
     if (!window.confirm(`Удалить задание #${taskId}?`)) return;
@@ -141,6 +126,22 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
     });
   }, [bankClass, bankTopic, groupedTasks, examFilter, taskSearch]);
 
+  const handleClassify = async () => {
+    setClassifyRunning(true);
+    setClassifyResult(null);
+    try {
+      const ids = currentTasks.map(t => t.id);
+      const res = await classifyTasks({ task_ids: ids });
+      setClassifyResult(res);
+      setClassifyModal(true);
+      if (onTasksUpdate) onTasksUpdate();
+    } catch (err) {
+      alert('Ошибка при запуске классификатора: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setClassifyRunning(false);
+    }
+  };
+
   const tasksCountByTopic = (cls, topic) => {
     const items = groupedTasks[cls]?.[topic];
     return items ? items.length : 0;
@@ -165,30 +166,6 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
                             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleClassify}
-              disabled={classifyRunning}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                classifyRunning
-                  ? 'bg-slate-200 text-slate-400 cursor-wait'
-                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200'
-              }`}
-            >
-              {classifyRunning ? (
-                <><Clock size={14} className="animate-spin" /> Идёт...</>
-              ) : (
-                <><Sparkles size={14} /> Классифицировать</>
-              )}
-            </button>
-            {classifyResult && !classifyModal && (
-              <button
-                onClick={() => setClassifyModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-black text-amber-700 hover:bg-amber-100 transition-all"
-              >
-                <AlertTriangle size={12} />
-                {classifyResult.failed || 0} ошибок
-              </button>
-            )}
             <button
               onClick={() => setExamFilter(!examFilter)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
@@ -298,10 +275,36 @@ export default function BankTab({ tasks, groupedTasks, availableClasses, bankCla
                               {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
                             </button>
           </div>
-          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black text-slate-400 uppercase">
-                              {taskSearch ? `Найдено: ${currentTasks.length} из ${groupedTasks[bankClass]?.[bankTopic]?.length || 0}` : `${currentTasks.length} заданий`}
-                            </span>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-[10px] font-black text-slate-400 uppercase">
+              {taskSearch ? `Найдено: ${currentTasks.length} из ${groupedTasks[bankClass]?.[bankTopic]?.length || 0}` : `${currentTasks.length} заданий`}
+            </span>
+            <div className="flex items-center gap-2">
+              {classifyResult && !classifyModal && (
+                <button
+                  onClick={() => setClassifyModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] font-black text-amber-700 hover:bg-amber-100 transition-all"
+                >
+                  <AlertTriangle size={12} />
+                  {classifyResult.failed || 0} ошибок
+                </button>
+              )}
+              <button
+                onClick={handleClassify}
+                disabled={classifyRunning || currentTasks.length === 0}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                  classifyRunning
+                    ? 'bg-slate-200 text-slate-400 cursor-wait'
+                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200'
+                }`}
+              >
+                {classifyRunning ? (
+                  <><Clock size={14} className="animate-spin" /> Идёт...</>
+                ) : (
+                  <><Sparkles size={14} /> Классифицировать ({currentTasks.length})</>
+                )}
+              </button>
+            </div>
           </div>
           <div className="space-y-4">
                             {currentTasks.map((t, index) => {
