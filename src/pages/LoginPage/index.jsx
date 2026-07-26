@@ -24,17 +24,27 @@ export default function LoginPage() {
 
     saveSession(res.data); // Автоматически вызовет SESSION_EVENT
 
+    const role = res.data?.role;
+
+    // Админ всегда идёт в админ-панель, даже если был редирект с /teacher
+    if (role === 'admin') {
+      navigate('/admin', { replace: true });
+      return;
+    }
+
     // Редирект на сохранённый URL или на дашборд по роли
     const redirect = searchParams.get('redirect');
     if (redirect && redirect.startsWith('/')) {
       return navigate(redirect, { replace: true });
     }
 
-    const role = res.data?.role;
-    if (role === 'student') navigate('/student', { replace: true });
-    else if (role === 'teacher') navigate('/teacher', { replace: true });
-    else if (role === 'admin') navigate('/admin', { replace: true });
-    else navigate('/', { replace: true });
+    if (role === 'teacher') {
+      navigate('/teacher', { replace: true });
+    } else if (role === 'student') {
+      navigate('/student', { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
 
   } catch (err) {
     alert(err.response?.data?.detail || 'Ошибка входа');
