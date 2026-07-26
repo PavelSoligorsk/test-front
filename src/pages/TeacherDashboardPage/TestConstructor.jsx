@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { XCircle, Send, Database, BookOpen } from 'lucide-react';
+import { XCircle, Send, Database, BookOpen, Sparkles } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { restoreSession } from '../../shared/lib/session';
 import { MarkdownPreview } from './MarkdownPreview';
@@ -11,7 +11,7 @@ const getDifficultyColor = (lvl) => {
   return "text-emerald-400 bg-emerald-900/30 border-emerald-800";
 };
 
-export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests, editingTest, onClearEditing, onClearTasks }) {
+export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests, editingTest, onClearEditing, onClearTasks, onOpenAiGenerator }) {
   const EMPTY_FORM = { id: null, title: '', target_class: '', target_topic: '', is_autocompile: false, task_ids: [], is_active: true };
   const [testForm, setTestForm] = useState(EMPTY_FORM);
 
@@ -70,6 +70,14 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
         >
           <BookOpen size={16} /> Мои тесты
         </button>
+        {onOpenAiGenerator && (
+          <button
+            onClick={onOpenAiGenerator}
+            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-xs font-black uppercase hover:shadow-xl hover:shadow-emerald-200 transition-all shadow-sm"
+          >
+            <Sparkles size={16} /> AI Генерация
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

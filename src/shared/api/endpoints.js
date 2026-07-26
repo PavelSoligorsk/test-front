@@ -49,6 +49,7 @@ export const ENDPOINTS = {
   TEACHER_TEST_ASSIGNMENTS: (testId) => `/teacher/test/${testId}/assignments`,
   TEACHER_ASSIGNMENT: (assignmentId) => `/teacher/assignments/${assignmentId}`,
   TEACHER_ASSIGN_TEST_TO_GROUP: '/teacher/assign-test-to-group',
+  TEACHER_GENERATE_TEST: '/teacher/generate-test',
 
   // Статистика
   STATS_ME: '/stats/me',

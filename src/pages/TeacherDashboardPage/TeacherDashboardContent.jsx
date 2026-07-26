@@ -26,6 +26,7 @@ import GroupStudentsModal from "./GroupStudentsModal";
 import AssignTestToGroupModal from "./AssignTestToGroupModal";
 import GroupDetailModal from "./GroupDetailModal";
 import CreateGroupModal from "./CreateGroupModal";
+import AiTestGeneratorModal from "./AiTestGeneratorModal";
 
 const TABS = [
   { id: "bank", icon: Database, label: "Банк заданий" },
@@ -69,6 +70,7 @@ export default function TeacherDashboardContent() {
   const [assignGroupModal, setAssignGroupModal] = useState(null);
   const [groupDetailModal, setGroupDetailModal] = useState(null);
   const [groupCreateModal, setGroupCreateModal] = useState(null); // null | { id, name, description, students? }
+  const [aiGeneratorModal, setAiGeneratorModal] = useState(false);
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
   const [editingTest, setEditingTest] = useState(null); // данные редактируемого теста
@@ -178,6 +180,39 @@ export default function TeacherDashboardContent() {
     } catch (e) { 
       console.error('Ошибка назначения теста:', e);
       throw e; 
+    }
+  };
+
+  const handleGenerateAiTest = async (aiParams) => {
+    try {
+      const res = await axios.post(
+        `${API_BASE}/teacher/generate-test`,
+        aiParams,
+        { headers: getAuthHeaders() }
+      );
+      const generatedTest = res.data;
+
+      // Auto-populate the constructor with generated tasks
+      if (generatedTest.tasks && generatedTest.tasks.length > 0) {
+        setSelectedTasks(generatedTest.tasks);
+        setEditingTest({
+          id: generatedTest.id,
+          title: generatedTest.title || '',
+          target_class: generatedTest.target_class || '',
+          target_topic: generatedTest.target_topic || '',
+          is_autocompile: false,
+          task_ids: generatedTest.tasks.map((t) => t.id),
+          is_active: true,
+        });
+      }
+
+      setAiGeneratorModal(false);
+      setActiveTab("constructor");
+      fetchTests();
+    } catch (e) {
+      const detail = e.response?.data?.detail;
+      alert(typeof detail === 'string' ? detail : 'Ошибка при генерации теста. Попробуйте другой запрос.');
+      throw e;
     }
   };
 
@@ -291,6 +326,7 @@ export default function TeacherDashboardContent() {
             editingTest={editingTest}
             onClearEditing={() => setEditingTest(null)}
             onClearTasks={() => setSelectedTasks([])}
+            onOpenAiGenerator={() => setAiGeneratorModal(true)}
           />
         )}
 
@@ -372,6 +408,15 @@ export default function TeacherDashboardContent() {
           onClose={() => setGroupCreateModal(null)}
           onSave={handleSaveGroupFromModal}
           navigate={navigate}
+        />
+      )}
+
+      {aiGeneratorModal && (
+        <AiTestGeneratorModal
+          groups={groups}
+          allStudents={students}
+          onClose={() => setAiGeneratorModal(false)}
+          onGenerate={handleGenerateAiTest}
         />
       )}
 
