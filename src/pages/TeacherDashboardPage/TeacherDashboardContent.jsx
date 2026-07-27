@@ -203,6 +203,11 @@ export default function TeacherDashboardContent() {
           is_autocompile: false,
           task_ids: generatedTest.tasks.map((t) => t.id),
           is_active: true,
+          max_attempts: generatedTest.max_attempts ?? null,
+          time_limit_minutes: generatedTest.time_limit_minutes ?? null,
+          allow_interruptions: generatedTest.allow_interruptions ?? true,
+          exam_start: generatedTest.exam_start || '',
+          exam_end: generatedTest.exam_end || '',
         });
       }
 

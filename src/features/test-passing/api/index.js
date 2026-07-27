@@ -18,12 +18,24 @@ export const testPassingApi = {
     return apiClient.get(ENDPOINTS.STUDENT_GET_TEST(testId));
   },
 
+  startTest(testId) {
+    return apiClient.post(ENDPOINTS.STUDENT_START_TEST(testId));
+  },
+
+  startAiTest(testId) {
+    return apiClient.post(ENDPOINTS.STUDENT_START_AI_TEST(testId));
+  },
+
+  retake(resultId) {
+    return apiClient.post(ENDPOINTS.STUDENT_RETAKE(resultId));
+  },
+
   submitTest(testId, answers) {
-    return apiClient.post(ENDPOINTS.STUDENT_SUBMIT_TEST(testId), { answers });
+    return apiClient.post(ENDPOINTS.STUDENT_SUBMIT_TEST(testId), answers);
   },
 
   getHint(taskId) {
-    return apiClient.get(ENDPOINTS.STUDENT_HINT(taskId));
+    return apiClient.post(ENDPOINTS.STUDENT_HINT(taskId));
   },
 
   getAiSolve(taskId) {

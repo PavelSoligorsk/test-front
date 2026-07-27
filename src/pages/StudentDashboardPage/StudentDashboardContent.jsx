@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Search, History, User as UserIcon, Filter, ChevronRight, XCircle, PlusCircle, BookOpen, RefreshCw, Sparkles, Clock, LayoutGrid, Target, ArrowRight, AlertCircle, Check } from 'lucide-react';
 import { fetchStudentTestsMeta, fetchMyAssignmentsMeta, fetchAiTests, fetchStudentMe, updateStudentProfile, fetchStudentHistory } from './api';
 import { generateAiTest } from './api';
+import { retakeTest } from './api';
 import TestsTab from './TestsTab';
 import HistoryTab from './HistoryTab';
 import ProfileTab from './ProfileTab';
@@ -112,6 +113,11 @@ export default function StudentDashboardContent() {
         is_completed: a.is_completed,
         assignment_id: a.assignment_id,
         is_autocompile: a.is_autocompile,
+        time_limit_minutes: a.time_limit_minutes ?? null,
+        max_attempts: a.max_attempts ?? null,
+        allow_interruptions: a.allow_interruptions ?? true,
+        exam_start: a.exam_start || null,
+        exam_end: a.exam_end || null,
       }));
       setCustomTests(customTestsData);
       setAiTests((aiRes || []).map(t => ({ ...t, is_ai: true })));
@@ -157,6 +163,18 @@ export default function StudentDashboardContent() {
     if (test.is_ai) navigate(`/test/${test.id}?type=ai`);
     else if (test.assignment_id) navigate(`/test/${test.id}?assignment=${test.assignment_id}`);
     else navigate(`/test/${test.id}`);
+  };
+
+  const handleRetake = async (resultId, testIdOverride) => {
+    try {
+      const retakeData = await retakeTest(resultId);
+      // Navigate with the actual test_id for submit, not result_id
+      const effectiveTestId = testIdOverride || retakeData.test_id || resultId;
+      navigate(`/test/${effectiveTestId}?retake=1`, { state: { startData: retakeData } });
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      alert(typeof detail === 'string' ? detail : 'Не удалось начать пересдачу. Проверьте лимит попыток.');
+    }
   };
 
   const handleGenerateAiTest = async () => {
@@ -300,7 +318,7 @@ export default function StudentDashboardContent() {
             setExamFilter={setExamFilter}
           />
         )}
-        {activeTab === 'history' && <HistoryTab filteredHistory={filteredHistory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}
+        {activeTab === 'history' && <HistoryTab filteredHistory={filteredHistory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onRetake={handleRetake} />}
         {activeTab === 'profile' && <ProfileTab profile={profile} editForm={editForm} setEditForm={setEditForm} handleUpdateProfile={handleUpdateProfile} saving={saving} />}
         {activeTab === 'theory' && (
           <TheoryTab

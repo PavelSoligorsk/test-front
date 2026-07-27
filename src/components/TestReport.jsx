@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
-import { Download, Sparkles } from 'lucide-react';
+import { Download, Sparkles, RotateCcw } from 'lucide-react';
 import { MarkdownRenderer as MarkdownViewer  } from '../shared/ui';
 
-export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId }) => {
+export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId, onRetake }) => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 1. Подсчет статистики
@@ -124,6 +124,14 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId
             <button onClick={onBack} className="px-6 py-3 bg-slate-100 text-black rounded-full text-[10px] font-black uppercase hover:bg-slate-200 transition">
               Назад
             </button>
+            {onRetake && (
+              <button
+                onClick={onRetake}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase hover:bg-blue-100 transition border border-blue-200"
+              >
+                <RotateCcw size={16} /> Пересдать
+              </button>
+            )}
             <button 
               onClick={handleDownloadPDF} 
               disabled={isGenerating}

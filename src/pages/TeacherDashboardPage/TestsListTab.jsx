@@ -107,6 +107,12 @@ export default function TestsListTab({ tests, onEdit, onDelete, onManage, onCrea
                       {test.target_topic && <span className="text-[7px] sm:text-[8px] md:text-[9px] font-black bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 sm:px-2 py-0.5 rounded-md whitespace-nowrap truncate max-w-[120px]">{test.target_topic}</span>}
                       <span className="text-[7px] sm:text-[8px] md:text-[9px] bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-100 dark:border-slate-600 whitespace-nowrap">{test.tasks?.length || 0} зад.</span>
                     </div>
+                    <div className="flex gap-1 sm:gap-1.5 mb-3 flex-wrap min-w-0">
+                      {test.time_limit_minutes != null && <span className="text-[7px] sm:text-[8px] md:text-[9px] font-black bg-amber-50 text-amber-600 px-1.5 sm:px-2 py-0.5 rounded-md whitespace-nowrap">⏱ {test.time_limit_minutes} мин</span>}
+                      {test.max_attempts != null && <span className="text-[7px] sm:text-[8px] md:text-[9px] font-black bg-violet-50 text-violet-600 px-1.5 sm:px-2 py-0.5 rounded-md whitespace-nowrap">🔄 ×{test.max_attempts}</span>}
+                      {test.allow_interruptions === false && <span className="text-[7px] sm:text-[8px] md:text-[9px] font-black bg-red-50 text-red-500 px-1.5 sm:px-2 py-0.5 rounded-md whitespace-nowrap">🔒 Без прерываний</span>}
+                      {test.exam_start && <span className="text-[7px] sm:text-[8px] md:text-[9px] font-black bg-purple-50 text-purple-600 px-1.5 sm:px-2 py-0.5 rounded-md whitespace-nowrap">📅 Экзамен</span>}
+                    </div>
                     <div className="flex-1 min-h-0" />
                     <div className="flex gap-0.5 sm:gap-1 md:gap-1.5 mt-auto min-w-0">
                       <button onClick={() => onEdit(test)} className="flex-1 min-w-0 p-1 sm:p-1.5 md:p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg sm:rounded-xl text-[7px] sm:text-[8px] md:text-[10px] font-black hover:bg-emerald-50 dark:hover:bg-emerald-600 hover:text-emerald-600 dark:hover:text-white transition-all flex items-center justify-center gap-0.5 border border-slate-100 dark:border-slate-600">

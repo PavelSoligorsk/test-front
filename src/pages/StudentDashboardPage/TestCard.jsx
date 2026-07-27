@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Users, Bot, Clock, LayoutGrid, Target, ArrowRight, AlertCircle, Check } from 'lucide-react';
+import { BookOpen, Users, Bot, Clock, LayoutGrid, Target, ArrowRight, AlertCircle, Check, RotateCcw, Calendar } from 'lucide-react';
 
 const TYPE_STYLES = {
   static: { gradient: 'from-blue-600 to-blue-700', icon: BookOpen, label: 'АВТОСБОРКА', badge: 'bg-blue-100 text-blue-600', accent: 'blue', accentBg: 'bg-blue-50' },
@@ -32,9 +32,19 @@ export default function TestCard({ test, type, onStart, disabled }) {
           <div className={`flex items-center gap-1.5 ${styles.accentBg} px-2.5 py-1.5 rounded-lg`}>
             <LayoutGrid size={12} /> <span className="text-[9px] font-black uppercase text-slate-600">{test.tasks?.length || 0} задач</span>
           </div>
-          {test.duration && (
+          {(test.time_limit_minutes != null) && (
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg">
+              <Clock size={12} className="text-slate-400" /> <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">{test.time_limit_minutes} мин</span>
+            </div>
+          )}
+          {test.duration && !test.time_limit_minutes && (
             <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg">
               <Clock size={12} className="text-slate-400" /> <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">{test.duration} мин</span>
+            </div>
+          )}
+          {test.max_attempts != null && (
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg">
+              <RotateCcw size={12} className="text-slate-400" /> <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400">×{test.max_attempts}</span>
             </div>
           )}
           {test.difficulty && (
@@ -53,6 +63,14 @@ export default function TestCard({ test, type, onStart, disabled }) {
           <div className="mb-4 flex items-center gap-2 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl">
             <Check size={12} className="text-emerald-500" />
             <span className="text-[9px] font-black text-emerald-700 uppercase">Выполнено</span>
+          </div>
+        )}
+        {test.exam_start && test.exam_end && !test.is_completed && (
+          <div className="mb-4 flex items-center gap-2 bg-purple-50 border border-purple-100 px-3 py-2 rounded-xl">
+            <Calendar size={12} className="text-purple-500" />
+            <span className="text-[9px] font-black text-purple-700 uppercase">
+              {new Date(test.exam_start).toLocaleDateString()} – {new Date(test.exam_end).toLocaleDateString()}
+            </span>
           </div>
         )}
         <div className="pt-3 border-t border-slate-50 dark:border-slate-700 flex items-center justify-between">

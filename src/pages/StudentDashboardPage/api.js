@@ -74,3 +74,26 @@ export const generateAiTest = async (prompt, taskCount, difficulty, targetClass)
   return res.data;
 };
 
+// Start test
+export const startAssignedTest = async (testId) => {
+  const res = await axios.post(`${API_BASE}/student/start-test/${testId}`, {}, authConfig());
+  return res.data;
+};
+
+export const startAiTest = async (testId) => {
+  const res = await axios.post(`${API_BASE}/student/start-ai-test/${testId}`, {}, authConfig());
+  return res.data;
+};
+
+// Retake
+export const retakeTest = async (resultId) => {
+  const res = await axios.post(`${API_BASE}/student/retake/${resultId}`, {}, authConfig());
+  return res.data;
+};
+
+// Result (timer sync)
+export const fetchTestResult = async (resultId) => {
+  const res = await axios.get(`${API_BASE}/student/results/${resultId}`, authConfig());
+  return res.data;
+};
+

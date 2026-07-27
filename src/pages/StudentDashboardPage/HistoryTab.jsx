@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History, Search, Calendar } from 'lucide-react';
+import { History, Search, Calendar, RotateCcw } from 'lucide-react';
 
-export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm }) {
+export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm, onRetake }) {
   const navigate = useNavigate();
 
   return (
@@ -25,6 +25,7 @@ export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm 
               <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Тест</th>
               <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Балл</th>
               <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Дата</th>
+              <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Действия</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
@@ -38,9 +39,18 @@ export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm 
                 <td className="px-6 md:px-8 py-5 text-[10px] font-bold text-slate-400 uppercase">
                   <div className="flex items-center gap-2"><Calendar size={12} /> {new Date(res.completed_at).toLocaleDateString()}</div>
                 </td>
+                <td className="px-6 md:px-8 py-5 text-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRetake(res.id, res.test_id); }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase hover:bg-blue-100 transition-all border border-blue-100"
+                    title="Пересдать тест"
+                  >
+                    <RotateCcw size={11} /> Пересдать
+                  </button>
+                </td>
               </tr>
             )) : (
-              <tr><td colSpan={3} className="text-center py-12 text-slate-300 font-black uppercase text-xs">История пуста</td></tr>
+              <tr><td colSpan={4} className="text-center py-12 text-slate-300 font-black uppercase text-xs">История пуста</td></tr>
             )}
           </tbody>
         </table>
