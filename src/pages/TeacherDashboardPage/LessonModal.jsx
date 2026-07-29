@@ -228,7 +228,8 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
     fetchSchedule();
     fetchPayments();
     fetchParent();
-  }, [fetchSchedule, fetchPayments, fetchParent]);
+    fetchAllParents();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Lesson actions ---
   const handleComplete = async () => {
@@ -1150,7 +1151,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
                     className="flex-1 p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center justify-center gap-1">
                     <PlusCircle size={12} /> Создать
                   </button>
-                  <button onClick={() => { fetchAllParents(); setShowParentPicker(true); setParentSearch(''); setError(null); }}
+                  <button onClick={() => { setShowParentPicker(true); setParentSearch(''); setError(null); }}
                     className="flex-1 p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center justify-center gap-1">
                     <Link2 size={12} /> Привязать
                   </button>
@@ -1172,18 +1173,27 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
                         <div className="text-xs text-slate-400 italic py-2">Ничего не найдено</div>
                       ) : (
                         <div className="max-h-40 overflow-y-auto space-y-1">
-                          {filtered.map((p) => (
+                          {filtered.map((p) => {
+                            const linkedCount = (p.student_ids || []).length;
+                            return (
                             <button key={p.id}
                               onClick={() => handleLinkExistingParent(p)}
                               disabled={actionLoading === 'parent'}
                               className="w-full p-2 bg-white hover:bg-emerald-50 rounded-lg text-xs text-left flex items-center justify-between transition-all border border-transparent hover:border-emerald-200 disabled:opacity-50">
-                              <div>
-                                <div className="font-bold text-slate-700">{p.name}</div>
-                                <div className="text-slate-400 text-[10px]">{p.phone || '—'}</div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-slate-700 truncate">{p.name}</div>
+                                <div className="text-slate-400 text-[10px] flex items-center gap-2">
+                                  <span>{p.phone || '—'}</span>
+                                  {linkedCount > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-500 text-[9px] font-bold">
+                                      {linkedCount} уч.
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <Link2 size={12} className="text-emerald-500" />
+                              <Link2 size={12} className="text-emerald-500 shrink-0 ml-2" />
                             </button>
-                          ))}
+                          );})}
                         </div>
                       );
                     })()}
