@@ -136,6 +136,10 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   const [showParentForm, setShowParentForm] = useState(false);
   const [editingParent, setEditingParent] = useState(false);
   const [parentForm, setParentForm] = useState({ name: '', phone: '', tg_username: '', comment: '' });
+  const [allParents, setAllParents] = useState([]);
+  const [parentsLoading, setParentsLoading] = useState(false);
+  const [showParentPicker, setShowParentPicker] = useState(false);
+  const [parentSearch, setParentSearch] = useState('');
 
   const student = students.find((s) => s.id === lesson.student_id);
   const studentName = lesson.student_name || (student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : `ID: ${lesson.student_id}`);
@@ -188,9 +192,37 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
       const res = await teacherApi.getParents();
       const p = (res.data || []).find((p) => p.id === student.parent_id);
       setParent(p || null);
+      // Also cache for the picker
+      if (res.data?.length) setAllParents((prev) => {
+        const existingIds = new Set(prev.map((x) => x.id));
+        const merged = [...prev];
+        for (const p of res.data) if (!existingIds.has(p.id)) merged.push(p);
+        return merged;
+      });
     } catch { /* ignore */ }
     finally { setParentLoading(false); }
   }, [student?.parent_id]);
+
+  const fetchAllParents = useCallback(async () => {
+    setParentsLoading(true);
+    try {
+      const res = await teacherApi.getParents();
+      setAllParents(res.data || []);
+    } catch { /* ignore */ }
+    finally { setParentsLoading(false); }
+  }, []);
+
+  const handleLinkExistingParent = async (p) => {
+    setActionLoading('parent'); setError(null);
+    try {
+      await teacherApi.linkStudentToParent(p.id, student.id);
+      setParent(p);
+      setShowParentPicker(false);
+      setSuccess('Родитель привязан');
+      onUpdated?.();
+    } catch (e) { setError(e.response?.data?.detail || 'Ошибка при привязке родителя'); }
+    finally { setActionLoading(null); }
+  };
 
   useEffect(() => {
     fetchSchedule();
@@ -1113,10 +1145,52 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
             ) : (
               <div className="space-y-2">
                 <div className="text-xs text-slate-400 italic py-2">Не указан</div>
-                <button onClick={() => { setShowParentForm(true); setParentForm({ name: '', phone: '', tg_username: '', comment: '' }); setError(null); }}
-                  className="w-full p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center justify-center gap-1">
-                  <PlusCircle size={12} /> Добавить родителя
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowParentForm(true); setParentForm({ name: '', phone: '', tg_username: '', comment: '' }); setError(null); }}
+                    className="flex-1 p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center justify-center gap-1">
+                    <PlusCircle size={12} /> Создать
+                  </button>
+                  <button onClick={() => { fetchAllParents(); setShowParentPicker(true); setParentSearch(''); setError(null); }}
+                    className="flex-1 p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center justify-center gap-1">
+                    <Link2 size={12} /> Привязать
+                  </button>
+                </div>
+
+                {/* Existing parent picker */}
+                {showParentPicker && (
+                  <div className="space-y-2 mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <input
+                      type="text" placeholder="Поиск по имени или телефону…" value={parentSearch}
+                      onChange={(e) => setParentSearch(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
+                    {parentsLoading ? (
+                      <div className="text-xs text-slate-400 italic py-2 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Загрузка...</div>
+                    ) : (() => {
+                      const filtered = allParents.filter((p) =>
+                        !parentSearch || (p.name || '').toLowerCase().includes(parentSearch.toLowerCase()) || (p.phone || '').includes(parentSearch));
+                      return filtered.length === 0 ? (
+                        <div className="text-xs text-slate-400 italic py-2">Ничего не найдено</div>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {filtered.map((p) => (
+                            <button key={p.id}
+                              onClick={() => handleLinkExistingParent(p)}
+                              disabled={actionLoading === 'parent'}
+                              className="w-full p-2 bg-white hover:bg-emerald-50 rounded-lg text-xs text-left flex items-center justify-between transition-all border border-transparent hover:border-emerald-200 disabled:opacity-50">
+                              <div>
+                                <div className="font-bold text-slate-700">{p.name}</div>
+                                <div className="text-slate-400 text-[10px]">{p.phone || '—'}</div>
+                              </div>
+                              <Link2 size={12} className="text-emerald-500" />
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    <button onClick={() => { setShowParentPicker(false); setError(null); }}
+                      className="w-full p-1.5 text-[10px] font-black text-slate-400 hover:text-slate-600">Отмена</button>
+                  </div>
+                )}
               </div>
             )}
           </Section>
