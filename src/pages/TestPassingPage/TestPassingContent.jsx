@@ -1,10 +1,11 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import { retakeTest } from '../StudentDashboardPage/api';
+import { ENDPOINTS } from '../../shared/api/endpoints';
 import DrawingPad from '../../components/DrawingPad';
 import TestProgressBar from './TestProgressBar';
 import TestQuestionCard from './TestQuestionCard';
@@ -74,7 +75,20 @@ export default function TestPassingContent() {
   const finishedRef = useRef(false);
   const currentTaskId = test?.tasks?.[currentIdx]?.id;
 
-  const saveProgress = useCallback(() => {
+  const savedToServerRef = useRef(false);
+
+  // Shared helper: build payload array from answers object
+  const buildAnswersPayload = useCallback((answers) =>
+    Object.keys(answers).map(id => ({
+      task_id: parseInt(id),
+      user_answer: Array.isArray(answers[id])
+        ? answers[id].sort((a, b) => a - b).join(',')
+        : String(answers[id]),
+    }))
+  , []);
+
+  // Save progress to localStorage (fast, local backup)
+  const saveProgressLocal = useCallback(() => {
     if (test && !finishedRef.current && allowInterruptions) {
       localStorage.setItem(`test_progress_${testId}`, JSON.stringify({
         currentIdx,
@@ -86,17 +100,71 @@ export default function TestPassingContent() {
     }
   }, [currentIdx, userAnswers, drawings, testId, test, timeRemaining, allowInterruptions]);
 
+  // Save progress to server (incremental persistence)
+  const saveProgressToServer = useCallback(async (answersOverride) => {
+    if (!test || finishedRef.current || !allowInterruptions) return;
+    const effectiveAnswers = answersOverride || userAnswers;
+    if (Object.keys(effectiveAnswers).length === 0) return;
+    const effectiveTestId = test?.id ?? parseInt(testId);
+    const token = getToken();
+    try {
+      const payload = buildAnswersPayload(effectiveAnswers);
+      await axios.post(
+        `${API_URL}${ENDPOINTS.STUDENT_SAVE_PROGRESS(effectiveTestId)}`,
+        { answers: payload },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      savedToServerRef.current = true;
+    } catch (e) {
+      // Silently fail – localStorage still has the backup
+      console.warn('save-progress failed, will retry:', e);
+    }
+  }, [test, testId, userAnswers, allowInterruptions, buildAnswersPayload]);
+
+  // Combined save: local + server
+  const saveProgress = useCallback(async (answersOverride) => {
+    saveProgressLocal();
+    await saveProgressToServer(answersOverride);
+  }, [saveProgressLocal, saveProgressToServer]);
+
   useEffect(() => {
-    const timer = setTimeout(saveProgress, 500);
+    const timer = setTimeout(() => saveProgress(), 500);
     return () => clearTimeout(timer);
   }, [currentIdx, userAnswers, drawings, saveProgress]);
 
+  // Auto-save to server every 45 seconds
   useEffect(() => {
     if (!allowInterruptions) return;
-    const handleBeforeUnload = () => saveProgress();
+    const interval = setInterval(() => {
+      saveProgressToServer();
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [allowInterruptions, saveProgressToServer]);
+
+  // beforeunload: use fetch keepalive for reliable server save on tab close
+  useEffect(() => {
+    if (!allowInterruptions) return;
+    const handleBeforeUnload = () => {
+      saveProgressLocal();
+      if (Object.keys(userAnswers).length > 0) {
+        const effectiveTestId = test?.id ?? parseInt(testId);
+        const payload = buildAnswersPayload(userAnswers);
+        const url = `${API_URL}${ENDPOINTS.STUDENT_SAVE_PROGRESS(effectiveTestId)}`;
+        const token = getToken();
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ answers: payload }),
+          keepalive: true,
+        });
+      }
+    };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [saveProgress, allowInterruptions]);
+  }, [saveProgressLocal, userAnswers, testId, test, allowInterruptions, buildAnswersPayload]);
 
   const saveCurrentDrawing = useCallback(() => {
     if (currentTaskId && canvasRef.current) {
@@ -117,12 +185,22 @@ export default function TestPassingContent() {
     try {
       const token = getToken();
       const effectiveTestId = test?.id ?? parseInt(testId);
-      const payload = Object.keys(answers).map(id => ({
-        task_id: parseInt(id),
-        user_answer: Array.isArray(answers[id])
-          ? answers[id].sort((a, b) => a - b).join(',')
-          : String(answers[id]),
-      }));
+
+      // If answers were saved server-side, send empty array for finalization.
+      // Otherwise (or if answers are provided explicitly), send full payload.
+      const hasSavedToServer = savedToServerRef.current;
+      let payload;
+      if (answers == null || Object.keys(answers).length === 0) {
+        if (hasSavedToServer) {
+          payload = []; // finalize with server-saved answers
+        } else {
+          // legacy: build from current userAnswers state
+          payload = buildAnswersPayload(userAnswers);
+        }
+      } else {
+        payload = buildAnswersPayload(answers);
+      }
+
       await axios.post(`${API_URL}/student/tests/${effectiveTestId}/submit`, payload, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -141,7 +219,7 @@ export default function TestPassingContent() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [testId, test?.id, isSubmitting]);
+  }, [testId, test?.id, isSubmitting, userAnswers, buildAnswersPayload]);
 
   submitRef.current = doSubmit;
 
@@ -203,6 +281,16 @@ export default function TestPassingContent() {
       setTest({ id: d.test_id ?? testId, title: d.test_title, tasks, time_limit_minutes: limit, max_attempts: d.max_attempts, allow_interruptions: interruptions });
       setExamStart(d.exam_start ?? null);
       setExamEnd(d.exam_end ?? null);
+
+      // Restore previous_answers from server (for retakes)
+      const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
+      if (prevAnswers.length > 0) {
+        const restored = {};
+        prevAnswers.forEach(a => { restored[a.task_id] = a.user_answer; });
+        setUserAnswers(restored);
+        savedToServerRef.current = true;
+      }
+
       setLoading(false);
       return;
     }
@@ -257,7 +345,19 @@ export default function TestPassingContent() {
         setExamStart(d.exam_start ?? null);
         setExamEnd(d.exam_end ?? null);
 
-        // Restore saved progress (only in interruptible mode)
+        // Restore previous_answers from server (canonical source)
+        const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
+        if (prevAnswers.length > 0) {
+          const restored = {};
+          prevAnswers.forEach(a => { restored[a.task_id] = a.user_answer; });
+          setUserAnswers(restored);
+          savedToServerRef.current = true;
+          // Clean up stale localStorage since server has the canonical progress
+          localStorage.removeItem(`test_progress_${testId}`);
+          localStorage.removeItem(`test_restored_${testId}`);
+        }
+
+        // Restore saved progress (only in interruptible mode) — fallback if no server answers
         if (interruptions !== false) {
           const savedProgress = localStorage.getItem(`test_progress_${testId}`);
           if (savedProgress && !cancelled) {
@@ -360,6 +460,21 @@ export default function TestPassingContent() {
   const handleSubmitClick = () => {
     saveCurrentDrawing();
     doSubmit(userAnswers);
+  };
+
+  const [isExiting, setIsExiting] = useState(false);
+  const handleExitClick = async () => {
+    saveCurrentDrawing();
+    setIsExiting(true);
+    try {
+      await saveProgressToServer();
+      localStorage.removeItem(`test_progress_${testId}`);
+      localStorage.removeItem(`test_restored_${testId}`);
+      navigate('/student');
+    } catch {
+      setIsExiting(false);
+      alert('Не удалось сохранить прогресс. Проверьте интернет-соединение.');
+    }
   };
 
   const handleRetakeInReport = async () => {
@@ -525,9 +640,19 @@ export default function TestPassingContent() {
 
         {/* ── Mode hints ── */}
         {!hasTimer && allowInterruptions && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-600">
-            <AlertTriangle size={12} />
-            Прогресс сохраняется — можно продолжить позже
+          <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-600">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={12} />
+              Прогресс сохраняется на сервере — можно выйти и продолжить позже
+            </div>
+            <button
+              onClick={handleExitClick}
+              disabled={isExiting}
+              className="flex items-center gap-1 px-3 py-1 bg-blue-100 hover:bg-blue-200 rounded-xl text-[10px] font-black uppercase transition disabled:opacity-50"
+            >
+              <LogOut size={12} />
+              {isExiting ? 'Сохранение...' : 'Выйти'}
+            </button>
           </div>
         )}
         {hasTimer && !allowInterruptions && (

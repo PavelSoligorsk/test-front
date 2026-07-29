@@ -21,6 +21,7 @@ export const ENDPOINTS = {
   STUDENT_HINT: (taskId) => `/student/tasks/${taskId}/hint`,
   STUDENT_AI_SOLVE: (taskId) => `/student/tasks/${taskId}/ai-solve`,
   STUDENT_GENERATE_TEST: '/student/generate-test',
+  STUDENT_SAVE_PROGRESS: (testId) => `/student/tests/${testId}/save-progress`,
   STUDENT_RETAKE: (resultId) => `/student/retake/${resultId}`,
   STUDENT_RESULT: (resultId) => `/student/results/${resultId}`,
   STUDENT_THEORY_TOPICS: '/student/theory/topics',
