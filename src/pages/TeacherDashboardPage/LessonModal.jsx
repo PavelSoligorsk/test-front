@@ -456,8 +456,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
     if (!parentForm.name.trim()) { setError('Укажите имя родителя'); return; }
     setActionLoading('parent'); setError(null);
     try {
-      const res = await teacherApi.createParent(parentForm);
-      await teacherApi.linkStudentToParent(res.data.id, student.id);
+      const res = await teacherApi.createParent({ ...parentForm, student_ids: [student.id] });
       setParent(res.data);
       setShowParentForm(false);
       setSuccess('Родитель создан и привязан');
