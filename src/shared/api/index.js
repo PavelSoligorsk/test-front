@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_URL } from '../config';
+import { clearSession } from '../lib/session';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -19,16 +20,15 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Интерцептор для обработки 401 — только очищаем сессию,
-// редирект обрабатывается в компонентах через navigate
+// Интерцептор для обработки 401 — полностью очищаем сессию,
+// clearSession удаляет токены из localStorage, sessionStorage, cookie,
+// сбрасывает axios-заголовок и генерирует SESSION_EVENT,
+// который подхватывает PrivateRoute и делает редирект на /login
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('edu_session');
-      sessionStorage.removeItem('edu_session');
-      // Не делаем window.location.href — это ломает SPA навигацию
-      // Редирект обрабатывается в PrivateRoute и компонентах
+      clearSession();
     }
     return Promise.reject(error);
   }

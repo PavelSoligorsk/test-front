@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { restoreSession, getCurrentUser, SESSION_EVENT } from '../../shared/lib/session';
+import { ErrorBoundary } from '../../shared/ui/ErrorBoundary';
 import Navbar from '../../widgets/Navbar';
 
 // Lazy load pages
@@ -82,9 +83,10 @@ export default function AppRoutes() {
           <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
         </div>
       }>
-        <div className="min-h-screen bg-slate-50">
-          <Navbar />
-          <Routes>
+        <ErrorBoundary>
+          <div className="min-h-screen bg-slate-50">
+            <Navbar />
+            <Routes>
             {/* Публичные страницы — редирект на дашборд если уже залогинен */}
             <Route path="/login" element={
               <RedirectIfAuth><LoginPage /></RedirectIfAuth>
@@ -139,6 +141,7 @@ export default function AppRoutes() {
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
+        </ErrorBoundary>
       </React.Suspense>
     </Router>
   );

@@ -12,6 +12,19 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  /* FullCalendar overrides */
+  --fc-border-color: #e2e8f0;
+  --fc-button-bg-color: #10b981;
+  --fc-button-border-color: #10b981;
+  --fc-button-hover-bg-color: #059669;
+  --fc-button-hover-border-color: #059669;
+  --fc-button-active-bg-color: #059669;
+  --fc-button-active-border-color: #059669;
+  --fc-today-bg-color: rgba(16, 185, 129, 0.08);
+  --fc-event-bg-color: #3b82f6;
+  --fc-event-border-color: #2563eb;
+  --fc-page-bg-color: #ffffff;
+
   @media (max-width: 1024px) {
     font-size: 16px;
   }

@@ -12,6 +12,8 @@ import {
   ClipboardList,
   GraduationCap,
   PlusCircle,
+  Calendar,
+  FileText,
 } from "lucide-react";
 
 // Импортируем подкомпоненты
@@ -27,14 +29,18 @@ import AssignTestToGroupModal from "./AssignTestToGroupModal";
 import GroupDetailModal from "./GroupDetailModal";
 import CreateGroupModal from "./CreateGroupModal";
 import AiTestGeneratorModal from "./AiTestGeneratorModal";
+import CalendarTab from "./CalendarTab";
+import TheoryGeneratorTab from "./TheoryGeneratorTab";
 
 const TABS = [
+  { id: "calendar", icon: Calendar, label: "Календарь" },
   { id: "bank", icon: Database, label: "Банк заданий" },
   { id: "sections", icon: BookOpen, label: "Банк заданий" },
   { id: "constructor", icon: ClipboardList, label: "Конструктор" },
   { id: "students", icon: Users, label: "Ученики" },
   { id: "tests_list", icon: BookOpen, label: "Тесты" },
   { id: "groups", icon: LayoutDashboard, label: "Группы" },
+  { id: "theory_generator", icon: FileText, label: "Теория" },
 ];
 
 export default function TeacherDashboardContent() {
@@ -274,19 +280,19 @@ export default function TeacherDashboardContent() {
             </div>
           </div>
 
-          <nav className="flex flex-wrap gap-1.5 bg-slate-100 dark:bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-2xl w-full">
+          <nav className="grid grid-cols-4 md:grid-cols-8 gap-1.5 bg-slate-100 dark:bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-2xl w-full">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-1 px-1 py-1.5 rounded-xl font-black text-[9px] transition-all flex-[1_0_calc(33.333%-0.5rem)] sm:flex-1 sm:px-3 sm:py-2 sm:text-xs sm:rounded-2xl ${
+                className={`flex items-center justify-center gap-1 px-1 py-2 rounded-xl font-black text-[9px] transition-all md:px-3 md:py-2.5 md:text-xs md:rounded-2xl ${
                   activeTab === tab.id
-                    ? "bg-emerald-500 text-white shadow-lg scale-[0.97] sm:scale-105"
+                    ? "bg-emerald-500 text-white shadow-lg scale-[0.97] md:scale-105"
                     : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800"
                 }`}
               >
-                <tab.icon size={12} className="sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="truncate max-w-[40px] sm:max-w-none sm:inline">{tab.id === "bank" ? "Тесты" : tab.id === "sections" ? "Темы" : tab.label}</span>
+                <tab.icon size={12} className="md:w-4 md:h-4 flex-shrink-0" />
+                <span className="truncate">{tab.id === "bank" ? "Тесты" : tab.id === "sections" ? "Темы" : tab.label}</span>
               </button>
             ))}
           </nav>
@@ -294,6 +300,14 @@ export default function TeacherDashboardContent() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 space-y-6">
+        {activeTab === "calendar" && (
+          <CalendarTab
+            students={students}
+            groups={groups}
+            onRefresh={() => { fetchStudents(); fetchGroups(); }}
+          />
+        )}
+
         {activeTab === "sections" && (
           <TheoryBank
             tasksMeta={topicSectionMeta}
@@ -360,6 +374,10 @@ export default function TeacherDashboardContent() {
             onDetail={(g) => setGroupDetailModal(g)}
             navigate={navigate}
           />
+        )}
+
+        {activeTab === "theory_generator" && (
+          <TheoryGeneratorTab />
         )}
       </main>
 

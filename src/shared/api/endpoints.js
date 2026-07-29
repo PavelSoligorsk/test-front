@@ -54,6 +54,30 @@ export const ENDPOINTS = {
   TEACHER_ASSIGN_TEST_TO_GROUP: '/teacher/assign-test-to-group',
   TEACHER_GENERATE_TEST: '/teacher/generate-test',
 
+  // Учитель — расписание и календарь
+  TEACHER_SCHEDULES: '/teacher/schedules',
+  TEACHER_SCHEDULE: (id) => `/teacher/schedules/${id}`,
+  TEACHER_SCHEDULE_TOGGLE: (id) => `/teacher/schedules/${id}/toggle`,
+  TEACHER_CALENDAR: '/teacher/calendar',
+  TEACHER_LESSONS: '/teacher/lessons',
+  TEACHER_LESSON: (id) => `/teacher/lessons/${id}`,
+  TEACHER_LESSON_COMPLETE: (id) => `/teacher/lessons/${id}/complete`,
+  TEACHER_LESSON_CANCEL: (id) => `/teacher/lessons/${id}/cancel`,
+  TEACHER_LESSON_RESCHEDULE: (id) => `/teacher/lessons/${id}/reschedule`,
+
+  // Учитель — оплаты
+  TEACHER_PAYMENTS: '/teacher/payments',
+  TEACHER_PAYMENT: (id) => `/teacher/payments/${id}`,
+  TEACHER_PAYMENT_PAID: (id) => `/teacher/payments/${id}/paid`,
+  TEACHER_PAYMENT_CANCEL: (id) => `/teacher/payments/${id}/cancel`,
+  TEACHER_PAYMENTS_STATS: '/teacher/payments/stats',
+
+  // Учитель — родители
+  TEACHER_PARENTS: '/teacher/parents',
+  TEACHER_PARENT: (id) => `/teacher/parents/${id}`,
+  TEACHER_PARENT_LINK_STUDENT: (parentId, studentId) => `/teacher/parents/${parentId}/link-student/${studentId}`,
+  TEACHER_PARENT_UNLINK_STUDENT: (studentId) => `/teacher/parents/unlink-student/${studentId}`,
+
   // Статистика
   STATS_ME: '/stats/me',
   STATS_ME_PERIOD: (period) => `/stats/me/period?period=${period}`,
