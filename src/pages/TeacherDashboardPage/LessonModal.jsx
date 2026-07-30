@@ -131,10 +131,10 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   const [editPayForm, setEditPayForm] = useState({ payment_type: 'per_lesson', amount: '', comment: '', package_total: '', valid_from: '', valid_until: '' });
 
   // --- Parent section ---
-  const [parent, setParent] = useState(null);
+  const [parents, setParents] = useState([]);
   const [parentLoading, setParentLoading] = useState(false);
   const [showParentForm, setShowParentForm] = useState(false);
-  const [editingParent, setEditingParent] = useState(false);
+  const [editingParentId, setEditingParentId] = useState(null);
   const [parentForm, setParentForm] = useState({ name: '', phone: '', tg_username: '', comment: '' });
   const [allParents, setAllParents] = useState([]);
   const [parentsLoading, setParentsLoading] = useState(false);
@@ -186,12 +186,11 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   }, [lesson.student_id]);
 
   const fetchParent = useCallback(async () => {
-    if (!student?.id) { setParent(null); return; }
+    if (!student?.id) { setParents([]); return; }
     setParentLoading(true);
     try {
       const res = await teacherApi.getStudentParents(student.id);
-      const parents = res.data || [];
-      setParent(parents.length > 0 ? parents[0] : null);
+      setParents(res.data || []);
     } catch { /* ignore */ }
     finally { setParentLoading(false); }
   }, [student?.id]);
@@ -209,7 +208,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
     setActionLoading('parent'); setError(null);
     try {
       await teacherApi.linkStudentToParent(p.id, student.id);
-      setParent(p);
+      setParents((prev) => [...prev, p]);
       setShowParentPicker(false);
       setSuccess('Родитель привязан');
       onUpdated?.();
@@ -483,7 +482,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
     setActionLoading('parent'); setError(null);
     try {
       const res = await teacherApi.createParent({ ...parentForm, student_ids: [student.id] });
-      setParent(res.data);
+      setParents((prev) => [...prev, res.data]);
       setShowParentForm(false);
       setSuccess('Родитель создан и привязан');
       onUpdated?.();
@@ -491,34 +490,34 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
     finally { setActionLoading(null); }
   };
 
-  const handleEditParent = async () => {
+  const handleEditParent = async (parentId) => {
     setActionLoading('parent'); setError(null);
     try {
-      const res = await teacherApi.updateParent(parent.id, parentForm);
-      setParent(res.data);
-      setEditingParent(false);
+      const res = await teacherApi.updateParent(parentId, parentForm);
+      setParents((prev) => prev.map((p) => p.id === parentId ? res.data : p));
+      setEditingParentId(null);
       setSuccess('Родитель обновлён');
     } catch (e) { setError(e.response?.data?.detail || 'Ошибка при редактировании родителя'); }
     finally { setActionLoading(null); }
   };
 
-  const handleDeleteParent = async () => {
+  const handleDeleteParent = async (parentId) => {
     if (!confirm('Удалить родителя? Студент останется без привязки.')) return;
     setActionLoading('parent'); setError(null);
     try {
-      await teacherApi.deleteParent(parent.id);
-      setParent(null);
+      await teacherApi.deleteParent(parentId);
+      setParents((prev) => prev.filter((p) => p.id !== parentId));
       setSuccess('Родитель удалён');
       onUpdated?.();
     } catch (e) { setError(e.response?.data?.detail || 'Ошибка при удалении родителя'); }
     finally { setActionLoading(null); }
   };
 
-  const handleUnlinkParent = async () => {
+  const handleUnlinkParent = async (parentId) => {
     setActionLoading('parent'); setError(null);
     try {
       await teacherApi.unlinkStudentFromParent(student.id);
-      setParent(null);
+      setParents((prev) => prev.filter((p) => p.id !== parentId));
       setSuccess('Родитель отвязан');
       onUpdated?.();
     } catch (e) { setError(e.response?.data?.detail || 'Ошибка при отвязке родителя'); }
@@ -1071,52 +1070,60 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
           </Section>
 
           {/* --- 6. Parent section --- */}
-          <Section icon={Phone} title="Родитель" badge={
+          <Section icon={Phone} title="Родители" badge={
             parentLoading ? <Loader2 size={12} className="animate-spin text-slate-400 ml-1" /> :
-            parent ? <span className="ml-1 px-2 py-0.5 rounded-full text-[8px] font-black bg-emerald-100 text-emerald-700">Привязан</span> : null
+            parents.length > 0 ? <span className="ml-1 px-2 py-0.5 rounded-full text-[8px] font-black bg-emerald-100 text-emerald-700">{parents.length}</span> : null
           }>
             {parentLoading ? (
               <div className="text-xs text-slate-400 italic py-2 flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Загрузка...</div>
-            ) : parent && !editingParent ? (
+            ) : parents.length > 0 ? (
               <div className="space-y-2">
-                <div className="text-xs text-slate-500 space-y-1">
-                  <div className="font-bold text-slate-700">{parent.name}</div>
-                  {parent.phone && <div>📞 {parent.phone}</div>}
-                  {parent.tg_username && <div className="text-blue-500">{parent.tg_username}</div>}
-                  {parent.comment && <div className="italic text-[10px]">{parent.comment}</div>}
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => { setParentForm({ name: parent.name, phone: parent.phone || '', tg_username: parent.tg_username || '', comment: parent.comment || '' }); setEditingParent(true); setError(null); }}
-                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center gap-1">
-                    <Pencil size={10} /> Ред.
-                  </button>
-                  <button onClick={handleUnlinkParent} disabled={actionLoading === 'parent'}
-                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center gap-1 disabled:opacity-50">
-                    <Unlink size={10} /> Отвязать
-                  </button>
-                  <button onClick={handleDeleteParent} disabled={actionLoading === 'parent'}
-                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-xl text-[10px] font-black text-red-600 flex items-center gap-1 disabled:opacity-50">
-                    <Trash2 size={10} /> Удалить
-                  </button>
-                </div>
-              </div>
-            ) : parent && editingParent ? (
-              <div className="space-y-2">
-                <input type="text" placeholder="Имя *" value={parentForm.name} onChange={(e) => setParentForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none" />
-                <input type="text" placeholder="Телефон" value={parentForm.phone} onChange={(e) => setParentForm((f) => ({ ...f, phone: e.target.value }))}
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
-                <input type="text" placeholder="TG username" value={parentForm.tg_username} onChange={(e) => setParentForm((f) => ({ ...f, tg_username: e.target.value }))}
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
-                <input type="text" placeholder="Комментарий" value={parentForm.comment} onChange={(e) => setParentForm((f) => ({ ...f, comment: e.target.value }))}
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
-                <div className="flex gap-2">
-                  <button onClick={() => { setEditingParent(false); setError(null); }} className="flex-1 p-2 bg-slate-100 rounded-xl text-xs font-black text-slate-500">Отмена</button>
-                  <button onClick={handleEditParent} disabled={actionLoading === 'parent' || !parentForm.name.trim()}
-                    className="flex-1 p-2 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-1">
-                    {actionLoading === 'parent' ? <Loader2 size={12} className="animate-spin" /> : null} Сохранить
-                  </button>
-                </div>
+                {parents.map((p) => (
+                  <div key={p.id} className="p-2 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                    {editingParentId === p.id ? (
+                      <div className="space-y-2">
+                        <input type="text" placeholder="Имя *" value={parentForm.name} onChange={(e) => setParentForm((f) => ({ ...f, name: e.target.value }))}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none" />
+                        <input type="text" placeholder="Телефон" value={parentForm.phone} onChange={(e) => setParentForm((f) => ({ ...f, phone: e.target.value }))}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
+                        <input type="text" placeholder="TG username" value={parentForm.tg_username} onChange={(e) => setParentForm((f) => ({ ...f, tg_username: e.target.value }))}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
+                        <input type="text" placeholder="Комментарий" value={parentForm.comment} onChange={(e) => setParentForm((f) => ({ ...f, comment: e.target.value }))}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none" />
+                        <div className="flex gap-2">
+                          <button onClick={() => { setEditingParentId(null); setError(null); }} className="flex-1 p-2 bg-slate-100 rounded-xl text-xs font-black text-slate-500">Отмена</button>
+                          <button onClick={() => handleEditParent(p.id)} disabled={actionLoading === 'parent' || !parentForm.name.trim()}
+                            className="flex-1 p-2 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-1">
+                            {actionLoading === 'parent' ? <Loader2 size={12} className="animate-spin" /> : null} Сохранить
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-xs text-slate-500 space-y-0.5">
+                          <div className="font-bold text-slate-700">{p.name}</div>
+                          {p.phone && <div>📞 {p.phone}</div>}
+                          {p.tg_username && <div className="text-blue-500">{p.tg_username}</div>}
+                          {p.comment && <div className="italic text-[10px]">{p.comment}</div>}
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <button onClick={() => { setParentForm({ name: p.name, phone: p.phone || '', tg_username: p.tg_username || '', comment: p.comment || '' }); setEditingParentId(p.id); setError(null); }}
+                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center gap-1">
+                            <Pencil size={10} /> Ред.
+                          </button>
+                          <button onClick={() => handleUnlinkParent(p.id)} disabled={actionLoading === 'parent'}
+                            className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center gap-1 disabled:opacity-50">
+                            <Unlink size={10} /> Отвязать
+                          </button>
+                          <button onClick={() => handleDeleteParent(p.id)} disabled={actionLoading === 'parent'}
+                            className="px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-xl text-[10px] font-black text-red-600 flex items-center gap-1 disabled:opacity-50">
+                            <Trash2 size={10} /> Удалить
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : showParentForm ? (
               <div className="space-y-2">
@@ -1138,7 +1145,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="text-xs text-slate-400 italic py-2">Не указан</div>
+                <div className="text-xs text-slate-400 italic py-2">Не указаны</div>
                 <div className="flex gap-2">
                   <button onClick={() => { setShowParentForm(true); setParentForm({ name: '', phone: '', tg_username: '', comment: '' }); setError(null); }}
                     className="flex-1 p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-[10px] font-black text-slate-600 flex items-center justify-center gap-1">
