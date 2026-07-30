@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { API_BASE } from "../../shared/api";
-import { restoreSession } from "../../shared/lib/session";
+import { restoreSession, saveSession } from "../../shared/lib/session";
 import {
   Database,
   Users,
@@ -14,6 +14,8 @@ import {
   PlusCircle,
   Calendar,
   FileText,
+  User as UserIcon,
+  Settings,
 } from "lucide-react";
 
 // Импортируем подкомпоненты
@@ -31,6 +33,7 @@ import CreateGroupModal from "./CreateGroupModal";
 import AiTestGeneratorModal from "./AiTestGeneratorModal";
 import CalendarTab from "./CalendarTab";
 import TheoryGeneratorTab from "./TheoryGeneratorTab";
+import { teacherApi } from "../../features/teacher/api";
 
 const TABS = [
   { id: "calendar", icon: Calendar, label: "Календарь" },
@@ -80,6 +83,39 @@ export default function TeacherDashboardContent() {
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
   const [editingTest, setEditingTest] = useState(null); // данные редактируемого теста
+
+  // --- Profile edit ---
+  const [profileModal, setProfileModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({ first_name: '', last_name: '', phone: '', tg_username: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const openProfileModal = () => {
+    const user = restoreSession();
+    setProfileForm({
+      first_name: user?.first_name || '',
+      last_name: user?.last_name || '',
+      phone: user?.phone || '',
+      tg_username: user?.tg_username || '',
+    });
+    setProfileModal(true);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    try {
+      const res = await teacherApi.updateProfile(profileForm);
+      // Update session with new data
+      const user = restoreSession();
+      if (user) {
+        saveSession({ ...user, ...res.data });
+      }
+      setProfileModal(false);
+      alert('Профиль обновлён!');
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Ошибка при сохранении');
+    } finally { setProfileSaving(false); }
+  };
 
   const getAuthHeaders = () => {
     const user = restoreSession();
@@ -278,6 +314,12 @@ export default function TeacherDashboardContent() {
                 </p>
               </div>
             </div>
+            <button onClick={openProfileModal}
+              className="p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl text-slate-600 hover:text-slate-800 transition-all flex items-center gap-2"
+              title="Редактировать профиль">
+              <Settings size={16} />
+              <span className="text-[10px] font-black uppercase hidden sm:inline">Профиль</span>
+            </button>
           </div>
 
           <nav className="grid grid-cols-4 md:grid-cols-8 gap-1.5 bg-slate-100 dark:bg-slate-800/50 backdrop-blur-sm p-1.5 rounded-2xl w-full">
@@ -441,6 +483,63 @@ export default function TeacherDashboardContent() {
           onClose={() => setAiGeneratorModal(false)}
           onGenerate={handleGenerateAiTest}
         />
+      )}
+
+      {/* Profile edit modal */}
+      {profileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/20 rounded-xl text-emerald-500">
+                  <UserIcon size={18} />
+                </div>
+                <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase">Профиль</h2>
+              </div>
+              <button onClick={() => setProfileModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <form onSubmit={handleSaveProfile} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Имя</label>
+                <input type="text" value={profileForm.first_name}
+                  onChange={e => setProfileForm(f => ({ ...f, first_name: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl font-bold text-slate-900 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Фамилия</label>
+                <input type="text" value={profileForm.last_name}
+                  onChange={e => setProfileForm(f => ({ ...f, last_name: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl font-bold text-slate-900 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Телефон</label>
+                <input type="tel" value={profileForm.phone}
+                  onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl font-bold text-slate-900 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telegram</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-emerald-500">@</span>
+                  <input type="text" value={profileForm.tg_username}
+                    onChange={e => setProfileForm(f => ({ ...f, tg_username: e.target.value }))}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-transparent rounded-xl font-bold text-slate-900 focus:bg-white focus:border-emerald-500 outline-none transition-all text-sm" />
+                </div>
+              </div>
+              <div className="pt-2 flex gap-2">
+                <button type="button" onClick={() => setProfileModal(false)}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase hover:bg-slate-200 transition-all">Отмена</button>
+                <button type="submit" disabled={profileSaving}
+                  className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-xs uppercase hover:bg-emerald-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                  {profileSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Сохранить'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Floating indicator */}

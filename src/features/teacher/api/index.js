@@ -187,4 +187,13 @@ export const teacherApi = {
   unlinkStudentFromParent(studentId) {
     return apiClient.delete(ENDPOINTS.TEACHER_PARENT_UNLINK_STUDENT(studentId));
   },
+
+  getStudentParents(studentId) {
+    return apiClient.get(ENDPOINTS.TEACHER_STUDENT_PARENTS(studentId));
+  },
+
+  // --- Профиль ---
+  updateProfile(data) {
+    return apiClient.put(ENDPOINTS.TEACHER_PROFILE, data);
+  },
 };

@@ -78,6 +78,10 @@ export const ENDPOINTS = {
   TEACHER_PARENT: (id) => `/teacher/parents/${id}`,
   TEACHER_PARENT_LINK_STUDENT: (parentId, studentId) => `/teacher/parents/${parentId}/link-student/${studentId}`,
   TEACHER_PARENT_UNLINK_STUDENT: (studentId) => `/teacher/parents/unlink-student/${studentId}`,
+  TEACHER_STUDENT_PARENTS: (studentId) => `/teacher/students/${studentId}/parents`,
+
+  // Учитель — профиль
+  TEACHER_PROFILE: '/teacher/profile',
 
   // Статистика
   STATS_ME: '/stats/me',

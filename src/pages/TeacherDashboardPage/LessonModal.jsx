@@ -186,22 +186,15 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   }, [lesson.student_id]);
 
   const fetchParent = useCallback(async () => {
-    if (!student?.parent_id) { setParent(null); return; }
+    if (!student?.id) { setParent(null); return; }
     setParentLoading(true);
     try {
-      const res = await teacherApi.getParents();
-      const p = (res.data || []).find((p) => p.id === student.parent_id);
-      setParent(p || null);
-      // Also cache for the picker
-      if (res.data?.length) setAllParents((prev) => {
-        const existingIds = new Set(prev.map((x) => x.id));
-        const merged = [...prev];
-        for (const p of res.data) if (!existingIds.has(p.id)) merged.push(p);
-        return merged;
-      });
+      const res = await teacherApi.getStudentParents(student.id);
+      const parents = res.data || [];
+      setParent(parents.length > 0 ? parents[0] : null);
     } catch { /* ignore */ }
     finally { setParentLoading(false); }
-  }, [student?.parent_id]);
+  }, [student?.id]);
 
   const fetchAllParents = useCallback(async () => {
     setParentsLoading(true);
