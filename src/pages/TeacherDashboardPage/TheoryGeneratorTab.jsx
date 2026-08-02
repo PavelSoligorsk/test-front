@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
 
 // ── Mermaid renderer через CDN (БЕЗ УСТАНОВКИ) ──
@@ -109,7 +110,7 @@ function MermaidBlock({ chart }) {
   }
 
   return (
-    <div className="my-6 p-4 bg-white rounded-lg border border-slate-200 overflow-x-auto">
+    <div className="my-6 p-4 bg-white rounded-lg border border-slate-200 overflow-x-auto mermaid-diagram">
       <div 
         className="flex justify-center"
         dangerouslySetInnerHTML={{ __html: svg }} 
@@ -138,7 +139,7 @@ function TableOfContents({ md }) {
   if (headings.length === 0) return null;
 
   return (
-    <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200 print:bg-white print:border print:border-slate-300">
+    <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200 print:bg-white print:border print:border-slate-300 no-print">
       <div className="flex items-center gap-2 mb-3">
         <ListTree size={16} className="text-purple-500" />
         <span className="text-xs font-bold uppercase text-purple-600 tracking-wider">
@@ -171,7 +172,7 @@ const CUSTOM_COMPONENTS = {
     const opts = (options || '').split(';').map(o => o.trim()).filter(Boolean);
     
     return (
-      <div className="my-6 p-6 bg-emerald-50 rounded-lg border border-emerald-200 print:border-2">
+      <div className="my-6 p-6 bg-emerald-50 rounded-lg border border-emerald-200 print:border-2 quiz-widget">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
             Q
@@ -424,11 +425,16 @@ const MARKDOWN_COMPONENTS = {
 function processCustomTags(md) {
   let result = md;
 
+  // Преобразуем <Quiz ... /> в HTML теги
   result = result.replace(
     /<Quiz\s+question="([^"]*)"\s+options="([^"]*)"\s+answer="([^"]*)"(?:\s+explanation="([^"]*)")?\s*\/>/g,
-    '<quiz question="$1" options="$2" answer="$3" explanation="$4"></quiz>'
+    (match, question, options, answer, explanation) => {
+      const explAttr = explanation ? ` explanation="${explanation}"` : '';
+      return `<quiz question="${question}" options="${options}" answer="${answer}"${explAttr}></quiz>`;
+    }
   );
 
+  // Преобразуем ::: блоки в HTML теги
   result = result.replace(
     /:::tip\[([^\]]*)\]\s*\n([\s\S]*?)(?=\n:::|$)/g,
     '<tip title="$1">$2</tip>'
@@ -510,6 +516,10 @@ $$
 Теорема Виета работает только когда $a = 1$!
 :::
 
+:::info[Примечание]
+Этот метод особенно полезен для целочисленных корней.
+:::
+
 ---
 
 ## 🐍 Код на Python
@@ -540,6 +550,7 @@ print(solve_quadratic(2, -4, -6))  # (-1.0, 3.0)
 
 ## Диаграмма алгоритма решения
 
+\`\`\`mermaid
 flowchart TD
     A[Начало] --> B{a = 0?}
     B -->|Да| C[Не квадратное уравнение]
@@ -553,6 +564,7 @@ flowchart TD
     F --> Z
     H --> Z
     I --> Z
+\`\`\`
 
 <Quiz 
   question="Сколько корней у уравнения x² - 5x + 6 = 0?" 
@@ -760,7 +772,7 @@ export default function TheoryGeneratorTab() {
               <div className="prose prose-slate max-w-none">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath, remarkGfm]}
-                  rehypePlugins={[rehypeKatex]}
+                  rehypePlugins={[rehypeKatex, rehypeRaw]}
                   components={{
                     ...MARKDOWN_COMPONENTS,
                     ...CUSTOM_COMPONENTS,

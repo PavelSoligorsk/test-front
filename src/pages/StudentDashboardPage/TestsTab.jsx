@@ -28,7 +28,7 @@ export default function TestsTab({
               {typeFilteredTests.length} тестов доступно
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button onClick={() => setExamFilter(!examFilter)}
               className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-1.5 border select-none shrink-0 ${examFilter ? 'bg-amber-500 text-white border-transparent shadow-lg shadow-amber-500/20' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
               <ScanSearch size={14} /> ЦТ/ЦЭ/РТ
@@ -37,16 +37,16 @@ export default function TestsTab({
               const filters = ['all', 'public', 'teacher', 'ai'];
               const ci = filters.indexOf(testTypeFilter);
               setTestTypeFilter(filters[(ci + 1) % filters.length]);
-            }} className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none shrink-0 ${
+            }} className={`flex-1 sm:flex-none px-5 py-3 sm:py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 border select-none ${
             testTypeFilter === 'all' ? 'bg-slate-900 text-white border-transparent shadow-lg shadow-slate-900/20'
             : testTypeFilter === 'public' ? 'bg-blue-600 text-white border-transparent shadow-lg shadow-blue-600/20'
             : testTypeFilter === 'teacher' ? 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-600/20'
             : 'bg-purple-600 text-white border-transparent shadow-lg shadow-purple-600/20'
           }`}>
-            {testTypeFilter === 'all' && <span>Все ({allTests.length})</span>}
-            {testTypeFilter === 'public' && <span>Общие ({publicStaticTests.length})</span>}
-            {testTypeFilter === 'teacher' && <span>Учительские ({teacherTests.length})</span>}
-            {testTypeFilter === 'ai' && <span>AI ({aiTestsMapped.length})</span>}
+            {testTypeFilter === 'all' && <span className="whitespace-nowrap">Все ({allTests.length})</span>}
+            {testTypeFilter === 'public' && <span className="whitespace-nowrap">Общие ({publicStaticTests.length})</span>}
+            {testTypeFilter === 'teacher' && <span className="whitespace-nowrap">Учительские ({teacherTests.length})</span>}
+            {testTypeFilter === 'ai' && <span className="whitespace-nowrap">AI ({aiTestsMapped.length})</span>}
           </button>
           </div>
         </div>
