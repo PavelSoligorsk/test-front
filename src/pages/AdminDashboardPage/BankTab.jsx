@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Download, FolderTree } from 'lucide-react';
+import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
@@ -215,12 +215,14 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     copyJSONToClipboard(loadedTasks, setFeedback);
   };
 
+  const [classifyAll, setClassifyAll] = useState(false);
+
   const handleClassify = async () => {
     setClassifyRunning(true);
     setClassifyResult(null);
     try {
-      const ids = currentTasks.map(t => t.id);
-      const res = await classifyTasks({ task_ids: ids });
+      const ids = classifyAll ? [] : currentTasks.map(t => t.id);
+      const res = await classifyTasks({ task_ids: ids, all_tasks: classifyAll });
       setClassifyResult(res);
       setClassifyModal(true);
       await refreshCurrentTasks();
@@ -342,9 +344,9 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               <button
                 onClick={handleExportJSON}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-black uppercase transition-all"
-                title="Скачать задания как JSON"
+                title="Копировать JSON в буфер обмена"
               >
-                <Download size={12} /> JSON
+                <Copy size={12} /> JSON
               </button>
             )}
             {/* Back button */}
@@ -538,7 +540,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                   onClick={handleExportJSON}
                   className="flex items-center gap-1.5 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-black uppercase transition-all"
                 >
-                  <Download size={14} /> JSON
+                  <Copy size={14} /> JSON
                 </button>
               )}
               <button
@@ -566,21 +568,29 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                     {classifyResult.failed || 0} ошибок
                   </button>
                 )}
-                <button
-                  onClick={handleClassify}
-                  disabled={classifyRunning || currentTasks.length === 0}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                    classifyRunning
-                      ? 'bg-slate-200 text-slate-400 cursor-wait'
-                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200'
-                  }`}
-                >
-                  {classifyRunning ? (
-                    <><Clock size={14} className="animate-spin" /> Идёт...</>
-                  ) : (
-                    <><Sparkles size={14} /> Классифицировать ({currentTasks.length})</>
-                  )}
-                </button>
+                <div className="flex items-center gap-1">
+                  <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all select-none"
+                    style={{ color: classifyAll ? '#7c3aed' : '#94a3b8', background: classifyAll ? '#f5f3ff' : '#f8fafc' }}>
+                    <input type="checkbox" checked={classifyAll} onChange={e => setClassifyAll(e.target.checked)}
+                      className="w-3 h-3 accent-purple-600 cursor-pointer" />
+                    Все
+                  </label>
+                  <button
+                    onClick={handleClassify}
+                    disabled={classifyRunning || currentTasks.length === 0}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+                      classifyRunning
+                        ? 'bg-slate-200 text-slate-400 cursor-wait'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200'
+                    }`}
+                  >
+                    {classifyRunning ? (
+                      <><Clock size={14} className="animate-spin" /> Идёт...</>
+                    ) : (
+                      <><Sparkles size={14} /> Классифицировать ({classifyAll ? 'все' : currentTasks.length})</>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="space-y-4">
@@ -679,6 +689,13 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
             )}
           </div>
         )
+      )}
+
+      {/* Feedback toast */}
+      {feedback && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-black uppercase animate-in slide-in-from-right-2 duration-300">
+          {feedback}
+        </div>
       )}
 
       {isShowingTasks && loadedTasks.length > 0 && (

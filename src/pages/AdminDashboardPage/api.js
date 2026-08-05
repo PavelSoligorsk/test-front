@@ -142,6 +142,7 @@ export const deleteTheory = async (id) => {
 
 // Classify
 export const classifyTasks = async (payload = {}) => {
+  // payload: { task_ids: [...], all_tasks: bool }
   const res = await axios.post(`${API_BASE}/admin/classify-tasks`, payload, { headers: getAuthHeaders() });
   return res.data;
 };
