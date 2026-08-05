@@ -22,6 +22,41 @@ export const adminApi = {
     return apiClient.delete(ENDPOINTS.ADMIN_TASK(id));
   },
 
+  // Batch operations
+  createTasksBatch(tasks) {
+    return apiClient.post(ENDPOINTS.ADMIN_TASKS_BATCH, { tasks });
+  },
+
+  updateTasksBatch(tasks) {
+    return apiClient.put(ENDPOINTS.ADMIN_TASKS_BATCH, { tasks });
+  },
+
+  deleteTasksBatch(ids) {
+    return apiClient.delete(ENDPOINTS.ADMIN_TASKS_BATCH, { data: { ids } });
+  },
+
+  // Lazy loading meta
+  getTasksMeta() {
+    return apiClient.get(ENDPOINTS.ADMIN_TASKS_META);
+  },
+
+  getTasksMetaByTopicSection() {
+    return apiClient.get(ENDPOINTS.ADMIN_TASKS_META_BY_TOPIC_SECTION);
+  },
+
+  // Tests
+  getTests() {
+    return apiClient.get(ENDPOINTS.ADMIN_TESTS);
+  },
+
+  getTest(id) {
+    return apiClient.get(ENDPOINTS.ADMIN_TEST(id));
+  },
+
+  getTestTasks(id) {
+    return apiClient.get(ENDPOINTS.ADMIN_TEST_TASKS(id));
+  },
+
   getUserProfile(userId) {
     return apiClient.get(ENDPOINTS.ADMIN_USERS_PROFILE(userId));
   },

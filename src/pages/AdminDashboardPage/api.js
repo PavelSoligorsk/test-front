@@ -43,6 +43,19 @@ export const fetchTasks = async () => {
   return res.data;
 };
 
+export const fetchTasksMeta = async () => {
+  const res = await axios.get(`${API_BASE}/admin/tasks-meta`, { headers: getAuthHeaders() });
+  return res.data;
+};
+
+export const fetchTasksByClassTopic = async (taskClass, topicNumber) => {
+  const res = await axios.get(`${API_BASE}/admin/tasks/by-class/`, {
+    params: { task_class: taskClass, topic_number: topicNumber },
+    headers: getAuthHeaders(),
+  });
+  return res.data;
+};
+
 export const fetchTask = async (taskId) => {
   const res = await axios.get(`${API_BASE}/admin/${taskId}`);
   return res.data;
@@ -58,6 +71,22 @@ export const updateTask = async (taskId, taskData) => {
 
 export const deleteTask = async (taskId) => {
   await axios.delete(`${API_BASE}/admin/tasks/${taskId}`);
+};
+
+// Batch operations
+export const createTasksBatch = async (tasks) => {
+  const res = await axios.post(`${API_BASE}/admin/tasks/batch`, { tasks }, { headers: getAuthHeaders() });
+  return res.data;
+};
+
+export const updateTasksBatch = async (tasks) => {
+  const res = await axios.put(`${API_BASE}/admin/tasks/batch`, { tasks }, { headers: getAuthHeaders() });
+  return res.data;
+};
+
+export const deleteTasksBatch = async (ids) => {
+  const res = await axios.delete(`${API_BASE}/admin/tasks/batch`, { data: { ids }, headers: getAuthHeaders() });
+  return res.data;
 };
 
 export const sendTaskToTelegram = async (taskId) => {

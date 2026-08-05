@@ -31,6 +31,12 @@ export const ENDPOINTS = {
   // Админ
   ADMIN_TASKS: '/admin/tasks',
   ADMIN_TASK: (id) => `/admin/tasks/${id}`,
+  ADMIN_TASKS_BATCH: '/admin/tasks/batch',
+  ADMIN_TASKS_META: '/admin/tasks-meta',
+  ADMIN_TASKS_META_BY_TOPIC_SECTION: '/admin/tasks-meta-by-topic-section',
+  ADMIN_TESTS: '/admin/tests',
+  ADMIN_TEST: (id) => `/admin/tests/${id}`,
+  ADMIN_TEST_TASKS: (id) => `/admin/tests/${id}/tasks`,
   ADMIN_USERS_PROFILE: (userId) => `/admin/users/${userId}/profile`,
   ADMIN_USERS_HISTORY: (userId) => `/admin/users/${userId}/history`,
   ADMIN_RESULT: (resultId) => `/admin/results/${resultId}`,

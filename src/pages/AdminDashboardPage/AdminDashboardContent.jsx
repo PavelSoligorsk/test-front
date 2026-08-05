@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlusCircle, Database, Users, LayoutDashboard, BookOpen, Library, ShieldCheck } from 'lucide-react';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC, INITIAL_TASK_STATE } from './constants';
-import { fetchUsers, fetchTasks, fetchAllowedEmails, fetchTheoryList, createTask, updateTask, createTheory, updateTheory, deleteTheory, addAllowedEmail, deleteAllowedEmail, rebuildStaticTests } from './api';
+import { fetchUsers, fetchTasks, fetchTasksMeta, fetchAllowedEmails, fetchTheoryList, createTask, updateTask, createTheory, updateTheory, deleteTheory, addAllowedEmail, deleteAllowedEmail, rebuildStaticTests } from './api';
 import TaskForm from './TaskForm';
 import TaskFormPreview from './TaskFormPreview';
 import BankTab from './BankTab';
@@ -54,6 +54,7 @@ export default function AdminDashboardContent() {
   // Data
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [tasksMeta, setTasksMeta] = useState(null); // Lazy: { class: { topic: count } }
   const [allowedEmails, setAllowedEmails] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [userSearch, setUserSearch] = useState('');
@@ -73,18 +74,18 @@ export default function AdminDashboardContent() {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
 
-  // Initial load
+  // Initial load — only meta, not all tasks
   useEffect(() => {
     const init = async () => {
       try {
-        const [usersData, tasksData, emailsData, theoryDataList] = await Promise.all([
+        const [usersData, tasksMetaData, emailsData, theoryDataList] = await Promise.all([
           fetchUsers(),
-          fetchTasks(),
+          fetchTasksMeta(),
           fetchAllowedEmails(),
           fetchTheoryList(),
         ]);
         setUsers(usersData);
-        setTasks(tasksData);
+        setTasksMeta(tasksMetaData);
         setAllowedEmails(emailsData);
         setTheoryList(theoryDataList);
       } catch (e) { console.error(e); }
@@ -112,24 +113,16 @@ export default function AdminDashboardContent() {
     }
   }, [tasks]);
 
-  // Computed
-  const groupedTasks = useMemo(() => {
-    return tasks.reduce((acc, t) => {
-      if (!acc[t.task_class]) acc[t.task_class] = {};
-      if (!acc[t.task_class][t.topic_number]) acc[t.task_class][t.topic_number] = [];
-      acc[t.task_class][t.topic_number].push(t);
-      return acc;
-    }, {});
-  }, [tasks]);
-
+  // Computed from meta (lazy)
   const availableClasses = useMemo(() => {
-    return Object.keys(groupedTasks).sort((a, b) => {
+    if (!tasksMeta) return [];
+    return Object.keys(tasksMeta).sort((a, b) => {
       const numA = parseInt(a);
       const numB = parseInt(b);
       if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       return a.localeCompare(b);
     });
-  }, [groupedTasks]);
+  }, [tasksMeta]);
 
   const filteredUsers = users.filter(u => {
     const match = (u.first_name + u.last_name + u.username).toLowerCase().includes(userSearch.toLowerCase());
@@ -320,15 +313,17 @@ export default function AdminDashboardContent() {
         {/* Bank Tab */}
         {activeTab === 'bank' && (
           <BankTab
-            tasks={tasks}
-            groupedTasks={groupedTasks}
+            tasksMeta={tasksMeta}
             availableClasses={availableClasses}
             bankClass={bankClass}
             setBankClass={setBankClass}
             bankTopic={bankTopic}
             setBankTopic={setBankTopic}
             onEditTask={handleEditTask}
-            onTasksUpdate={() => fetchTasks().then(setTasks)}
+            onTasksUpdate={async () => {
+              const meta = await fetchTasksMeta();
+              setTasksMeta(meta);
+            }}
           />
         )}
 
