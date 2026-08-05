@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2 } from 'lucide-react';
+import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Download, FolderTree } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
-import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic } from './api';
+import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
@@ -18,6 +18,30 @@ const getDifficultyColor = (lvl) => {
   return 'text-emerald-500 bg-emerald-50 border-emerald-100';
 };
 
+const downloadJSON = (tasks, filenameBase) => {
+  const data = JSON.stringify(tasks.map(t => ({
+    id: t.id,
+    task_class: t.task_class,
+    topic_number: t.topic_number,
+    topic: t.topic || '',
+    section: t.section || '',
+    content: t.content,
+    answer: t.answer,
+    is_open_answer: t.is_open_answer,
+    difficulty: t.difficulty,
+    options: t.options,
+    hint: t.hint || '',
+    solution: t.solution || '',
+  })), null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filenameBase}_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function BankTab({ tasksMeta, availableClasses, bankClass, setBankClass, bankTopic, setBankTopic, onEditTask, onTasksUpdate }) {
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
@@ -26,20 +50,38 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   const [topicSearch, setTopicSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
 
+  // Navigation mode: 'class' (class → topic_number) or 'topic' (topic → section)
+  const [navMode, setNavMode] = useState('class');
+  
+  // Topic-section nav state
+  const [selectedNavTopic, setSelectedNavTopic] = useState(null);
+  const [selectedNavSection, setSelectedNavSection] = useState(null);
+  const [topicSectionMeta, setTopicSectionMeta] = useState(null); // { topic: { section: count } }
+
   // Lazy loading state
-  const [loadedTasks, setLoadedTasks] = useState([]); // tasks for current class+topic
+  const [loadedTasks, setLoadedTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
-  // Classify state
-  const [classifyRunning, setClassifyRunning] = useState(false);
-  const [classifyResult, setClassifyResult] = useState(null);
-  const [classifyModal, setClassifyModal] = useState(false);
-  const [failedTaskIds, setFailedTaskIds] = useState(new Set());
-
-  // Load tasks when class + topic are selected
+  // Load topic-section meta
   useEffect(() => {
-    if (!bankClass || !bankTopic) {
-      setLoadedTasks([]);
+    if (navMode !== 'topic') return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { fetchTasksMetaByTopicSection } = await import('./api');
+        if (cancelled) return;
+        const data = await fetchTasksMetaByTopicSection();
+        if (!cancelled) setTopicSectionMeta(data);
+      } catch (e) { console.error(e); }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [navMode]);
+
+  // Load tasks by class+topic
+  useEffect(() => {
+    if (navMode !== 'class' || !bankClass || !bankTopic) {
+      if (navMode === 'class') setLoadedTasks([]);
       return;
     }
     let cancelled = false;
@@ -49,7 +91,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         const data = await fetchTasksByClassTopic(bankClass, bankTopic);
         if (!cancelled) setLoadedTasks(data);
       } catch (e) {
-        console.error('Failed to load tasks', e);
+        console.error(e);
         if (!cancelled) setLoadedTasks([]);
       } finally {
         if (!cancelled) setLoadingTasks(false);
@@ -57,19 +99,51 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     };
     load();
     return () => { cancelled = true; };
-  }, [bankClass, bankTopic]);
+  }, [navMode, bankClass, bankTopic]);
 
-  // Refresh tasks after update/delete/classify
+  // Load tasks by topic+section
+  useEffect(() => {
+    if (navMode !== 'topic' || !selectedNavTopic || !selectedNavSection) {
+      if (navMode === 'topic') setLoadedTasks([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setLoadingTasks(true);
+      try {
+        const data = await fetchTasksByTopicSection(selectedNavTopic, selectedNavSection);
+        if (!cancelled) setLoadedTasks(data);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setLoadedTasks([]);
+      } finally {
+        if (!cancelled) setLoadingTasks(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [navMode, selectedNavTopic, selectedNavSection]);
+
+  // Refresh tasks
   const refreshCurrentTasks = useCallback(async () => {
-    if (!bankClass || !bankTopic) return;
+    let data = [];
     try {
-      const data = await fetchTasksByClassTopic(bankClass, bankTopic);
-      setLoadedTasks(data);
+      if (navMode === 'class' && bankClass && bankTopic) {
+        data = await fetchTasksByClassTopic(bankClass, bankTopic);
+      } else if (navMode === 'topic' && selectedNavTopic && selectedNavSection) {
+        data = await fetchTasksByTopicSection(selectedNavTopic, selectedNavSection);
+      }
     } catch (e) { console.error(e); }
+    if (data.length || loadedTasks.length) setLoadedTasks(data);
     if (onTasksUpdate) onTasksUpdate();
-  }, [bankClass, bankTopic, onTasksUpdate]);
+  }, [navMode, bankClass, bankTopic, selectedNavTopic, selectedNavSection, onTasksUpdate, loadedTasks.length]);
 
-  // Derive failed IDs from classify log
+  // Classify
+  const [classifyRunning, setClassifyRunning] = useState(false);
+  const [classifyResult, setClassifyResult] = useState(null);
+  const [classifyModal, setClassifyModal] = useState(false);
+  const [failedTaskIds, setFailedTaskIds] = useState(new Set());
+
   useEffect(() => {
     if (!classifyResult?.log) return;
     const ids = new Set();
@@ -126,40 +200,12 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     } catch (err) { alert('Ошибка при обновлении сложности'); }
   };
 
-  // Filter classes by search
-  const filteredClasses = useMemo(() => {
-    return availableClasses.filter(cls =>
-      cls.toLowerCase().includes(classSearch.toLowerCase())
-    );
-  }, [availableClasses, classSearch]);
-
-  const topicsForClass = useMemo(() => {
-    if (!bankClass || !tasksMeta || !tasksMeta[bankClass]) return [];
-    return Object.keys(tasksMeta[bankClass]).sort();
-  }, [bankClass, tasksMeta]);
-
-  const filteredTopics = useMemo(() => {
-    return topicsForClass.filter(topic =>
-      topic.toLowerCase().includes(topicSearch.toLowerCase())
-    );
-  }, [topicsForClass, topicSearch]);
-
-  const currentTasks = useMemo(() => {
-    let list = loadedTasks;
-    if (examFilter) list = list.filter(t => hasExamKeyword(t.content));
-    if (taskSearch) {
-      const q = taskSearch.toLowerCase();
-      list = list.filter(t =>
-        t.content?.toLowerCase().includes(q) ||
-        t.answer?.toLowerCase().includes(q) ||
-        t.id?.toString().includes(q)
-      );
-    }
-    return list.slice().sort((a, b) => {
-      if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-      return (a.difficulty || 0) - (b.difficulty || 0);
-    });
-  }, [loadedTasks, examFilter, taskSearch]);
+  const handleExportJSON = () => {
+    const label = navMode === 'class'
+      ? `${bankClass}_${bankTopic}`
+      : `${selectedNavTopic}_${selectedNavSection}`;
+    downloadJSON(loadedTasks, `tasks_${label}`);
+  };
 
   const handleClassify = async () => {
     setClassifyRunning(true);
@@ -177,9 +223,62 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     }
   };
 
+  // --- Class mode filters ---
+  const filteredClasses = useMemo(() => {
+    return availableClasses.filter(cls =>
+      cls.toLowerCase().includes(classSearch.toLowerCase())
+    );
+  }, [availableClasses, classSearch]);
+
+  const topicsForClass = useMemo(() => {
+    if (!bankClass || !tasksMeta || !tasksMeta[bankClass]) return [];
+    return Object.keys(tasksMeta[bankClass]).sort();
+  }, [bankClass, tasksMeta]);
+
+  const filteredTopics = useMemo(() => {
+    return topicsForClass.filter(topic =>
+      topic.toLowerCase().includes(topicSearch.toLowerCase())
+    );
+  }, [topicsForClass, topicSearch]);
+
+  // --- Topic-section mode filters ---
+  const filteredNavTopics = useMemo(() => {
+    if (!topicSectionMeta) return [];
+    return Object.keys(topicSectionMeta)
+      .filter(t => t.toLowerCase().includes(topicSearch.toLowerCase()))
+      .sort();
+  }, [topicSectionMeta, topicSearch]);
+
+  const sectionsForNavTopic = useMemo(() => {
+    if (!selectedNavTopic || !topicSectionMeta?.[selectedNavTopic]) return [];
+    return Object.keys(topicSectionMeta[selectedNavTopic]).sort();
+  }, [selectedNavTopic, topicSectionMeta]);
+
+  // --- Current task list ---
+  const currentTasks = useMemo(() => {
+    let list = loadedTasks;
+    if (examFilter) list = list.filter(t => hasExamKeyword(t.content));
+    if (taskSearch) {
+      const q = taskSearch.toLowerCase();
+      list = list.filter(t =>
+        t.content?.toLowerCase().includes(q) ||
+        t.answer?.toLowerCase().includes(q) ||
+        t.id?.toString().includes(q)
+      );
+    }
+    return list.slice().sort((a, b) => {
+      if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+      return (a.difficulty || 0) - (b.difficulty || 0);
+    });
+  }, [loadedTasks, examFilter, taskSearch]);
+
   const tasksCountByTopic = (cls, topic) => {
     return tasksMeta?.[cls]?.[topic] || 0;
   };
+
+  // Are we at task list level?
+  const isShowingTasks = (navMode === 'class' && bankClass && bankTopic) || 
+                          (navMode === 'topic' && selectedNavTopic && selectedNavSection);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
@@ -193,16 +292,36 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
             <div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-800 uppercase italic tracking-tighter">Банк заданий</h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                {bankClass
-                  ? `${bankClass} раздел${bankTopic ? ` → ${bankTopic}` : ' → выберите подраздел'}`
-                  : `${availableClasses.length} разделов доступно`}
+                {navMode === 'class'
+                  ? (bankClass ? `${bankClass} раздел${bankTopic ? ` → ${bankTopic}` : ' → выберите подраздел'}` : `${availableClasses.length} разделов доступно`)
+                  : (selectedNavTopic ? `${selectedNavTopic}${selectedNavSection ? ` → ${selectedNavSection}` : ' → выберите раздел'}` : `${filteredNavTopics.length} тем доступно`)
+                }
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Nav mode switch */}
+            <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-xl">
+              <button
+                onClick={() => { setNavMode('class'); setBankClass(null); setBankTopic(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                  navMode === 'class' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <GraduationCap size={12} /> Классы
+              </button>
+              <button
+                onClick={() => { setNavMode('topic'); setSelectedNavTopic(null); setSelectedNavSection(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                  navMode === 'topic' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <FolderTree size={12} /> Топики
+              </button>
+            </div>
             <button
               onClick={() => setExamFilter(!examFilter)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
                 examFilter
                   ? "bg-amber-500 text-white shadow-lg"
                   : "bg-white border border-slate-200 text-slate-500 hover:border-amber-300"
@@ -210,92 +329,189 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
             >
               {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
             </button>
-            {(bankClass || bankTopic) && (
+            {/* JSON Export */}
+            {loadedTasks.length > 0 && (
+              <button
+                onClick={handleExportJSON}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-black uppercase transition-all"
+                title="Скачать задания как JSON"
+              >
+                <Download size={12} /> JSON
+              </button>
+            )}
+            {/* Back button */}
+            {(bankTopic || selectedNavSection) ? (
               <button onClick={() => {
-                if (bankTopic) { setBankTopic(null); setTaskSearch(''); setExamFilter(false); }
-                else { setBankClass(null); setClassSearch(''); }
+                if (navMode === 'class') { setBankTopic(null); setTaskSearch(''); setExamFilter(false); }
+                else { setSelectedNavSection(null); setTaskSearch(''); setExamFilter(false); }
               }}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-black uppercase text-slate-600 transition-all">
-                <ChevronRight size={14} className="rotate-180" />
-                {bankTopic ? 'К подразделам' : 'Ко всем разделам'}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-600 transition-all">
+                <ChevronRight size={14} className="rotate-180" /> Назад
+              </button>
+            ) : (bankClass || selectedNavTopic) && (
+              <button onClick={() => {
+                if (navMode === 'class') { setBankClass(null); setClassSearch(''); }
+                else { setSelectedNavTopic(null); setTopicSearch(''); }
+              }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-600 transition-all">
+                <ChevronRight size={14} className="rotate-180" /> Ко всем
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {!tasksMeta && (
+      {!tasksMeta && navMode === 'class' && (
         <div className="flex items-center justify-center py-16">
           <Loader2 size={32} className="animate-spin text-slate-400" />
         </div>
       )}
 
-      {/* Level 1: Class selection */}
-      {tasksMeta && !bankClass && (
-        <div className="space-y-4">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Поиск раздела..." value={classSearch}
-              onChange={e => setClassSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredClasses.map(cls => {
-              const topicsCount = Object.keys(tasksMeta[cls] || {}).length;
-              const totalTasks = Object.values(tasksMeta[cls] || {}).reduce((sum, count) => sum + count, 0);
-              return (
-                <button key={cls} onClick={() => { setBankClass(cls); setBankTopic(null); }}
-                  className="w-full bg-white rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all p-5 text-left">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-black text-slate-800 text-sm uppercase truncate">{cls} раздел</h3>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] font-bold text-slate-400">{topicsCount} подразделов</span>
-                        <span className="text-[10px] text-slate-300">•</span>
-                        <span className="text-[10px] font-bold text-slate-400">{totalTasks} заданий</span>
+      {/* ==================== CLASS MODE ==================== */}
+      {navMode === 'class' && (
+        <>
+          {/* Level 1: Class selection */}
+          {!bankClass && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Поиск раздела..." value={classSearch}
+                  onChange={e => setClassSearch(e.target.value)}
+                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredClasses.map(cls => {
+                  const topicsCount = Object.keys(tasksMeta[cls] || {}).length;
+                  const totalTasks = Object.values(tasksMeta[cls] || {}).reduce((sum, count) => sum + count, 0);
+                  return (
+                    <button key={cls} onClick={() => { setBankClass(cls); setBankTopic(null); }}
+                      className="w-full bg-white rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all p-5 text-left">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-black text-slate-800 text-sm uppercase truncate">{cls} раздел</h3>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-bold text-slate-400">{topicsCount} подразделов</span>
+                            <span className="text-[10px] text-slate-300">•</span>
+                            <span className="text-[10px] font-bold text-slate-400">{totalTasks} заданий</span>
+                          </div>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-300 shrink-0" />
                       </div>
-                    </div>
-                    <ChevronRight size={18} className="text-slate-300 shrink-0" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Level 2: Topic selection */}
+          {bankClass && !bankTopic && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Поиск подраздела..." value={topicSearch}
+                  onChange={e => setTopicSearch(e.target.value)}
+                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredTopics.map((topic, index) => {
+                  const count = tasksCountByTopic(bankClass, topic);
+                  return (
+                    <button key={topic} onClick={() => setBankTopic(topic)}
+                      className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm shrink-0">{index + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-700 text-sm leading-tight truncate">{topic}</p>
+                          <p className="text-[9px] font-bold text-slate-400 mt-0.5">{count} заданий</p>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Level 2: Topic selection */}
-      {tasksMeta && bankClass && !bankTopic && (
-        <div className="space-y-4">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Поиск подраздела..." value={topicSearch}
-              onChange={e => setTopicSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {filteredTopics.map((topic, index) => {
-              const count = tasksCountByTopic(bankClass, topic);
-              return (
-                <button key={topic} onClick={() => setBankTopic(topic)}
-                  className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm shrink-0">{index + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-700 text-sm leading-tight truncate">{topic}</p>
-                      <p className="text-[9px] font-bold text-slate-400 mt-0.5">{count} заданий</p>
-                    </div>
-                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* ==================== TOPIC-SECTION MODE ==================== */}
+      {navMode === 'topic' && (
+        <>
+          {/* Level 1: Topic selection */}
+          {!selectedNavTopic && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Поиск темы..." value={topicSearch}
+                  onChange={e => setTopicSearch(e.target.value)}
+                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+              </div>
+              {!topicSectionMeta && (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={24} className="animate-spin text-slate-400" />
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredNavTopics.map(topic => {
+                  const sections = topicSectionMeta?.[topic] || {};
+                  const sectionCount = Object.keys(sections).length;
+                  const totalTasks = Object.values(sections).reduce((s, c) => s + c, 0);
+                  return (
+                    <button key={topic} onClick={() => { setSelectedNavTopic(topic); setSelectedNavSection(null); }}
+                      className="w-full bg-white rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 text-left">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-black text-slate-800 text-sm truncate">{topic}</h3>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-bold text-slate-400">{sectionCount} разделов</span>
+                            <span className="text-[10px] text-slate-300">•</span>
+                            <span className="text-[10px] font-bold text-slate-400">{totalTasks} заданий</span>
+                          </div>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-300 shrink-0" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {!loadingTasks && filteredNavTopics.length === 0 && topicSectionMeta && (
+                <div className="text-center py-12">
+                  <p className="font-black text-slate-400 uppercase">Нет тем</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Level 2: Section selection */}
+          {selectedNavTopic && !selectedNavSection && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {sectionsForNavTopic.map((section, index) => {
+                  const count = topicSectionMeta?.[selectedNavTopic]?.[section] || 0;
+                  return (
+                    <button key={section} onClick={() => setSelectedNavSection(section)}
+                      className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-300 hover:shadow-lg transition-all text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 font-black text-sm shrink-0">{index + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-700 text-sm leading-tight truncate">{section}</p>
+                          <p className="text-[9px] font-bold text-slate-400 mt-0.5">{count} заданий</p>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all shrink-0" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Level 3: Task list */}
-      {bankClass && bankTopic && (
+      {/* ==================== TASK LIST ==================== */}
+      {isShowingTasks && (
         loadingTasks ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={32} className="animate-spin text-blue-500" />
@@ -309,6 +525,14 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                   onChange={e => setTaskSearch(e.target.value)}
                   className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
               </div>
+              {loadedTasks.length > 0 && (
+                <button
+                  onClick={handleExportJSON}
+                  className="flex items-center gap-1.5 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-black uppercase transition-all"
+                >
+                  <Download size={14} /> JSON
+                </button>
+              )}
               <button
                 onClick={() => setExamFilter(!examFilter)}
                 className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
@@ -365,7 +589,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                           : 'border-slate-200'
                     }`}>
                     <div className="p-6 space-y-6">
-                      {/* Meta row */}
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900">
                           Задание №{index + 1}
@@ -387,14 +610,12 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                         </div>
                       </div>
 
-                      {/* Content */}
                       <MarkdownPreview text={t.content} title="Условие задания" type="default" />
                       {!t.is_open_answer && t.options && (
                         <MarkdownPreview type="default"
                           text={(Array.isArray(t.options) ? t.options : t.options.split(';')).map(opt => opt.trim()).filter(opt => opt !== "").map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')} />
                       )}
 
-                      {/* Answer, Hint, Solution */}
                       <div className="flex flex-wrap gap-2 items-center">
                         <span className="text-[10px] font-black text-slate-500">Ответ:</span>
                         <span className="text-sm font-black text-emerald-600">{t.answer}</span>
@@ -405,7 +626,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                       {openHints[t.id] && <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-200/40"><MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" /></div>}
                       {openSolutions[t.id] && <div className="p-5 rounded-[2rem] bg-blue-50/50 border border-blue-200/40"><MarkdownPreview text={t.solution} title="ПОЛНОЕ РЕШЕНИЕ" type="solution" /></div>}
 
-                      {/* Admin controls */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                         <select value={t.topic || ''} onChange={e => handleTopicChange(t.id, t, e.target.value)}
                           className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors outline-none">
@@ -453,7 +673,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         )
       )}
 
-      {bankTopic && loadedTasks.length > 0 && (
+      {isShowingTasks && loadedTasks.length > 0 && (
         <TaskMap tasks={loadedTasks} onScroll={(taskId) => { const el = document.querySelector(`[data-task-id="${taskId}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
       )}
 
@@ -461,7 +681,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
       {classifyModal && classifyResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setClassifyModal(false)}>
           <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
-            {/* Modal Header */}
             <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center">
@@ -480,7 +699,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               </button>
             </div>
 
-            {/* Stats bar */}
             <div className="px-6 py-4 grid grid-cols-4 gap-3 shrink-0">
               {[
                 { label: 'Сложность', value: classifyResult.difficulty_assigned, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -495,7 +713,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               ))}
             </div>
 
-            {/* Log */}
             <div className="flex-1 overflow-y-auto px-6 py-2">
               <div className="rounded-2xl bg-slate-900 p-5 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto">
                 {classifyResult.log.map((line, i) => {
@@ -536,7 +753,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               </div>
             </div>
 
-            {/* Footer */}
             <div className="p-6 border-t border-slate-100 flex items-center justify-between shrink-0">
               <p className="text-[10px] font-bold text-slate-400">
                 Проблемные задания подсвечены в банке

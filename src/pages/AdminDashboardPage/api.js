@@ -48,11 +48,24 @@ export const fetchTasksMeta = async () => {
   return res.data;
 };
 
+export const fetchTasksMetaByTopicSection = async () => {
+  const res = await axios.get(`${API_BASE}/admin/tasks-meta-by-topic-section`, { headers: getAuthHeaders() });
+  return res.data;
+};
+
 export const fetchTasksByClassTopic = async (taskClass, topicNumber) => {
   const res = await axios.get(`${API_BASE}/admin/tasks/by-class/`, {
     params: { task_class: taskClass, topic_number: topicNumber },
     headers: getAuthHeaders(),
   });
+  return res.data;
+};
+
+export const fetchTasksByTopicSection = async (topic, section) => {
+  const res = await axios.get(
+    `${API_BASE}/admin/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+    { headers: getAuthHeaders() }
+  );
   return res.data;
 };
 
