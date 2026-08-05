@@ -221,8 +221,8 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     setClassifyRunning(true);
     setClassifyResult(null);
     try {
-      const ids = classifyAll ? [] : currentTasks.map(t => t.id);
-      const res = await classifyTasks({ task_ids: ids, all_tasks: classifyAll });
+      const ids = currentTasks.map(t => t.id);
+      const res = await classifyTasks({ task_ids: ids, include_classified: classifyAll });
       setClassifyResult(res);
       setClassifyModal(true);
       await refreshCurrentTasks();
