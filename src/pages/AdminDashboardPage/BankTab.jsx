@@ -18,7 +18,7 @@ const getDifficultyColor = (lvl) => {
   return 'text-emerald-500 bg-emerald-50 border-emerald-100';
 };
 
-const downloadJSON = (tasks, filenameBase) => {
+const copyJSONToClipboard = async (tasks, setFeedback) => {
   const data = JSON.stringify(tasks.map(t => ({
     id: t.id,
     task_class: t.task_class,
@@ -33,16 +33,27 @@ const downloadJSON = (tasks, filenameBase) => {
     hint: t.hint || '',
     solution: t.solution || '',
   })), null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${filenameBase}_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    await navigator.clipboard.writeText(data);
+    if (setFeedback) setFeedback('✅ JSON скопирован в буфер обмена');
+    setTimeout(() => setFeedback?.(null), 2000);
+  } catch {
+    // Fallback for non-HTTPS
+    const ta = document.createElement('textarea');
+    ta.value = data;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (setFeedback) setFeedback('✅ JSON скопирован в буфер');
+    setTimeout(() => setFeedback?.(null), 2000);
+  }
 };
 
 export default function BankTab({ tasksMeta, availableClasses, bankClass, setBankClass, bankTopic, setBankTopic, onEditTask, onTasksUpdate }) {
+  const [feedback, setFeedback] = useState(null);
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
   const [examFilter, setExamFilter] = useState(false);
@@ -201,10 +212,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   };
 
   const handleExportJSON = () => {
-    const label = navMode === 'class'
-      ? `${bankClass}_${bankTopic}`
-      : `${selectedNavTopic}_${selectedNavSection}`;
-    downloadJSON(loadedTasks, `tasks_${label}`);
+    copyJSONToClipboard(loadedTasks, setFeedback);
   };
 
   const handleClassify = async () => {
