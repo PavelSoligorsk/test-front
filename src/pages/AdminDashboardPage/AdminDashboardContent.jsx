@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { PlusCircle, Database, Users, LayoutDashboard, BookOpen, Library, ShieldCheck } from 'lucide-react';
+import { PlusCircle, Database, Users, LayoutDashboard, BookOpen, Library, ShieldCheck, Layers } from 'lucide-react';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC, INITIAL_TASK_STATE } from './constants';
 import { fetchUsers, fetchTasks, fetchTasksMeta, fetchAllowedEmails, fetchTheoryList, createTask, updateTask, createTheory, updateTheory, deleteTheory, addAllowedEmail, deleteAllowedEmail, rebuildStaticTests } from './api';
 import TaskForm from './TaskForm';
@@ -10,6 +10,7 @@ import TheoryConstructorTab from './TheoryConstructorTab';
 import TheoryBankTab from './TheoryBankTab';
 import UsersTab from './UsersTab';
 import AccessTab from './AccessTab';
+import BatchTab from './BatchTab';
 
 export default function AdminDashboardContent() {
   const navigate = useNavigate();
@@ -267,6 +268,7 @@ export default function AdminDashboardContent() {
     { id: 'theoryConstructor', icon: BookOpen, label: 'Теория+' },
     { id: 'theoryBank', icon: Library, label: 'Библиотека' },
     { id: 'users', icon: Users, label: 'Юзеры' },
+    { id: 'batch', icon: Layers, label: 'Batch' },
     { id: 'access', icon: ShieldCheck, label: 'Доступ' },
   ];
 
@@ -359,6 +361,14 @@ export default function AdminDashboardContent() {
             navigate={navigate}
             onUsersUpdate={handleUsersUpdate}
           />
+        )}
+
+        {/* Batch Tab */}
+        {activeTab === 'batch' && (
+          <BatchTab onSuccess={async () => {
+            const meta = await fetchTasksMeta();
+            setTasksMeta(meta);
+          }} />
         )}
 
         {/* Access Tab */}
