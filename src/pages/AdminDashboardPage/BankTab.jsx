@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree } from 'lucide-react';
+import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree, MessageSquare, Clipboard, Check } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
@@ -217,6 +217,8 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
 
   const [classifyAll, setClassifyAll] = useState(false);
   const [reestimateDifficulty, setReestimateDifficulty] = useState(false);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const handleClassify = async () => {
     setClassifyRunning(true);
@@ -344,6 +346,16 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
             >
               {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
             </button>
+            {/* Prompt */}
+            {loadedTasks.length > 0 && (
+              <button
+                onClick={() => setPromptModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl text-[10px] font-black uppercase transition-all"
+                title="Показать AI-промпт классификации"
+              >
+                <MessageSquare size={12} /> Промпт
+              </button>
+            )}
             {/* JSON Export */}
             {loadedTasks.length > 0 && (
               <button
@@ -700,6 +712,20 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
             )}
           </div>
         )
+      )}
+
+      {/* Prompt Modal */}
+      {promptModalOpen && (
+        <PromptModal
+          tasks={loadedTasks}
+          topicsMeta={topicSectionMeta || {}}
+          onClose={() => { setPromptModalOpen(false); setCopiedPrompt(false); }}
+          copied={copiedPrompt}
+          onCopy={() => {
+            setCopiedPrompt(true);
+            setTimeout(() => setCopiedPrompt(false), 2000);
+          }}
+        />
       )}
 
       {/* Feedback toast */}
