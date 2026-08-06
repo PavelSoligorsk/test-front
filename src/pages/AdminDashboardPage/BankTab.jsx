@@ -216,6 +216,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
 
   const [classifyAll, setClassifyAll] = useState(false);
   const [reestimateDifficulty, setReestimateDifficulty] = useState(false);
+  const [skipClassification, setSkipClassification] = useState(false);
   const handleClassify = async () => {
     setClassifyRunning(true);
     setClassifyResult(null);
@@ -225,6 +226,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         task_ids: ids,
         include_classified: classifyAll,
         reestimate_difficulty: reestimateDifficulty,
+        skip_classification: reestimateDifficulty && skipClassification,
       });
       setClassifyResult(res);
       setClassifyModal(true);
@@ -584,6 +586,14 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                       className="w-3 h-3 accent-sky-600 cursor-pointer" />
                     Сложность
                   </label>
+                  {reestimateDifficulty && (
+                    <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all select-none"
+                      style={{ color: skipClassification ? '#f59e0b' : '#cbd5e1', background: skipClassification ? '#fffbeb' : '#f8fafc' }}>
+                      <input type="checkbox" checked={skipClassification} onChange={e => setSkipClassification(e.target.checked)}
+                        className="w-3 h-3 accent-amber-500 cursor-pointer" />
+                      Только сложность
+                    </label>
+                  )}
                   <button
                     onClick={handleClassify}
                     disabled={classifyRunning || currentTasks.length === 0}
