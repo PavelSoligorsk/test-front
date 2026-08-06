@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
+import PromptModal from './PromptModal';
 
 const EXAMPLE_CREATE = `[
   {
@@ -39,6 +40,8 @@ export default function BatchTab({ onSuccess }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showExample, setShowExample] = useState(false);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const getExample = () => {
     if (mode === 'create') return EXAMPLE_CREATE;
@@ -176,8 +179,16 @@ export default function BatchTab({ onSuccess }) {
               </p>
             </div>
           </div>
-          {/* Mode switcher */}
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+            {/* Prompt */}
+            <button
+              onClick={() => setPromptModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl text-[10px] font-black uppercase transition-all"
+              title="Показать AI-промпт классификации"
+            >
+              <MessageSquare size={12} /> Промпт
+            </button>
+            {/* Mode switcher */}
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
             {[
               { id: 'create', label: 'Создать', icon: Upload },
               { id: 'update', label: 'Обновить', icon: Edit3 },
@@ -227,8 +238,22 @@ export default function BatchTab({ onSuccess }) {
             >
               Загрузить пример
             </button>
-          </div>
         </div>
+      </div>
+
+      {/* Prompt Modal */}
+      {promptModalOpen && (
+        <PromptModal
+          tasks={[]}
+          topicsMeta={{}}
+          onClose={() => { setPromptModalOpen(false); setCopiedPrompt(false); }}
+          copied={copiedPrompt}
+          onCopy={() => {
+            setCopiedPrompt(true);
+            setTimeout(() => setCopiedPrompt(false), 2000);
+          }}
+        />
+      )}
 
         {/* Example panel */}
         {showExample && (
