@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
-import PromptModal from './PromptModal';
+import BatchPromptModal from './BatchPromptModal';
 
 const EXAMPLE_CREATE = `[
   {
@@ -243,15 +243,8 @@ export default function BatchTab({ onSuccess }) {
 
       {/* Prompt Modal */}
       {promptModalOpen && (
-        <PromptModal
-          tasks={[]}
-          topicsMeta={{}}
-          onClose={() => { setPromptModalOpen(false); setCopiedPrompt(false); }}
-          copied={copiedPrompt}
-          onCopy={() => {
-            setCopiedPrompt(true);
-            setTimeout(() => setCopiedPrompt(false), 2000);
-          }}
+        <BatchPromptModal
+          onClose={() => setPromptModalOpen(false)}
         />
       )}
 
