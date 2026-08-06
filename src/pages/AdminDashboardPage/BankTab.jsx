@@ -216,13 +216,18 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   };
 
   const [classifyAll, setClassifyAll] = useState(false);
+  const [reestimateDifficulty, setReestimateDifficulty] = useState(false);
 
   const handleClassify = async () => {
     setClassifyRunning(true);
     setClassifyResult(null);
     try {
       const ids = currentTasks.map(t => t.id);
-      const res = await classifyTasks({ task_ids: ids, include_classified: classifyAll });
+      const res = await classifyTasks({
+        task_ids: ids,
+        include_classified: classifyAll,
+        reestimate_difficulty: reestimateDifficulty,
+      });
       setClassifyResult(res);
       setClassifyModal(true);
       await refreshCurrentTasks();
@@ -574,6 +579,12 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                     <input type="checkbox" checked={classifyAll} onChange={e => setClassifyAll(e.target.checked)}
                       className="w-3 h-3 accent-purple-600 cursor-pointer" />
                     Все
+                  </label>
+                  <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all select-none"
+                    style={{ color: reestimateDifficulty ? '#0ea5e9' : '#94a3b8', background: reestimateDifficulty ? '#f0f9ff' : '#f8fafc' }}>
+                    <input type="checkbox" checked={reestimateDifficulty} onChange={e => setReestimateDifficulty(e.target.checked)}
+                      className="w-3 h-3 accent-sky-600 cursor-pointer" />
+                    Сложность
                   </label>
                   <button
                     onClick={handleClassify}
