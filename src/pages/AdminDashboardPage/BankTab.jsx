@@ -4,6 +4,7 @@ import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
+import PromptModal from './PromptModal';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
 
