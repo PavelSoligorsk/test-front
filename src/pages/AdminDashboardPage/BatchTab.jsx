@@ -91,7 +91,7 @@ export default function BatchTab({ onSuccess }) {
           if (item.answer === undefined || item.answer === null || String(item.answer).trim() === '') {
             throw new Error(`Элемент [${i}]: отсутствует answer`);
           }
-          if (!item.is_open_answer && (!item.options || !Array.isArray(item.options) || item.options.length === 0)) {
+          if (item.is_open_answer === false && (!item.options || !Array.isArray(item.options) || item.options.length === 0)) {
             throw new Error(`Элемент [${i}]: для закрытого задания нужно options (массив вариантов)`);
           }
           if (item.difficulty !== undefined && (item.difficulty < 1 || item.difficulty > 5)) {
