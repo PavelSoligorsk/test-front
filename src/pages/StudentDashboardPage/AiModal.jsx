@@ -6,6 +6,8 @@ export default function AiModal({
   aiPrompt, setAiPrompt,
   aiTaskCount, setAiTaskCount,
   aiDifficulty, setAiDifficulty,
+  aiExcludeWeeks, setAiExcludeWeeks,
+  aiUseStats, setAiUseStats,
   aiGenerating, handleGenerateAiTest,
 }) {
   if (!showAiModal) return null;
@@ -34,15 +36,15 @@ export default function AiModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Количество задач (1-30)</label>
-              <input type="number" min="1" max="30" value={aiTaskCount}
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Количество задач (1-50)</label>
+              <input type="number" min="1" max="50" value={aiTaskCount}
                 onChange={e => {
                   const val = e.target.value;
                   if (val === '') { setAiTaskCount(''); return; }
                   const num = Number(val);
                   if (isNaN(num)) return;
                   if (num < 1) setAiTaskCount(1);
-                  else if (num > 30) setAiTaskCount(30);
+                  else if (num > 50) setAiTaskCount(50);
                   else setAiTaskCount(num);
                 }}
                 onBlur={() => { if (aiTaskCount === '' || isNaN(aiTaskCount) || aiTaskCount < 1) setAiTaskCount(10); }}
@@ -57,6 +59,21 @@ export default function AiModal({
                 <option value="hard">Сложный</option>
                 <option value="none">🍲 Рататуй (любая)</option>
               </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Исключить за последние (недель)</label>
+              <input type="number" min="0" max="12" step="0.5" value={aiExcludeWeeks}
+                onChange={e => setAiExcludeWeeks(e.target.value)}
+                className="w-full p-3 bg-slate-50 dark:bg-slate-700 rounded-xl font-bold text-sm outline-none dark:text-white focus:ring-2 focus:ring-purple-400 transition-all" />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-700 rounded-xl cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-all w-full">
+                <input type="checkbox" checked={aiUseStats} onChange={e => setAiUseStats(e.target.checked)}
+                  className="w-4 h-4 accent-purple-600 cursor-pointer" />
+                <span className="text-[10px] font-black text-slate-500 uppercase">Использовать мою статистику</span>
+              </label>
             </div>
           </div>
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 p-4 rounded-2xl flex items-start gap-3">

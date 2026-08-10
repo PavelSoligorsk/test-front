@@ -48,6 +48,12 @@ export const fetchStudentHistory = async () => {
   return res.data;
 };
 
+// Detailed Stats
+export const fetchMyDetailedStats = async (period = 'all') => {
+  const res = await axios.get(`${API_BASE}/student/me/stats?period=${period}`, authConfig());
+  return res.data;
+};
+
 // Theory
 export const fetchTheoryTopics = async () => {
   const res = await axios.get(`${API_BASE}/student/theory/topics`, authConfig());
@@ -65,10 +71,17 @@ export const fetchTheoryByTopicSection = async (topic, section) => {
 };
 
 // AI generate
-export const generateAiTest = async (prompt, taskCount, difficulty, targetClass) => {
+export const generateAiTest = async (prompt, taskCount, difficulty, targetClass, excludeWeeks, useStats) => {
   const res = await axios.post(
     `${API_BASE}/student/generate-test`,
-    { prompt, task_count: parseInt(taskCount), difficulty: difficulty === 'none' ? null : difficulty, target_class: targetClass !== 'Все' ? targetClass : null },
+    {
+      prompt,
+      task_count: parseInt(taskCount) || 10,
+      difficulty: difficulty === 'none' ? null : difficulty,
+      target_class: targetClass !== 'Все' ? targetClass : null,
+      exclude_recent_weeks: parseFloat(excludeWeeks) || 0,
+      use_stats: !!useStats,
+    },
     authConfig()
   );
   return res.data;

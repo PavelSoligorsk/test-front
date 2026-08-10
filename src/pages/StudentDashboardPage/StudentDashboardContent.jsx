@@ -84,6 +84,8 @@ export default function StudentDashboardContent() {
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiTaskCount, setAiTaskCount] = useState('10');
   const [aiDifficulty, setAiDifficulty] = useState('none');
+  const [aiExcludeWeeks, setAiExcludeWeeks] = useState(0);
+  const [aiUseStats, setAiUseStats] = useState(false);
 
   useEffect(() => {
     const sessionData = localStorage.getItem('edu_session');
@@ -181,7 +183,7 @@ export default function StudentDashboardContent() {
     if (!aiPrompt.trim()) return;
     setAiGenerating(true);
     try {
-      const newTest = await generateAiTest(aiPrompt, aiTaskCount, aiDifficulty, selectedClass);
+      const newTest = await generateAiTest(aiPrompt, aiTaskCount, aiDifficulty, selectedClass, aiExcludeWeeks, aiUseStats);
       setShowAiModal(false);
       setAiPrompt('');
       navigate(`/test/${newTest.id}?type=ai`);
@@ -356,6 +358,10 @@ export default function StudentDashboardContent() {
         setAiTaskCount={setAiTaskCount}
         aiDifficulty={aiDifficulty}
         setAiDifficulty={setAiDifficulty}
+        aiExcludeWeeks={aiExcludeWeeks}
+        setAiExcludeWeeks={setAiExcludeWeeks}
+        aiUseStats={aiUseStats}
+        setAiUseStats={setAiUseStats}
         aiGenerating={aiGenerating}
         handleGenerateAiTest={handleGenerateAiTest}
       />
