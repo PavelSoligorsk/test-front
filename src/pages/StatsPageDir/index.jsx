@@ -47,7 +47,7 @@ export default function StatsPage() {
       setError(null);
       try {
         const token = getToken();
-        const baseUrl = userId ? `${API_URL}/admin/users/${userId}/stats` : `${API_URL}/student/stats`;
+        const baseUrl = userId ? `${API_URL}/admin/users/${userId}/stats` : `${API_URL}/student/me/stats`;
         const res = await axios.get(`${baseUrl}?period=${period}`, {
           headers: { Authorization: `Bearer ${token}` }
         });

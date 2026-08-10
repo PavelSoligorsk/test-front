@@ -1,9 +1,50 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User as UserIcon, Phone, Check, BarChart3 } from 'lucide-react';
+import { User as UserIcon, Phone, Check, BarChart3, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { fetchMyDetailedStats } from './api';
+
+const DIFF_COLORS = {
+  1: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  2: 'bg-lime-100 text-lime-700 border-lime-200',
+  3: 'bg-amber-100 text-amber-700 border-amber-200',
+  4: 'bg-orange-100 text-orange-700 border-orange-200',
+  5: 'bg-red-100 text-red-700 border-red-200',
+};
+
+const getDiffColor = (d) => DIFF_COLORS[d] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+const PERIODS = [
+  { label: 'За всё время', value: 'all' },
+  { label: 'Год', value: 'year' },
+  { label: 'Месяц', value: 'month' },
+  { label: 'Неделя', value: 'week' },
+];
 
 export default function ProfileTab({ profile, editForm, setEditForm, handleUpdateProfile, saving }) {
-  const navigate = useNavigate();
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [period, setPeriod] = useState('all');
+
+  const loadStats = async (p) => {
+    setStatsLoading(true);
+    try {
+      const data = await fetchMyDetailedStats(p);
+      setStats(data);
+    } catch (e) { console.error(e); }
+    finally { setStatsLoading(false); }
+  };
+
+  const toggleStats = () => {
+    const next = !statsOpen;
+    setStatsOpen(next);
+    if (next && !stats) loadStats(period);
+  };
+
+  const handlePeriodChange = (p) => {
+    setPeriod(p);
+    loadStats(p);
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -35,11 +76,125 @@ export default function ProfileTab({ profile, editForm, setEditForm, handleUpdat
             </div>
           </div>
 
-          <div className="flex gap-4 mb-8">
-            <button onClick={() => navigate('/stats/me')}
-              className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
-              <BarChart3 size={16} /> Детальная статистика
+          {/* Stats expander */}
+          <div className="mb-8">
+            <button
+              onClick={toggleStats}
+              className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700 rounded-2xl hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <BarChart3 size={18} className="text-blue-600" />
+                <span className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase">Детальная статистика</span>
+              </div>
+              {statsOpen ? <ChevronUp size={18} className="text-slate-400 group-hover:text-blue-600" /> : <ChevronDown size={18} className="text-slate-400 group-hover:text-blue-600" />}
             </button>
+
+            {statsOpen && (
+              <div className="mt-4 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                {/* Period selector */}
+                <div className="flex gap-2 flex-wrap">
+                  {PERIODS.map(p => (
+                    <button key={p.value}
+                      onClick={() => handlePeriodChange(p.value)}
+                      className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                        period === p.value
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {statsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={24} className="animate-spin text-blue-500" />
+                  </div>
+                ) : stats ? (
+                  <>
+                    {/* Summary */}
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: 'Тестов', value: stats.period.total_tests },
+                        { label: 'Правильно', value: stats.period.correct_tasks },
+                        { label: 'Задач', value: stats.period.total_tasks },
+                        { label: 'Дней серии', value: stats.period.streak_days },
+                      ].map(s => (
+                        <div key={s.label} className="bg-slate-50 dark:bg-slate-700 rounded-xl p-3 text-center border border-slate-100 dark:border-slate-600">
+                          <div className="text-[8px] font-black text-slate-400 uppercase">{s.label}</div>
+                          <div className="text-lg font-black text-slate-800 dark:text-white">{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Difficulty bars */}
+                    <div>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">По сложности</h4>
+                      <div className="space-y-2">
+                        {[1, 2, 3, 4, 5].map(d => {
+                          const item = (stats.difficulties?.difficulties || []).find(x => x.difficulty === d);
+                          const total = item?.total_tasks || 0;
+                          const correct = item?.correct_tasks || 0;
+                          const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+                          return (
+                            <div key={d} className="flex items-center gap-3">
+                              <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black border ${getDiffColor(d)}`}>
+                                {d}
+                              </span>
+                              <div className="flex-1">
+                                <div className="flex justify-between text-[9px] font-bold mb-0.5">
+                                  <span className="text-slate-600">{correct}/{total}</span>
+                                  <span className="text-slate-400">{pct}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all ${pct > 70 ? 'bg-emerald-500' : pct > 40 ? 'bg-amber-500' : 'bg-red-400'}`}
+                                    style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Topics */}
+                    <div>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">По темам</h4>
+                      <div className="space-y-3">
+                        {(stats.topics?.topics || []).slice(0, 10).map(topic => {
+                          const pct = topic.mastery_percent || 0;
+                          return (
+                            <div key={topic.topic}>
+                              <div className="flex justify-between text-[9px] font-bold mb-1">
+                                <span className="text-slate-700 dark:text-slate-200">{topic.topic}</span>
+                                <span className="text-slate-400">{pct}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${pct > 70 ? 'bg-indigo-500' : pct > 40 ? 'bg-violet-400' : 'bg-pink-400'}`}
+                                  style={{ width: `${pct}%` }} />
+                              </div>
+                              {topic.sections?.length > 0 && (
+                                <div className="mt-1 ml-4 space-y-0.5">
+                                  {topic.sections.map(sec => (
+                                    <div key={sec.section} className="flex justify-between text-[8px] font-bold">
+                                      <span className="text-slate-400">{sec.section}</span>
+                                      <span className="text-slate-400">{sec.mastery_percent}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-4 text-[10px] font-bold text-slate-400 uppercase">Нет данных</div>
+                )}
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleUpdateProfile} className="space-y-8">
