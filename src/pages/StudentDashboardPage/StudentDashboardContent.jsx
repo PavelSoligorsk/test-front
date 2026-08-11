@@ -101,102 +101,33 @@ export default function StudentDashboardContent() {
     .then(([testsRes, assignmentsRes, aiRes, profileRes, historyRes]) => {
       setStaticTests(testsRes);
       const customTestsData = (assignmentsRes || []).map(a => ({
-        id: a.test_id,
-        title: a.test_title,
-        target_class: a.target_class || '',
-        target_topic: a.target_topic || '',
-        subject: a.subject || '',
-        tasks: a.tasks || [],
-        is_assigned: true,
-        due_date: a.due_date,
-        is_completed: a.is_completed,
-        assignment_id: a.assignment_id,
-        is_autocompile: a.is_autocompile,
-        time_limit_minutes: a.time_limit_minutes ?? null,
-        max_attempts: a.max_attempts ?? null,
+        id: a.test_id, title: a.test_title, target_class: a.target_class || '',
+        target_topic: a.target_topic || '', subject: a.subject || '', tasks: a.tasks || [],
+        is_assigned: true, due_date: a.due_date, is_completed: a.is_completed,
+        assignment_id: a.assignment_id, is_autocompile: a.is_autocompile,
+        time_limit_minutes: a.time_limit_minutes ?? null, max_attempts: a.max_attempts ?? null,
         allow_interruptions: a.allow_interruptions ?? true,
-        exam_start: a.exam_start || null,
-        exam_end: a.exam_end || null,
+        exam_start: a.exam_start || null, exam_end: a.exam_end || null,
       }));
       setCustomTests(customTestsData);
       setAiTests((aiRes || []).map(t => ({ ...t, is_ai: true })));
-      setProfile(profileRes);
-      setHistory(historyRes);
-      setEditForm({
-        first_name: profileRes.user.first_name || '',
-        last_name: profileRes.user.last_name || '',
-        phone: profileRes.user.phone || '',
-        telegram: profileRes.user.tg_username || '',
-      });
+      setProfile(profileRes); setHistory(historyRes);
+      setEditForm({ first_name: profileRes.user.first_name || '', last_name: profileRes.user.last_name || '',
+        phone: profileRes.user.phone || '', telegram: profileRes.user.tg_username || '' });
       setLoading(false);
-    })
-    .catch(err => { if (err.response?.status === 401 && window.location.pathname !== '/login') navigate('/login'); });
+    }).catch(err => { if (err.response?.status === 401 && window.location.pathname !== '/login') navigate('/login'); });
   }, [navigate]);
 
-  useEffect(() => {
-    if (activeTab === 'theory') {
-      fetchTheoryTopics().then(setTheoryTopics).catch(console.error);
-    }
-  }, [activeTab]);
+  useEffect(() => { if (activeTab === 'theory') fetchTheoryTopics().then(setTheoryTopics).catch(console.error); }, [activeTab]);
 
   const handleLogout = () => { localStorage.clear(); sessionStorage.clear(); navigate('/login', { replace: true }); };
-
-  const handleUpdateProfile = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const res = await updateStudentProfile({ first_name: editForm.first_name, last_name: editForm.last_name, phone: editForm.phone, tg_username: editForm.telegram });
-      setProfile(prev => ({ ...prev, user: res }));
-      alert('Данные сохранены!');
-    } catch (err) { alert('Ошибка при сохранении'); } finally { setSaving(false); }
-  };
-
-  const handleStartTest = (test) => {
-    if (test.is_ai) navigate(`/test/${test.id}?type=ai`);
-    else if (test.assignment_id) navigate(`/test/${test.id}?assignment=${test.assignment_id}`);
-    else navigate(`/test/${test.id}`);
-  };
-
-  const handleRetake = async (resultId, testIdOverride) => {
-    try {
-      const retakeData = await retakeTest(resultId);
-      const effectiveTestId = testIdOverride || retakeData.test_id || resultId;
-      navigate(`/test/${effectiveTestId}?retake=1`, { state: { startData: retakeData } });
-    } catch (err) {
-      const detail = err.response?.data?.detail;
-      alert(typeof detail === 'string' ? detail : 'Не удалось начать пересдачу. Проверьте лимит попыток.');
-    }
-  };
-
-  const handleGenerateAiTest = async () => {
-    if (!aiPrompt.trim()) return;
-    setAiGenerating(true);
-    try {
-      const newTest = await generateAiTest(aiPrompt, aiTaskCount, aiDifficulty, selectedClass, aiExcludeWeeks, aiUseStats);
-      setShowAiModal(false);
-      setAiPrompt('');
-      navigate(`/test/${newTest.id}?type=ai`);
-    } catch (err) { console.error(err); alert('Не удалось сгенерировать тест. Попробуйте другой запрос.'); }
-    finally { setAiGenerating(false); }
-  };
-
-  const handleTopicClickInternal = async (topic) => {
-    const sections = await fetchTheorySections(topic.topic).catch(() => []);
-    if (sections.length === 1) {
-      fetchTheoryByTopicSection(topic.topic, sections[0].section).then(setTheoryContent).catch(console.error);
-      setSelectedTopic(topic);
-      setSelectedSection(sections[0].section);
-    } else if (sections.length > 1) {
-      setSectionsForModal(sections);
-      setSelectedTopic(topic);
-      setShowSectionModal(true);
-    }
-  };
-
+  const handleUpdateProfile = async (e) => { e.preventDefault(); setSaving(true); try { const res = await updateStudentProfile({ first_name: editForm.first_name, last_name: editForm.last_name, phone: editForm.phone, tg_username: editForm.telegram }); setProfile(prev => ({ ...prev, user: res })); alert('Данные сохранены!'); } catch (err) { alert('Ошибка при сохранении'); } finally { setSaving(false); } };
+  const handleStartTest = (test) => { if (test.is_ai) navigate(`/test/${test.id}?type=ai`); else if (test.assignment_id) navigate(`/test/${test.id}?assignment=${test.assignment_id}`); else navigate(`/test/${test.id}`); };
+  const handleRetake = async (resultId, testIdOverride) => { try { const retakeData = await retakeTest(resultId); navigate(`/test/${testIdOverride || retakeData.test_id || resultId}?retake=1`, { state: { startData: retakeData } }); } catch (err) { alert(err.response?.data?.detail || 'Не удалось начать пересдачу. Проверьте лимит попыток.'); } };
+  const handleGenerateAiTest = async () => { if (!aiPrompt.trim()) return; setAiGenerating(true); try { const newTest = await generateAiTest(aiPrompt, aiTaskCount, aiDifficulty, selectedClass, aiExcludeWeeks, aiUseStats); setShowAiModal(false); setAiPrompt(''); navigate(`/test/${newTest.id}?type=ai`); } catch (err) { alert('Не удалось сгенерировать тест. Попробуйте другой запрос.'); } finally { setAiGenerating(false); } };
+  const handleTopicClickInternal = async (topic) => { const sections = await fetchTheorySections(topic.topic).catch(() => []); if (sections.length === 1) { fetchTheoryByTopicSection(topic.topic, sections[0].section).then(setTheoryContent).catch(console.error); setSelectedTopic(topic); setSelectedSection(sections[0].section); } else if (sections.length > 1) { setSectionsForModal(sections); setSelectedTopic(topic); setShowSectionModal(true); } };
   const handleBackToTopics = () => { setSelectedSection(null); setTheoryContent(null); setSelectedTopic(null); };
-  const handleFetchTheory = (topic, section) => {
-    fetchTheoryByTopicSection(topic, section).then(data => { setTheoryContent(data); setSelectedSection(section); }).catch(console.error);
-  };
+  const handleFetchTheory = (topic, section) => { fetchTheoryByTopicSection(topic, section).then(data => { setTheoryContent(data); setSelectedSection(section); }).catch(console.error); };
 
   const publicStaticTests = staticTests.filter(t => t.is_autocompile !== false);
   const teacherTests = [...customTests.map(t => ({ ...t, type: 'custom' })), ...staticTests.filter(t => t.is_autocompile === false).map(t => ({ ...t, type: 'custom' }))];
@@ -207,8 +138,7 @@ export default function StudentDashboardContent() {
   const classTests = selectedClass ? typeFilteredTests.filter(t => (t.target_class || 'Общие') === selectedClass) : [];
   const subjects = selectedClass ? ['Все', ...new Set(classTests.map(t => t.subject || t.target_topic || 'Общее').filter(Boolean))] : [];
   const displayTests = (selectedSubject === 'Все' || !selectedSubject) ? classTests : classTests.filter(t => (t.subject || t.target_topic || 'Общее') === selectedSubject);
-  const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
-  const hasExamKeyword = (title) => EXAM_KEYWORDS.some(kw => (title || '').includes(kw));
+  const hasExamKeyword = (title) => ['ЦТ','ЦЭ','РЦЭ','ДРТ','РТ'].some(kw => (title || '').includes(kw));
   const searchedTests = (() => { let result = testSearch.trim() ? displayTests.filter(t => t.title?.toLowerCase().includes(testSearch.toLowerCase()) || t.subject?.toLowerCase().includes(testSearch.toLowerCase())) : displayTests; if (examFilter) result = result.filter(t => hasExamKeyword(t.title)); return result; })();
   const filteredHistory = history.filter(item => item.test_title?.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -225,19 +155,22 @@ export default function StudentDashboardContent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-900">
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 dark:bg-slate-900/80 dark:border-slate-800 py-2">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-3 md:px-8 flex items-center gap-2 md:gap-3">
           <div className="flex items-center gap-2 shrink-0">
             <GraduationCap size={18} className="text-blue-600" />
             <span className="text-xs font-black uppercase text-slate-800 dark:text-white hidden sm:inline whitespace-nowrap">{profile?.user.first_name} {profile?.user.last_name}</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-700 ml-auto">
-            {TABS.map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`relative px-3 md:px-5 py-1.5 md:py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 ${activeTab === tab.key ? 'text-white' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-slate-700/50'}`}>
-                {activeTab === tab.key && <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300" />}
-                <span className="relative z-10 flex items-center gap-1">{tab.icon ? <tab.icon size={11} /> : null}{tab.label}</span>
-              </button>
-            ))}
+          {/* Адаптивные табы: скролл на телефонах, справа на десктопе */}
+          <div className="overflow-x-auto scrollbar-none ml-auto">
+            <div className="flex items-center gap-1 md:gap-1.5 bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-700 min-w-max">
+              {TABS.map(tab => (
+                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                  className={`relative px-2.5 md:px-5 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 ${activeTab === tab.key ? 'text-white' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-slate-700/50'}`}>
+                  {activeTab === tab.key && <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300" />}
+                  <span className="relative z-10 flex items-center gap-1">{tab.icon ? <tab.icon size={10} className="md:w-[11px] md:h-[11px]" /> : null}{tab.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </nav>
