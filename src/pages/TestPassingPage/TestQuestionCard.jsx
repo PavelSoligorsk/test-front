@@ -13,6 +13,49 @@ export default function TestQuestionCard({
   if (!currentTask) return null;
   const taskId = currentTask.id;
 
+  const renderHintContent = () => {
+    if (!hintUsed[taskId]) {
+      return (
+        <button
+          onClick={() => onFetchHint(taskId)}
+          className="flex items-center gap-2 text-[10px] font-black uppercase text-violet-600 bg-violet-50 px-5 py-3 rounded-2xl hover:bg-violet-100 transition-all border border-violet-200/40 active:scale-95"
+        >
+          <Sparkles size={14} className="text-violet-500" />
+          ИИ-подсказка (1 раз)
+        </button>
+      );
+    }
+
+    if (hintLoading[taskId]) {
+      return (
+        <div className="flex items-center gap-3 p-5 bg-violet-50/50 border border-violet-100 rounded-[2rem]">
+          <Loader2 size={16} className="animate-spin text-violet-400" />
+          <span className="text-[10px] font-black uppercase text-violet-400 tracking-widest">ИИ думает...</span>
+        </div>
+      );
+    }
+
+    if (hintData[taskId]) {
+      const hd = hintData[taskId];
+      const hintText = typeof hd === 'object' ? hd.hint : hd;
+      const hintGeo = typeof hd === 'object' ? hd.geogebra : null;
+      return (
+        <div className="p-6 bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200/40 rounded-[2rem] animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-[9px] font-black uppercase text-violet-600 tracking-widest flex items-center gap-2">
+              <Lightbulb size={14} className="text-amber-500" />
+              Подсказка ИИ
+            </span>
+            <span className="text-[8px] font-bold text-violet-400 bg-violet-100 px-2 py-0.5 rounded-lg">использовано</span>
+          </div>
+          <MathHintPreview text={hintText} geogebra={hintGeo} title="" />
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       {/* Условие */}
@@ -29,31 +72,7 @@ export default function TestQuestionCard({
 
       {/* AI подсказка */}
       <div className="mt-2">
-        {!hintUsed[taskId] ? (
-          <button
-            onClick={() => onFetchHint(taskId)}
-            className="flex items-center gap-2 text-[10px] font-black uppercase text-violet-600 bg-violet-50 px-5 py-3 rounded-2xl hover:bg-violet-100 transition-all border border-violet-200/40 active:scale-95"
-          >
-            <Sparkles size={14} className="text-violet-500" />
-            ИИ-подсказка (1 раз)
-          </button>
-        ) : hintLoading[taskId] ? (
-          <div className="flex items-center gap-3 p-5 bg-violet-50/50 border border-violet-100 rounded-[2rem]">
-            <Loader2 size={16} className="animate-spin text-violet-400" />
-            <span className="text-[10px] font-black uppercase text-violet-400 tracking-widest">ИИ думает...</span>
-          </div>
-        ) : hintData[taskId] ? (
-          <div className="p-6 bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200/40 rounded-[2rem] animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black uppercase text-violet-600 tracking-widest flex items-center gap-2">
-                <Lightbulb size={14} className="text-amber-500" />
-                Подсказка ИИ
-              </span>
-              <span className="text-[8px] font-bold text-violet-400 bg-violet-100 px-2 py-0.5 rounded-lg">использовано</span>
-            </div>
-            <MathHintPreview text={hintData[taskId]} title="" />
-          </div>
-        ) : null}
+        {renderHintContent()}
       </div>
 
       {/* Рисовалка */}

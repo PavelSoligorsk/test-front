@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { remarkMath, rehypeKatex, ReactMarkdown } from '../MarkdownRenderer';
+import MarkdownWithGeoGebra from '../MarkdownWithGeoGebra';
 
 /**
  * Компонент отображения AI-решения
  * Используется в TestResultDetail
+ * Поддерживает рендеринг GeoGebra блоков в тексте, формат === ОТВЕТ ===,
+ * и отдельный объект geogebra из ответа сервера
  */
 export default function AISolutionPreview({ data, isLoading = false, error = null, onClose = null }) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -79,6 +81,13 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
     );
   }
 
+  // Парсим секцию === ОТВЕТ === для красивого отображения
+  const answerMarkerRegex = /=== ОТВЕТ ===/i;
+  const solutionParts = data.ai_solution.split(answerMarkerRegex);
+  const solutionBeforeAnswer = solutionParts[0]?.trim() || '';
+  const answerSection = solutionParts.length > 1 ? solutionParts.slice(1).join('=== ОТВЕТ ===').trim() : '';
+  const hasAnswerSection = solutionParts.length > 1;
+
   return (
     <div className="relative p-6 rounded-[2rem] border shadow-sm bg-white">
       {onClose && (
@@ -86,7 +95,7 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
           <XCircle size={18} className="text-slate-400 hover:text-slate-600" />
         </button>
       )}
-      
+
       <div className="flex items-center justify-between flex-wrap gap-2 mb-4 pr-6">
         <div className="flex items-center gap-2 flex-wrap">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-green-600">🤖 AI-РЕШЕНИЕ</h4>
@@ -109,7 +118,7 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
           {copied ? <><CheckCircle2 size={10} /> СКОПИРОВАНО</> : <>📋 КОПИРОВАТЬ</>}
         </button>
       </div>
-      
+
       <div className={`text-slate-700 text-sm md:text-base leading-relaxed ${!isExpanded && 'max-h-48 overflow-hidden relative'}`}>
         <style>{`
           .math-solution .katex-display { overflow-x: auto; overflow-y: hidden; padding: 8px 0; margin: 12px 0; }
@@ -118,23 +127,25 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
           .math-solution pre { white-space: pre-wrap; word-wrap: break-word; }
         `}</style>
         <div className="math-solution">
-          <ReactMarkdown
-            remarkPlugins={[remarkMath]}
-            rehypePlugins={[rehypeKatex]}
-            components={{
-              p: ({ children }) => <p className="mb-4 last:mb-0 text-left whitespace-normal break-words">{children}</p>,
-              strong: ({ children }) => <strong className="font-bold text-slate-900">{children}</strong>,
-              code: ({ inline, children }) => inline
-                ? <code className="bg-slate-100 px-1 py-0.5 rounded text-sm font-mono break-words">{children}</code>
-                : <code className="block bg-slate-800 text-white p-3 rounded-xl overflow-x-auto text-sm my-2 whitespace-pre-wrap break-words">{children}</code>,
-            }}
-          >
-            {data.ai_solution}
-          </ReactMarkdown>
+          {hasAnswerSection && solutionBeforeAnswer && (
+            <MarkdownWithGeoGebra>{solutionBeforeAnswer}</MarkdownWithGeoGebra>
+          )}
+          {hasAnswerSection && (
+            <div className="my-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 size={14} className="text-emerald-600" />
+                <span className="text-[9px] font-black uppercase text-emerald-700 tracking-widest">Ответ</span>
+              </div>
+              <MarkdownWithGeoGebra>{answerSection}</MarkdownWithGeoGebra>
+            </div>
+          )}
+          {!hasAnswerSection && (
+            <MarkdownWithGeoGebra>{data.ai_solution}</MarkdownWithGeoGebra>
+          )}
         </div>
         {!isExpanded && <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent pointer-events-none" />}
       </div>
-      
+
       {!isExpanded && (
         <button onClick={() => setIsExpanded(true)} className="mt-2 text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
           <ChevronDown size={14} /> Показать полное решение
@@ -145,8 +156,8 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
           <ChevronUp size={14} /> Свернуть
         </button>
       )}
-      
-      {hasAnswer && (
+
+      {hasAnswer && !hasAnswerSection && (
         <div className="mt-4 pt-3 border-t border-slate-100">
           <div className={`p-3 rounded-xl ${isVerified ? 'bg-emerald-50' : 'bg-amber-50'}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -175,7 +186,7 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
           )}
         </div>
       )}
-      
+
       <div className="mt-3">
         <p className="text-[9px] text-slate-400 italic">🤖 Решение сгенерировано ИИ. Возможны ошибки. Проверяйте самостоятельно.</p>
       </div>

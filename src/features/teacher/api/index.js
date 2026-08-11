@@ -196,4 +196,11 @@ export const teacherApi = {
   updateProfile(data) {
     return apiClient.put(ENDPOINTS.TEACHER_PROFILE, data);
   },
+
+  // --- Статистика ученика ---
+  getStudentStats(studentId, period = 'all') {
+    return apiClient.get(ENDPOINTS.TEACHER_STUDENT_STATS(studentId), {
+      params: { period },
+    });
+  },
 };

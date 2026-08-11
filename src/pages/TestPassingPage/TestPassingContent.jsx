@@ -419,7 +419,7 @@ export default function TestPassingContent() {
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
       );
       if (res.data?.hint) {
-        setHintData(prev => ({ ...prev, [taskId]: res.data.hint }));
+        setHintData(prev => ({ ...prev, [taskId]: { hint: res.data.hint, geogebra: res.data.geogebra || null } }));
       }
     } catch (err) {
       setHintData(prev => ({ ...prev, [taskId]: 'Не удалось загрузить подсказку. Попробуйте позже.' }));

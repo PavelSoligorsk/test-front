@@ -27,6 +27,7 @@ export const ENDPOINTS = {
   STUDENT_THEORY_TOPICS: '/student/theory/topics',
   STUDENT_THEORY_SECTIONS: (topic) => `/student/theory/sections/${topic}`,
   STUDENT_THEORY_BY_TOPIC_SECTION: (topic, section) => `/student/theory/by-topic/${topic}/section/${section}`,
+  STUDENT_THEORY_ASK_AI: '/student/theory/ask-ai',
 
   // Админ
   ADMIN_TASKS: '/admin/tasks',
@@ -88,6 +89,9 @@ export const ENDPOINTS = {
 
   // Учитель — профиль
   TEACHER_PROFILE: '/teacher/profile',
+
+  // Учитель — статистика ученика
+  TEACHER_STUDENT_STATS: (studentId) => `/teacher/students/${studentId}/stats`,
 
   // Статистика
   STATS_ME: '/stats/me',
