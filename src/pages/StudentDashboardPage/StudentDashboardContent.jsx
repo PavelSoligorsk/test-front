@@ -154,13 +154,15 @@ export default function StudentDashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-900">
+      {/* Шапочка убрана для телефона */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 dark:bg-slate-900/80 dark:border-slate-800 py-2">
         <div className="max-w-7xl mx-auto px-3 md:px-8 flex items-center gap-2 md:gap-3">
+          {/* Убираем имя пользователя на телефонах */}
           <div className="flex items-center gap-2 shrink-0">
             <GraduationCap size={18} className="text-blue-600" />
             <span className="text-xs font-black uppercase text-slate-800 dark:text-white hidden sm:inline whitespace-nowrap">{profile?.user.first_name} {profile?.user.last_name}</span>
           </div>
-          {/* Адаптивные табы: скролл на телефонах, справа на десктопе */}
+          {/* Табы без шапочки */}
           <div className="overflow-x-auto scrollbar-none ml-auto">
             <div className="flex items-center gap-1 md:gap-1.5 bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-700 min-w-max">
               {TABS.map(tab => (
