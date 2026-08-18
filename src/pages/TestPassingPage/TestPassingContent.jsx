@@ -1,7 +1,6 @@
-
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, LayoutGrid, ScrollText, ArrowUp } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import { retakeTest } from '../StudentDashboardPage/api';
@@ -33,6 +32,9 @@ export default function TestPassingContent() {
 
   const isAi = searchParams.get('type') === 'ai';
   const startData = location.state?.startData;
+
+  // ── View mode state ──
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'scroll'
 
   // ── Constraint / block error ──
   const [blockError, setBlockError] = useState(null);
@@ -70,9 +72,15 @@ export default function TestPassingContent() {
   const [hintLoading, setHintLoading] = useState({});
   const [hintUsed, setHintUsed] = useState({});
 
+  // ── Refs for scroll management ──
   const canvasRef = useRef(null);
   const submitRef = useRef(null);
   const finishedRef = useRef(false);
+  const questionRefs = useRef({});
+  const scrollPositionsRef = useRef({
+    cards: 0,
+    scroll: 0
+  });
   const currentTaskId = test?.tasks?.[currentIdx]?.id;
 
   const savedToServerRef = useRef(false);
@@ -96,9 +104,10 @@ export default function TestPassingContent() {
         drawings,
         timestamp: Date.now(),
         timeRemaining,
+        viewMode,
       }));
     }
-  }, [currentIdx, userAnswers, drawings, testId, test, timeRemaining, allowInterruptions]);
+  }, [currentIdx, userAnswers, drawings, testId, test, timeRemaining, allowInterruptions, viewMode]);
 
   // Save progress to server (incremental persistence)
   const saveProgressToServer = useCallback(async (answersOverride) => {
@@ -116,7 +125,6 @@ export default function TestPassingContent() {
       );
       savedToServerRef.current = true;
     } catch (e) {
-      // Silently fail – localStorage still has the backup
       console.warn('save-progress failed, will retry:', e);
     }
   }, [test, testId, userAnswers, allowInterruptions, buildAnswersPayload]);
@@ -177,6 +185,50 @@ export default function TestPassingContent() {
     return () => { saveCurrentDrawing(); };
   }, [currentTaskId, saveCurrentDrawing]);
 
+  // ── Save scroll position on scroll ──
+  useEffect(() => {
+    const handleScroll = () => {
+      scrollPositionsRef.current[viewMode] = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [viewMode]);
+
+  // ── Handle mode switch with position preservation ──
+  const handleModeSwitch = (mode) => {
+    if (mode === viewMode) return;
+    
+    // Save current scroll position
+    scrollPositionsRef.current[viewMode] = window.scrollY;
+    
+    setViewMode(mode);
+    
+    setTimeout(() => {
+      if (mode === 'scroll') {
+        // Scroll to saved scroll position or current question
+        const savedPosition = scrollPositionsRef.current.scroll;
+        if (savedPosition > 0) {
+          window.scrollTo({ top: savedPosition, behavior: 'auto' });
+        } else {
+          // Scroll to current question if no saved position
+          const element = questionRefs.current[currentTaskId];
+          if (element) {
+            element.scrollIntoView({ behavior: 'auto', block: 'start' });
+          }
+        }
+      } else {
+        // Restore cards mode scroll position
+        const savedPosition = scrollPositionsRef.current.cards;
+        window.scrollTo({ top: savedPosition, behavior: 'auto' });
+      }
+    }, 50);
+  };
+
+  // ── Scroll to top button ──
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // ── Submit function ──
   const doSubmit = useCallback(async (answers) => {
     if (submittedRef.current || isSubmitting) return;
@@ -186,15 +238,12 @@ export default function TestPassingContent() {
       const token = getToken();
       const effectiveTestId = test?.id ?? parseInt(testId);
 
-      // If answers were saved server-side, send empty array for finalization.
-      // Otherwise (or if answers are provided explicitly), send full payload.
       const hasSavedToServer = savedToServerRef.current;
       let payload;
       if (answers == null || Object.keys(answers).length === 0) {
         if (hasSavedToServer) {
-          payload = []; // finalize with server-saved answers
+          payload = [];
         } else {
-          // legacy: build from current userAnswers state
           payload = buildAnswersPayload(userAnswers);
         }
       } else {
@@ -237,7 +286,6 @@ export default function TestPassingContent() {
           clearInterval(timerRef.current);
           if (!finishedRef.current) {
             finishedRef.current = true;
-            // flush latest answers then submit
             setUserAnswers(current => {
               submitRef.current?.(current);
               return current;
@@ -256,7 +304,6 @@ export default function TestPassingContent() {
   useEffect(() => {
     let cancelled = false;
 
-    // For retakes: use pre-fetched startData directly
     if (startData?.tasks?.length > 0) {
       const d = startData;
       const tasks = [...d.tasks].sort((a, b) => {
@@ -282,7 +329,6 @@ export default function TestPassingContent() {
       setExamStart(d.exam_start ?? null);
       setExamEnd(d.exam_end ?? null);
 
-      // Restore previous_answers from server (for retakes)
       const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
       if (prevAnswers.length > 0) {
         const restored = {};
@@ -345,19 +391,16 @@ export default function TestPassingContent() {
         setExamStart(d.exam_start ?? null);
         setExamEnd(d.exam_end ?? null);
 
-        // Restore previous_answers from server (canonical source)
         const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
         if (prevAnswers.length > 0) {
           const restored = {};
           prevAnswers.forEach(a => { restored[a.task_id] = a.user_answer; });
           setUserAnswers(restored);
           savedToServerRef.current = true;
-          // Clean up stale localStorage since server has the canonical progress
           localStorage.removeItem(`test_progress_${testId}`);
           localStorage.removeItem(`test_restored_${testId}`);
         }
 
-        // Restore saved progress (only in interruptible mode) — fallback if no server answers
         if (interruptions !== false) {
           const savedProgress = localStorage.getItem(`test_progress_${testId}`);
           if (savedProgress && !cancelled) {
@@ -373,6 +416,9 @@ export default function TestPassingContent() {
                 setCurrentIdx(parsed.currentIdx || 0);
                 setUserAnswers(parsed.answers || {});
                 setDrawings(parsed.drawings || {});
+                if (parsed.viewMode) {
+                  setViewMode(parsed.viewMode);
+                }
                 if (parsed.timeRemaining != null && limit != null) {
                   setTimeRemaining(Math.max(0, parsed.timeRemaining));
                   timeSpentRef.current = totalSec - parsed.timeRemaining;
@@ -385,7 +431,6 @@ export default function TestPassingContent() {
             }
           }
         } else {
-          // Non-interruptible: clear any stale progress
           localStorage.removeItem(`test_progress_${testId}`);
           localStorage.removeItem(`test_restored_${testId}`);
         }
@@ -428,9 +473,7 @@ export default function TestPassingContent() {
     }
   };
 
-  const handleToggleAnswer = (index) => {
-    if (!currentTask) return;
-    const taskId = currentTask.id;
+  const handleToggleAnswer = (taskId, index) => {
     const val = String(index + 1);
     const currentSelection = Array.isArray(userAnswers[taskId]) ? userAnswers[taskId] : [];
     if (currentSelection.includes(val)) {
@@ -440,9 +483,8 @@ export default function TestPassingContent() {
     }
   };
 
-  const handleTextChange = (val) => {
-    if (!currentTask) return;
-    setUserAnswers({ ...userAnswers, [currentTask.id]: val });
+  const handleTextChange = (taskId, val) => {
+    setUserAnswers({ ...userAnswers, [taskId]: val });
   };
 
   const toggleDrawing = (taskId) => {
@@ -598,7 +640,7 @@ export default function TestPassingContent() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
-      <div className="max-w-2xl mx-auto p-4 md:p-8 space-y-6">
+      <div className={`${viewMode === 'cards' ? 'max-w-2xl' : 'max-w-4xl'} mx-auto p-4 md:p-8 space-y-6`}>
         {/* ── Timer bar ── */}
         {hasTimer && (
           <div className={`flex items-center justify-between px-5 py-3 rounded-2xl border shadow-sm transition-colors ${
@@ -662,42 +704,97 @@ export default function TestPassingContent() {
           </div>
         )}
 
-        <TestProgressBar
-          test={test}
-          currentIdx={currentIdx}
-          userAnswers={userAnswers}
-          onNavigate={(idx) => setCurrentIdx(idx)}
-        />
+        {/* ── Progress bar (only in cards mode) ── */}
+        {viewMode === 'cards' && (
+          <TestProgressBar
+            test={test}
+            currentIdx={currentIdx}
+            userAnswers={userAnswers}
+            onNavigate={(idx) => setCurrentIdx(idx)}
+          />
+        )}
 
-        <TestQuestionCard
-          currentTask={currentTask}
-          currentIdx={currentIdx}
-          userAnswers={userAnswers}
-          onToggleAnswer={handleToggleAnswer}
-          onTextChange={handleTextChange}
-          hintUsed={hintUsed}
-          hintLoading={hintLoading}
-          hintData={hintData}
-          onFetchHint={fetchHint}
-          showDrawing={showDrawing}
-          onToggleDrawing={toggleDrawing}
-          canvasRef={canvasRef}
-          drawings={drawings}
-          onDrawingSave={handleDrawingSave}
-          onDrawingDataChange={handleDrawingDataChange}
-          DrawingPadComponent={DrawingPad}
-        />
+        {/* ── Questions rendering ── */}
+        {viewMode === 'cards' ? (
+          <TestQuestionCard
+            currentTask={currentTask}
+            currentIdx={currentIdx}
+            userAnswers={userAnswers}
+            onToggleAnswer={(index) => handleToggleAnswer(currentTask?.id, index)}
+            onTextChange={(val) => handleTextChange(currentTask?.id, val)}
+            hintUsed={hintUsed}
+            hintLoading={hintLoading}
+            hintData={hintData}
+            onFetchHint={fetchHint}
+            showDrawing={showDrawing}
+            onToggleDrawing={toggleDrawing}
+            canvasRef={canvasRef}
+            drawings={drawings}
+            onDrawingSave={handleDrawingSave}
+            onDrawingDataChange={handleDrawingDataChange}
+            DrawingPadComponent={DrawingPad}
+          />
+        ) : (
+          <div className="space-y-6">
+            {test.tasks.map((task, idx) => (
+              <div 
+                key={task.id} 
+                ref={el => questionRefs.current[task.id] = el}
+                className="relative scroll-mt-24"
+              >
+                <TestQuestionCard
+                  currentTask={task}
+                  currentIdx={idx}
+                  userAnswers={userAnswers}
+                  onToggleAnswer={(index) => handleToggleAnswer(task.id, index)}
+                  onTextChange={(val) => handleTextChange(task.id, val)}
+                  hintUsed={hintUsed}
+                  hintLoading={hintLoading}
+                  hintData={hintData}
+                  onFetchHint={fetchHint}
+                  showDrawing={showDrawing}
+                  onToggleDrawing={toggleDrawing}
+                  canvasRef={idx === currentIdx ? canvasRef : null}
+                  drawings={drawings}
+                  onDrawingSave={handleDrawingSave}
+                  onDrawingDataChange={handleDrawingDataChange}
+                  DrawingPadComponent={DrawingPad}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
-        <footer className="flex justify-between items-center pt-8">
-          <button
-            disabled={currentIdx === 0}
-            onClick={() => setCurrentIdx(v => v - 1)}
-            className="flex items-center gap-3 text-slate-400 font-black text-[10px] uppercase tracking-widest disabled:opacity-0 p-4 hover:text-slate-600 transition-colors"
-          >
-            <ChevronLeft size={18} /> Назад
-          </button>
+        {/* ── Footer navigation ── */}
+        {viewMode === 'cards' ? (
+          <footer className="flex justify-between items-center pt-8">
+            <button
+              disabled={currentIdx === 0}
+              onClick={() => setCurrentIdx(v => v - 1)}
+              className="flex items-center gap-3 text-slate-400 font-black text-[10px] uppercase tracking-widest disabled:opacity-0 p-4 hover:text-slate-600 transition-colors"
+            >
+              <ChevronLeft size={18} /> Назад
+            </button>
 
-          {currentIdx === test.tasks.length - 1 ? (
+            {currentIdx === test.tasks.length - 1 ? (
+              <button
+                onClick={handleSubmitClick}
+                disabled={isSubmitting}
+                className="px-12 py-5 bg-blue-600 text-white rounded-full font-black uppercase text-[11px] tracking-[0.15em] shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300"
+              >
+                {isSubmitting ? 'Отправка...' : 'Завершить работу'}
+              </button>
+            ) : (
+              <button
+                onClick={() => setCurrentIdx(v => v + 1)}
+                className="flex items-center gap-3 px-10 py-5 bg-slate-900 text-white rounded-full font-black uppercase text-[11px] tracking-[0.15em] shadow-xl active:scale-95 transition-all"
+              >
+                Следующий шаг <ChevronRight size={18} />
+              </button>
+            )}
+          </footer>
+        ) : (
+          <footer className="flex justify-center pt-8">
             <button
               onClick={handleSubmitClick}
               disabled={isSubmitting}
@@ -705,16 +802,49 @@ export default function TestPassingContent() {
             >
               {isSubmitting ? 'Отправка...' : 'Завершить работу'}
             </button>
-          ) : (
-            <button
-              onClick={() => setCurrentIdx(v => v + 1)}
-              className="flex items-center gap-3 px-10 py-5 bg-slate-900 text-white rounded-full font-black uppercase text-[11px] tracking-[0.15em] shadow-xl active:scale-95 transition-all"
-            >
-              Следующий шаг <ChevronRight size={18} />
-            </button>
-          )}
-        </footer>
+          </footer>
+        )}
       </div>
+
+      {/* ── Floating buttons (bottom left) ── */}
+<div className="fixed left-4 bottom-4 flex flex-row gap-2 z-50">
+  {/* View mode toggle */}
+  <div className="flex flex-row gap-1 bg-white border border-slate-200 rounded-full shadow-lg p-1">
+    <button
+      onClick={() => handleModeSwitch('cards')}
+      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+        viewMode === 'cards' 
+          ? 'bg-slate-900 text-white' 
+          : 'text-slate-500 hover:bg-slate-100'
+      }`}
+      title="По одному"
+    >
+      <LayoutGrid size={18} />
+    </button>
+    <button
+      onClick={() => handleModeSwitch('scroll')}
+      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+        viewMode === 'scroll' 
+          ? 'bg-slate-900 text-white' 
+          : 'text-slate-500 hover:bg-slate-100'
+      }`}
+      title="Все сразу"
+    >
+      <ScrollText size={18} />
+    </button>
+  </div>
+
+  {/* Scroll to top button (only in scroll mode) */}
+  {viewMode === 'scroll' && (
+    <button
+      onClick={scrollToTop}
+      className="w-10 h-10 bg-white border border-slate-200 rounded-full shadow-lg flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
+      title="Наверх"
+    >
+      <ArrowUp size={18} />
+    </button>
+  )}
+</div>
     </div>
   );
 }

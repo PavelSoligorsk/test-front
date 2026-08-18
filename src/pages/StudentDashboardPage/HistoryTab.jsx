@@ -5,6 +5,12 @@ import { History, Search, Calendar, RotateCcw } from 'lucide-react';
 export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm, onRetake }) {
   const navigate = useNavigate();
 
+  // Фильтрация тестов после 2000 года
+  const validHistory = filteredHistory.filter(res => {
+    const completedDate = new Date(res.completed_at);
+    return completedDate.getFullYear() >= 2000;
+  });
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-[3rem] border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="p-6 md:p-8 border-b border-slate-50 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -29,7 +35,7 @@ export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm,
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-            {filteredHistory.length > 0 ? filteredHistory.map(res => (
+            {validHistory.length > 0 ? validHistory.map(res => (
               <tr key={res.id} onClick={() => navigate(`/result/${res.id}`)}
                 className="hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors group">
                 <td className="px-6 md:px-8 py-5 font-black uppercase text-slate-800 dark:text-white text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400">

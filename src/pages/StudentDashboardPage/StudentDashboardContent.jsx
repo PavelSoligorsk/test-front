@@ -147,9 +147,9 @@ export default function StudentDashboardContent() {
   const TABS = [
     { key: 'theory', label: 'Теория', icon: null },
     { key: 'tests', label: 'Тесты', icon: null },
-    { key: 'stats', label: 'Статистика', icon: BarChart3 },
     { key: 'history', label: 'История', icon: null },
     { key: 'profile', label: 'Профиль', icon: null },
+    { key: 'stats', label: 'Статистика', icon: null },
   ];
 
   return (
