@@ -1,332 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import { 
-  ChevronDown, ChevronUp, CheckCircle2, Menu, X 
+  CheckCircle2, Menu, X 
 } from 'lucide-react';
 import 'katex/dist/katex.min.css';
-
-// ========== СЕКЦИИ И БЛОКИ ТЕОРИИ ==========
-
-const SectionBlock = ({ id, title, children, isHard }) => {
-  const [isOpen, setIsOpen] = useState(true);
-  
-  return (
-    <section id={id} className="scroll-mt-20 border-b border-slate-200/70 dark:border-slate-700/70 pb-12 last:border-0 transition-colors">
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 group"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <h2 className="text-xl font-medium text-slate-900 dark:text-white tracking-tight transition-colors">
-            {title}
-          </h2>
-          {isHard && (
-            <span className="self-start sm:self-auto px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/50 transition-colors">
-              Повышенная сложность
-            </span>
-          )}
-        </div>
-        {isOpen ? (
-          <ChevronUp size={20} className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
-        ) : (
-          <ChevronDown size={20} className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
-        )}
-      </button>
-      
-      {isOpen && (
-        <div className="space-y-6 text-slate-700 dark:text-slate-300 dynamic-markdown text-left">
-          {children}
-        </div>
-      )}
-    </section>
-  );
-};
-
-const Def = ({ title = "Определение", children }) => (
-  <div className="my-6 p-4 sm:p-5 rounded-xl border-l-4 border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/40 text-left transition-colors">
-    <div className="mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">📖 {title}</span>
-    </div>
-    <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
-      {children}
-    </div>
-  </div>
-);
-
-const Ex = ({ title, children, isHard }) => {
-  const resolvedTitle = title || (isHard ? "Сложный пример" : "Пример");
-  return (
-    <div className={`my-6 p-4 sm:p-5 rounded-xl border-l-4 text-left transition-colors ${
-      isHard 
-        ? 'border-rose-400 bg-rose-50/60 dark:bg-rose-950/40' 
-        : 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40'
-    }`}>
-      <div className="mb-2">
-        <span className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
-          isHard ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'
-        }`}>📝 {resolvedTitle}</span>
-      </div>
-      <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
-        {children}
-      </div>
-    </div>
-  );
-};
-
-const Explanation = ({ children }) => (
-  <div className="my-6 p-4 sm:p-5 rounded-xl border-l-4 border-amber-500 bg-amber-50/60 dark:bg-amber-950/40 text-left transition-colors">
-    <div className="mb-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">💡 Пояснение</span>
-    </div>
-    <div className="text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed">
-      {children}
-    </div>
-  </div>
-);
-
-// ========== ИНТЕРАКТИВНЫЙ БЛОК GEOGEBRA ==========
-
-const GeoGebra = ({ id, setup, height = "400" }) => {
-  const containerRef = useRef(null);
-  const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
-
-  useEffect(() => {
-    const initApplet = () => {
-      if (!containerRef.current) return;
-
-      const parameters = {
-        "id": appletId.current,
-        "width": containerRef.current.clientWidth || 600,
-        "height": parseInt(height, 10),
-        "showToolBar": false,
-        "showMenuBar": false,
-        "showAlgebraInput": false,
-        "enableLabelDrags": false,
-        "enableShiftDragZoom": true,
-        "language": "ru",
-        "useBrowserForJS": false,
-        ...(id ? { "material_id": id } : {}),
-        "appletOnLoad": (api) => {
-          if (!id) {
-            api.evalCommand('ShowAxes(true)');
-            api.evalCommand('ShowGrid(true)');
-          }
-
-          if (setup) {
-            const commands = setup
-              .split('\n')
-              .map(cmd => cmd.trim())
-              .filter(cmd => cmd.length > 0 && !cmd.startsWith('//') && !cmd.startsWith('#'));
-
-            let viewCommands = [];
-            let perspectiveCommand = null;
-            let evalCommands = [];
-            let delayedCommands = [];
-
-            commands.forEach(cmd => {
-              if (!cmd) return;
-
-              if (cmd.startsWith('view:')) {
-                const parts = cmd.substring(5).split(',').map(s => s.trim());
-                viewCommands.push(parts);
-              }
-              else if (cmd.startsWith('perspective:')) {
-                perspectiveCommand = cmd.substring(12).trim();
-              }
-              else if (cmd.startsWith('color:')) {
-                const match = cmd.match(/color:\s*(\w+)\s*,\s*([\w#]+)/);
-                if (match) {
-                  delayedCommands.push({
-                    type: 'color',
-                    obj: match[1],
-                    color: match[2]
-                  });
-                }
-              }
-              else if (cmd.startsWith('size:')) {
-                const match = cmd.match(/size:\s*(\w+)\s*,\s*(\d+)/);
-                if (match) {
-                  delayedCommands.push({
-                    type: 'size',
-                    obj: match[1],
-                    size: match[2]
-                  });
-                }
-              }
-              else if (cmd.startsWith('label:')) {
-                const match = cmd.match(/label:\s*(\w+)\s*,\s*"([^"]+)"/);
-                if (match) {
-                  delayedCommands.push({
-                    type: 'label',
-                    obj: match[1],
-                    label: match[2]
-                  });
-                }
-              }
-              else if (cmd.startsWith('show:')) {
-                const items = cmd.substring(5).split(',').map(s => s.trim());
-                delayedCommands.push({
-                  type: 'show',
-                  items: items
-                });
-              }
-              else if (cmd.startsWith('hide:')) {
-                const items = cmd.substring(5).split(',').map(s => s.trim());
-                delayedCommands.push({
-                  type: 'hide',
-                  items: items
-                });
-              }
-              else if (cmd.startsWith('animate:')) {
-                const match = cmd.match(/animate:\s*(\w+)\s*,\s*(\w+)\s*,?\s*(\d+)?/);
-                if (match) {
-                  delayedCommands.push({
-                    type: 'animate',
-                    obj: match[1],
-                    animate: match[2] === 'true',
-                    speed: match[3] || null
-                  });
-                }
-              }
-              else if (cmd.includes('=') || cmd.includes(':=')) {
-                evalCommands.push(cmd);
-              }
-              else {
-                evalCommands.push(cmd);
-              }
-            });
-
-            viewCommands.forEach(parts => {
-              if (parts.length >= 4) {
-                const xMin = parseFloat(parts[0]) || -10;
-                const xMax = parseFloat(parts[1]) || 10;
-                const yMin = parseFloat(parts[2]) || -10;
-                const yMax = parseFloat(parts[3]) || 10;
-                
-                if (parts.length >= 6) {
-                  const zMin = parseFloat(parts[4]) || -10;
-                  const zMax = parseFloat(parts[5]) || 10;
-                  api.setCoordSystem(xMin, xMax, yMin, yMax, zMin, zMax);
-                } else {
-                  api.setCoordSystem(xMin, xMax, yMin, yMax);
-                }
-                
-                if (parts.includes('grid')) {
-                  api.setGridVisible(true);
-                }
-                if (parts.includes('axes')) {
-                  api.setAxesVisible(true, true);
-                }
-              }
-            });
-
-            if (perspectiveCommand) {
-              api.setPerspective(perspectiveCommand);
-            }
-
-            evalCommands.forEach(cmd => {
-              try {
-                api.evalCommand(cmd);
-              } catch (err) {
-                console.error(`Ошибка выполнения команды "${cmd}":`, err);
-              }
-            });
-
-            if (delayedCommands.length > 0) {
-              setTimeout(() => {
-                delayedCommands.forEach(dCmd => {
-                  try {
-                    switch (dCmd.type) {
-                      case 'color':
-                        api.setColor(dCmd.obj, ...hexToRgb(dCmd.color));
-                        break;
-                      case 'size':
-                        api.setPointSize(dCmd.obj, parseInt(dCmd.size));
-                        break;
-                      case 'label':
-                        api.setCaption(dCmd.obj, dCmd.label);
-                        break;
-                      case 'show':
-                        dCmd.items.forEach(item => {
-                          if (item === 'grid') api.setGridVisible(true);
-                          else if (item === 'axes') api.setAxesVisible(true, true);
-                          else api.setVisible(item, true);
-                        });
-                        break;
-                      case 'hide':
-                        dCmd.items.forEach(item => {
-                          if (item === 'grid') api.setGridVisible(false);
-                          else if (item === 'axes') api.setAxesVisible(false, false);
-                          else api.setVisible(item, false);
-                        });
-                        break;
-                      case 'animate':
-                        api.setAnimating(dCmd.obj, dCmd.animate);
-                        if (dCmd.animate) {
-                          api.startAnimation();
-                        } else {
-                          api.stopAnimation();
-                        }
-                        if (dCmd.speed) {
-                          api.setAnimationSpeed(dCmd.obj, parseFloat(dCmd.speed));
-                        }
-                        break;
-                    }
-                  } catch (err) {
-                    console.error(`Ошибка отложенной команды:`, dCmd, err);
-                  }
-                });
-              }, 200);
-            }
-          }
-        }
-      };
-
-      const applet = new window.GGBApplet(parameters, true);
-      applet.inject(containerRef.current);
-    };
-
-    if (!window.GGBApplet) {
-      const script = document.createElement('script');
-      script.src = 'https://www.geogebra.org/apps/deployggb.js';
-      script.id = 'ggb-api-script';
-      script.onload = initApplet;
-      document.head.appendChild(script);
-    } else {
-      initApplet();
-    }
-
-    return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
-    };
-  }, [id, setup, height]);
-
-  return (
-    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-slate-50 dark:bg-slate-800/80 relative transition-colors">
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 z-10"></div>
-      <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }}></div>
-    </div>
-  );
-};
-
-function hexToRgb(hex) {
-  hex = hex.replace('#', '');
-  
-  if (hex.length === 3) {
-    hex = hex.split('').map(c => c + c).join('');
-  }
-  
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  
-  return [r, g, b];
-}
+import {
+  SectionBlock,
+  Def,
+  Ex,
+  Explanation,
+  Important,
+  Formula,
+  Collapsible,
+  Grid,
+  Card,
+  Steps,
+  GeoGebra
+} from './TheoryBlocks';
 
 // ========== ЭЛЕМЕНТЫ MARKDOWN ==========
 
@@ -396,7 +89,7 @@ const markdownComponents = {
   ),
 };
 
-// ========== ПАРСЕР MDX ==========
+// ========== ПАРСЕР ВЛОЖЕННОГО MDX ==========
 
 const convertMarkdownLists = (content) => {
   if (!content) return content;
@@ -422,112 +115,188 @@ const convertMarkdownLists = (content) => {
   return content;
 };
 
-const parseBlocks = (content) => {
-  const allTags = [];
+// Функция для поиска следующего парного или самозакрывающегося тега с учетом вложенности
+const findNextTag = (content, startIndex = 0) => {
+  const tagRegex = /<(\/)?(Def|Ex|Explanation|Important|Formula|Collapsible|Grid|Card|Steps|GeoGebra)([\s\S]*?)(\/)?>/g;
+  tagRegex.lastIndex = startIndex;
   
-  const defRegex = /<Def(?:\s+title="([^"]+)")?>([\s\S]*?)<\/Def>/g;
-  const exRegex = /<Ex(?:\s+title="([^"]+)")?(?:\s+isHard)?>([\s\S]*?)<\/Ex>/g;
-  const expRegex = /<Explanation>([\s\S]*?)<\/Explanation>/g;
-  const geoRegex = /<GeoGebra([\s\S]*?)\/>/g;
-  
-  let match;
-  
-  while ((match = defRegex.exec(content)) !== null) {
-    const innerContent = match[2];
-    const innerBlocks = parseBlocks(innerContent);
-    
-    allTags.push({
-      type: 'def',
-      title: match[1] || 'Определение',
-      content: innerContent,
-      innerBlocks: innerBlocks,
-      index: match.index,
-      endIndex: match.index + match[0].length
-    });
-  }
-  
-  while ((match = exRegex.exec(content)) !== null) {
-    const innerContent = match[2];
-    const innerBlocks = parseBlocks(innerContent);
-    
-    allTags.push({
-      type: 'ex',
-      title: match[1] || 'Пример',
-      content: innerContent,
-      isHard: match[0].includes('isHard'),
-      innerBlocks: innerBlocks,
-      index: match.index,
-      endIndex: match.index + match[0].length
-    });
-  }
-  
-  while ((match = expRegex.exec(content)) !== null) {
-    const innerContent = match[1];
-    const innerBlocks = parseBlocks(innerContent);
-    
-    allTags.push({
-      type: 'explanation',
-      content: innerContent,
-      innerBlocks: innerBlocks,
-      index: match.index,
-      endIndex: match.index + match[0].length
-    });
-  }
-  
-  while ((match = geoRegex.exec(content)) !== null) {
-    const attrsStr = match[1];
-    const idMatch = attrsStr.match(/id="([^"]+)"/);
-    const heightMatch = attrsStr.match(/height="([^"]+)"/);
-    const setupMatch = attrsStr.match(/setup=\{`([\s\S]*?)`\}/) || attrsStr.match(/setup="([^"]+)"/);
+  let match = tagRegex.exec(content);
+  if (!match) return null;
 
-    allTags.push({
-      type: 'geogebra',
-      id: idMatch ? idMatch[1] : null,
-      height: heightMatch ? heightMatch[1] : "400",
-      setup: setupMatch ? setupMatch[1] : null,
-      index: match.index,
-      endIndex: match.index + match[0].length
-    });
+  const [fullMatch, isClosing, tagName, attrs, isSelfClosing] = match;
+  const index = match.index;
+
+  // Если это самозакрывающийся тег (например <GeoGebra ... />)
+  if (isSelfClosing) {
+    return {
+      tagName,
+      attrs,
+      isSelfClosing: true,
+      startIndex: index,
+      endIndex: index + fullMatch.length,
+      innerContent: ''
+    };
   }
-  
-  allTags.sort((a, b) => a.index - b.index);
+
+  // Если это закрывающий тег без пары
+  if (isClosing) {
+    return findNextTag(content, index + fullMatch.length);
+  }
+
+  // Поиск парного закрывающего тега с балансировкой вложенности
+  let depth = 1;
+  const searchRegex = new RegExp(`<(\/)?${tagName}(?:[\\s\\S]*?)(\/)?>`, 'g');
+  searchRegex.lastIndex = index + fullMatch.length;
+
+  let nestedMatch;
+  while ((nestedMatch = searchRegex.exec(content)) !== null) {
+    const [nFull, nClosing, nSelfClosing] = nestedMatch;
+    if (nSelfClosing) continue; // Игнорируем самозакрывающиеся теги
+    
+    if (nClosing) {
+      depth--;
+    } else {
+      depth++;
+    }
+
+    if (depth === 0) {
+      return {
+        tagName,
+        attrs,
+        isSelfClosing: false,
+        startIndex: index,
+        endIndex: nestedMatch.index + nFull.length,
+        innerContent: content.substring(index + fullMatch.length, nestedMatch.index)
+      };
+    }
+  }
+
+  return null;
+};
+
+const parseBlocks = (content) => {
+  if (!content) return [];
   
   const blocks = [];
   let pointer = 0;
-  
-  for (const tag of allTags) {
-    if (tag.index > pointer) {
-      const betweenText = content.substring(pointer, tag.index).trim();
-      if (betweenText) {
-        blocks.push({ type: 'text', content: convertMarkdownLists(betweenText) });
+
+  while (pointer < content.length) {
+    const tagMatch = findNextTag(content, pointer);
+
+    if (!tagMatch) {
+      const remainingText = content.substring(pointer).trim();
+      if (remainingText) {
+        blocks.push({ type: 'text', content: convertMarkdownLists(remainingText) });
+      }
+      break;
+    }
+
+    if (tagMatch.startIndex > pointer) {
+      const textBefore = content.substring(pointer, tagMatch.startIndex).trim();
+      if (textBefore) {
+        blocks.push({ type: 'text', content: convertMarkdownLists(textBefore) });
       }
     }
-    
-    if (tag.type === 'def' || tag.type === 'ex' || tag.type === 'explanation') {
+
+    const { tagName, attrs, innerContent } = tagMatch;
+
+    if (tagName === 'Def') {
+      const titleMatch = attrs.match(/title="([^"]+)"/);
       blocks.push({
-        ...tag,
-        blocks: tag.innerBlocks
+        type: 'def',
+        title: titleMatch ? titleMatch[1] : 'Определение',
+        blocks: parseBlocks(innerContent) // Рекурсивный парсинг вложенных блоков
       });
-      delete tag.innerBlocks;
-    } else {
-      blocks.push(tag);
+    } else if (tagName === 'Ex') {
+      const titleMatch = attrs.match(/title="([^"]+)"/);
+      const isHard = attrs.includes('isHard');
+      blocks.push({
+        type: 'ex',
+        title: titleMatch ? titleMatch[1] : null,
+        isHard,
+        blocks: parseBlocks(innerContent) // Рекурсивный парсинг вложенных блоков
+      });
+    } else if (tagName === 'Explanation') {
+      blocks.push({
+        type: 'explanation',
+        blocks: parseBlocks(innerContent) // Рекурсивный парсинг вложенных блоков
+      });
+    } else if (tagName === 'Important') {
+      const titleMatch = attrs.match(/title="([^"]+)"/);
+      blocks.push({
+        type: 'important',
+        title: titleMatch ? titleMatch[1] : 'Важно',
+        blocks: parseBlocks(innerContent)
+      });
+    } else if (tagName === 'Formula') {
+      const titleMatch = attrs.match(/title="([^"]+)"/);
+      blocks.push({
+        type: 'formula',
+        title: titleMatch ? titleMatch[1] : null,
+        blocks: parseBlocks(innerContent)
+      });
+    } else if (tagName === 'Collapsible') {
+      const titleMatch = attrs.match(/title="([^"]+)"/);
+      blocks.push({
+        type: 'collapsible',
+        title: titleMatch ? titleMatch[1] : 'Доказательство',
+        blocks: parseBlocks(innerContent)
+      });
+    } else if (tagName === 'Grid') {
+      const colsMatch = attrs.match(/cols="?(\d+)"?/);
+      blocks.push({
+        type: 'grid',
+        cols: colsMatch ? parseInt(colsMatch[1], 10) : 2,
+        blocks: parseBlocks(innerContent)
+      });
+    } else if (tagName === 'Card') {
+      const titleMatch = attrs.match(/title="([^"]+)"/);
+      blocks.push({
+        type: 'card',
+        title: titleMatch ? titleMatch[1] : null,
+        blocks: parseBlocks(innerContent)
+      });
+    } else if (tagName === 'Steps') {
+      // Извлекаем отдельные шаги из <div>...</div> блоков
+      const stepRegex = /<div[^>]*>([\s\S]*?)<\/div>/g;
+      const stepContents = [];
+      let stepMatch;
+      while ((stepMatch = stepRegex.exec(innerContent)) !== null) {
+        const stepText = stepMatch[1].trim();
+        if (stepText) {
+          stepContents.push(stepText);
+        }
+      }
+      // Если <div> не найдены — используем весь контент как один шаг
+      if (stepContents.length === 0) {
+        const trimmed = innerContent.trim();
+        if (trimmed) stepContents.push(trimmed);
+      }
+      blocks.push({
+        type: 'steps',
+        steps: stepContents
+      });
+    } else if (tagName === 'GeoGebra') {
+      const idMatch = attrs.match(/id="([^"]+)"/);
+      const heightMatch = attrs.match(/height="([^"]+)"/);
+      const setupMatch = attrs.match(/setup=\{`([\s\S]*?)`\}/) || attrs.match(/setup="([^"]+)"/);
+
+      blocks.push({
+        type: 'geogebra',
+        id: idMatch ? idMatch[1] : null,
+        height: heightMatch ? heightMatch[1] : "400",
+        setup: setupMatch ? setupMatch[1] : null
+      });
     }
-    
-    pointer = tag.endIndex;
+
+    pointer = tagMatch.endIndex;
   }
-  
-  if (pointer < content.length) {
-    const afterText = content.substring(pointer).trim();
-    if (afterText) {
-      blocks.push({ type: 'text', content: convertMarkdownLists(afterText) });
-    }
-  }
-  
+
   return blocks;
 };
 
 const renderBlocks = (blocks) => {
-  if (!blocks) return null;
+  if (!blocks || !Array.isArray(blocks)) return null;
   
   return blocks.map((block, idx) => {
     if (block.type === 'text') {
@@ -563,6 +332,52 @@ const renderBlocks = (blocks) => {
         </Explanation>
       );
     }
+    if (block.type === 'important') {
+      return (
+        <Important key={idx} title={block.title}>
+          {renderBlocks(block.blocks)}
+        </Important>
+      );
+    }
+    if (block.type === 'formula') {
+      return (
+        <Formula key={idx} title={block.title}>
+          {renderBlocks(block.blocks)}
+        </Formula>
+      );
+    }
+    if (block.type === 'collapsible') {
+      return (
+        <Collapsible key={idx} title={block.title}>
+          {renderBlocks(block.blocks)}
+        </Collapsible>
+      );
+    }
+    if (block.type === 'grid') {
+      return (
+        <Grid key={idx} cols={block.cols}>
+          {renderBlocks(block.blocks)}
+        </Grid>
+      );
+    }
+    if (block.type === 'card') {
+      return (
+        <Card key={idx} title={block.title}>
+          {renderBlocks(block.blocks)}
+        </Card>
+      );
+    }
+    if (block.type === 'steps') {
+      return (
+        <Steps key={idx}>
+          {(block.steps || []).map((step, i) => (
+            <div key={i}>
+              {renderBlocks(parseBlocks(step))}
+            </div>
+          ))}
+        </Steps>
+      );
+    }
     if (block.type === 'geogebra') {
       return (
         <GeoGebra 
@@ -576,8 +391,6 @@ const renderBlocks = (blocks) => {
     return null;
   });
 };
-
-// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
