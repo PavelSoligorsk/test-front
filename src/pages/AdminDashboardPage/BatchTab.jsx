@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
 import BatchPromptModal from './BatchPromptModal';
+import BatchPreview from './BatchPreview';
 
 const EXAMPLE_CREATE = `[
   {
@@ -42,6 +43,54 @@ export default function BatchTab({ onSuccess }) {
   const [showExample, setShowExample] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewError, setPreviewError] = useState(null);
+  const [previewMode, setPreviewMode] = useState('create');
+
+  const updatePreview = (text, currentMode) => {
+    if (!text.trim()) {
+      setPreviewData(null);
+      setPreviewError(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      if (currentMode === 'delete') {
+        if (!Array.isArray(parsed)) throw new Error('Должен быть массив чисел (ID заданий)');
+        if (parsed.length === 0) throw new Error('Массив ID не может быть пустым');
+        for (const id of parsed) {
+          if (typeof id !== 'number' || !Number.isInteger(id) || id < 1) {
+            throw new Error(`Некорректный ID: ${id}. Должны быть целые положительные числа.`);
+          }
+        }
+      } else {
+        if (!Array.isArray(parsed)) throw new Error('Должен быть массив объектов');
+        if (parsed.length === 0) throw new Error('Массив не может быть пустым');
+      }
+      setPreviewData(parsed);
+      setPreviewError(null);
+    } catch (e) {
+      setPreviewData(null);
+      setPreviewError(e.message || 'Некорректный JSON');
+    }
+  };
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    setResult(null);
+    setError(null);
+    setPreviewMode(newMode);
+    setPreviewData(null);
+    setPreviewError(null);
+  };
+
+  const handleTextChange = (text) => {
+    setJsonText(text);
+    setError(null);
+    setResult(null);
+    updatePreview(text, mode);
+    setPreviewMode(mode);
+  };
 
   const getExample = () => {
     if (mode === 'create') return EXAMPLE_CREATE;
@@ -50,9 +99,12 @@ export default function BatchTab({ onSuccess }) {
   };
 
   const handleLoadExample = () => {
-    setJsonText(getExample().trim());
+    const example = getExample().trim();
+    setJsonText(example);
     setError(null);
     setResult(null);
+    updatePreview(example, mode);
+    setPreviewMode(mode);
   };
 
   const validateJSON = (text) => {
@@ -196,7 +248,7 @@ export default function BatchTab({ onSuccess }) {
             ].map(m => (
               <button
                 key={m.id}
-                onClick={() => { setMode(m.id); setResult(null); setError(null); }}
+                onClick={() => handleModeChange(m.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
                   mode === m.id
                     ? 'bg-white text-slate-900 shadow-sm'
@@ -211,76 +263,88 @@ export default function BatchTab({ onSuccess }) {
         </div>
       </div>
 
-      {/* JSON Input */}
-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              JSON {mode === 'delete' ? '(массив ID)' : '(массив заданий)'}
-            </span>
-            {jsonText && (
-              <span className="text-[9px] font-bold text-slate-400">
-                {jsonText.split('\n').length} строк
+      {/* JSON Input + Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                JSON {mode === 'delete' ? '(массив ID)' : '(массив заданий)'}
               </span>
-            )}
+              {jsonText && (
+                <span className="text-[9px] font-bold text-slate-400">
+                  {jsonText.split('\n').length} строк
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowExample(!showExample)}
+                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+              >
+                Пример
+                {showExample ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              <button
+                onClick={handleLoadExample}
+                className="px-3 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all"
+              >
+                Загрузить пример
+              </button>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowExample(!showExample)}
-              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
-            >
-              Пример
-              {showExample ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-            <button
-              onClick={handleLoadExample}
-              className="px-3 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all"
-            >
-              Загрузить пример
-            </button>
         </div>
-      </div>
 
-      {/* Prompt Modal */}
-      {promptModalOpen && (
-        <BatchPromptModal
-          onClose={() => setPromptModalOpen(false)}
-        />
-      )}
-
-        {/* Example panel */}
-        {showExample && (
-          <div className="rounded-2xl bg-slate-900 p-5 font-mono text-xs text-slate-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
-            {getExample().trim()}
-          </div>
+        {/* Prompt Modal */}
+        {promptModalOpen && (
+          <BatchPromptModal
+            onClose={() => setPromptModalOpen(false)}
+          />
         )}
 
-        <textarea
-          value={jsonText}
-          onChange={e => { setJsonText(e.target.value); setError(null); setResult(null); }}
-          placeholder={mode === 'delete'
-            ? '[1, 2, 3, ...]'
-            : '[\n  { "task_class": "10", "topic_number": "1.1", ... },\n  ...\n]'}
-          className="w-full h-72 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y placeholder:text-slate-400"
-          spellCheck={false}
-        />
-
-        {/* Submit */}
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !jsonText.trim()}
-          className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm uppercase transition-all ${
-            loading
-              ? 'bg-slate-200 text-slate-400 cursor-wait'
-              : `bg-gradient-to-r ${modeColor} text-white hover:shadow-lg active:scale-[0.98]`
-          }`}
-        >
-          {loading ? (
-            <><Loader2 size={18} className="animate-spin" /> Обработка...</>
-          ) : (
-            <><modeIcon size={18} /> {modeLabel} задания</>
+          {/* Example panel */}
+          {showExample && (
+            <div className="rounded-2xl bg-slate-900 p-5 font-mono text-xs text-slate-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
+              {getExample().trim()}
+            </div>
           )}
-        </button>
+
+          <textarea
+            value={jsonText}
+            onChange={e => handleTextChange(e.target.value)}
+            placeholder={mode === 'delete'
+              ? '[1, 2, 3, ...]'
+              : '[\n  { "task_class": "10", "topic_number": "1.1", ... },\n  ...\n]'}
+            className="w-full h-72 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y placeholder:text-slate-400"
+            spellCheck={false}
+          />
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !jsonText.trim()}
+            className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm uppercase transition-all ${
+              loading
+                ? 'bg-slate-200 text-slate-400 cursor-wait'
+                : `bg-gradient-to-r ${modeColor} text-white hover:shadow-lg active:scale-[0.98]`
+            }`}
+          >
+            {loading ? (
+              <><Loader2 size={18} className="animate-spin" /> Обработка...</>
+            ) : (
+              <><modeIcon size={18} /> {modeLabel} задания</>
+            )}
+          </button>
+        </div>
+
+        {/* Preview panel */}
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
+          <BatchPreview
+            mode={previewMode}
+            parsed={previewData}
+            error={previewError}
+            hasText={!!jsonText.trim()}
+          />
+        </div>
       </div>
 
       {/* Error */}
