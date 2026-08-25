@@ -3,6 +3,8 @@ import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, Chev
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
 import BatchPromptModal from './BatchPromptModal';
 import BatchPreview from './BatchPreview';
+import ImageAwareTextarea from './ImageAwareTextarea'; // Укажите ваш путь к компоненту
+
 
 const EXAMPLE_CREATE = `[
   {
@@ -308,15 +310,13 @@ export default function BatchTab({ onSuccess }) {
             </div>
           )}
 
-          <textarea
-            value={jsonText}
-            onChange={e => handleTextChange(e.target.value)}
-            placeholder={mode === 'delete'
-              ? '[1, 2, 3, ...]'
-              : '[\n  { "task_class": "10", "topic_number": "1.1", ... },\n  ...\n]'}
-            className="w-full h-72 p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-y placeholder:text-slate-400"
-            spellCheck={false}
-          />
+          <ImageAwareTextarea
+  value={jsonText}
+  onChange={setJsonText}
+  placeholder="Вставьте JSON или перетащите сюда картинку для получения Markdown-ссылки..."
+  className="w-full h-[500px] p-4 font-mono text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y"
+  rows={20}
+/>
 
           {/* Submit */}
           <button
