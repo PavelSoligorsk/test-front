@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, AlertCircle, Trash2, Hash, Loader2, Sparkles } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
-import { adminApi } from '../../../shared/api/adminApi'; // Перепроверьте путь импорта к вашему adminApi
+import { adminApi } from './api';
 
 const MetaBadge = ({ label, value, color }) => (
   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap ${color || 'bg-slate-100 text-slate-600'}`}>
