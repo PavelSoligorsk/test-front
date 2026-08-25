@@ -314,7 +314,7 @@ export default function BatchTab({ onSuccess }) {
   value={jsonText}
   onChange={setJsonText}
   placeholder="Вставьте JSON или перетащите сюда картинку для получения Markdown-ссылки..."
-  className="w-full h-[500px] p-4 font-mono text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y"
+  className="w-full h-[500px] p-4 font-mono text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y transition-colors"
   rows={20}
 />
 
