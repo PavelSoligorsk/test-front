@@ -336,7 +336,7 @@ export default function BatchTab({ onSuccess }) {
           </button>
         </div>
 
-        {/* Preview panel */}
+        {/* Preview  panel */}
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
           <BatchPreview
   mode={previewMode}
