@@ -339,11 +339,11 @@ export default function BatchTab({ onSuccess }) {
         {/* Preview panel */}
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
           <BatchPreview
-            mode={previewMode}
-            parsed={previewData}
-            error={previewError}
-            hasText={!!jsonText.trim()}
-          />
+  mode={previewMode}
+  parsed={previewData}
+  error={previewError}
+  hasText={!!jsonText.trim()}
+/>
         </div>
       </div>
 
