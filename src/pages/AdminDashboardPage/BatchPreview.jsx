@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, AlertCircle, Trash2, Hash, Loader2, Sparkles } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
-import { adminApi } from './api';
+import { fetchTask } from './api';
 
 const MetaBadge = ({ label, value, color }) => (
   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap ${color || 'bg-slate-100 text-slate-600'}`}>
@@ -46,11 +46,13 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
     const fetchTasks = async () => {
       try {
         const uniqueIds = [...new Set(idsToFetch)];
-        const requests = uniqueIds.map(id =>
-          adminApi.getTask(id)
-            .then(res => ({ id, data: res.data }))
-            .catch(() => ({ id, data: null }))
-        );
+        // Внутри useEffect в BatchPreview.jsx замените adminApi.getTask(id) на fetchTask(id):
+
+const requests = uniqueIds.map(id =>
+  fetchTask(id)
+    .then(data => ({ id, data })) // fetchTask возвращает res.data напрямую
+    .catch(() => ({ id, data: null }))
+);
 
         const results = await Promise.all(requests);
         
