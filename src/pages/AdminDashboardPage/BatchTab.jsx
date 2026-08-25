@@ -3,7 +3,7 @@ import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, Chev
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
 import BatchPromptModal from './BatchPromptModal';
 import BatchPreview from './BatchPreview';
-import ImageAwareTextarea from './ImageAwareTextarea'; // Укажите ваш путь к компоненту
+import BatchJsonTextarea from './BatchJsonTextarea';
 
 
 const EXAMPLE_CREATE = `[
@@ -310,10 +310,10 @@ export default function BatchTab({ onSuccess }) {
             </div>
           )}
 
-          <ImageAwareTextarea
+          <BatchJsonTextarea
   value={jsonText}
   onChange={setJsonText}
-  placeholder="Вставьте JSON или перетащите сюда картинку для получения Markdown-ссылки..."
+  placeholder="Вставьте JSON. Ctrl+V / перетащите картинку — она вставится как валидная JSON-строка..."
   className="w-full h-[500px] p-4 font-mono text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y transition-colors"
   rows={20}
 />
