@@ -2,8 +2,8 @@ import React, { useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { uploadImage } from './api';
 
-// Проверка: находится ли позиция pos внутри JSON-строки (двойные кавычки, с учётом экранирования \" и \\)
-function isInsideJsonString(text, pos) {
+// Проверка: находится ли позиция pos внутри двойных кавычек YAML-скаляра (с учётом экранирования \" и \\)
+function isInsideDoubleQuoted(text, pos) {
   let inString = false;
   let escaped = false;
   for (let i = 0; i < pos; i++) {
@@ -19,8 +19,8 @@ function isInsideJsonString(text, pos) {
   return inString;
 }
 
-// Экранирование содержимого JSON-строки (без внешних кавычек)
-function escapeJsonInner(str) {
+// Экранирование содержимого YAML-строки в двойных кавычках (без внешних кавычек)
+function escapeYaml(str) {
   return str
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
@@ -29,13 +29,13 @@ function escapeJsonInner(str) {
     .replace(/\t/g, '\\t');
 }
 
-export default function BatchJsonTextarea({ value, onChange, placeholder, className = '', rows = 6 }) {
+export default function BatchYamlTextarea({ value, onChange, placeholder, className = '', rows = 6 }) {
   const textareaRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
 
-  // Вставляет валидную JSON-строку с markdown-ссылкой на картинку в позицию курсора
-  const insertMarkdownAsJson = (markdown) => {
+  // Вставляет markdown-ссылку на картинку как валидную YAML-строку в позицию курсора
+  const insertMarkdownAsYaml = (markdown) => {
     const textarea = textareaRef.current;
     if (!textarea) {
       onChange(value + markdown);
@@ -44,12 +44,12 @@ export default function BatchJsonTextarea({ value, onChange, placeholder, classN
     const start = textarea.selectionStart ?? value.length;
     const end = textarea.selectionEnd ?? value.length;
     let insertion;
-    if (isInsideJsonString(value, start)) {
-      // Курсор внутри строки: вставляем экранированное содержимое без внешних кавычек
-      insertion = escapeJsonInner(markdown);
+    if (isInsideDoubleQuoted(value, start)) {
+      // Курсор внутри двойных кавычек: вставляем экранированное содержимое без кавычек
+      insertion = escapeYaml(markdown);
     } else {
-      // Курсор вне строки: вставляем полный JSON-литерал "..." (с экранированием)
-      insertion = JSON.stringify(markdown);
+      // Вне кавычек: вставляем полную YAML-строку в двойных кавычках
+      insertion = `"${escapeYaml(markdown)}"`;
     }
     const newValue = value.substring(0, start) + insertion + value.substring(end);
     onChange(newValue);
@@ -74,10 +74,10 @@ export default function BatchJsonTextarea({ value, onChange, placeholder, classN
       const imageUrl = await uploadImage(base64);
       setUploadProgress(100);
       const markdown = `![${file.name || 'image'}](${imageUrl})`;
-      insertMarkdownAsJson(markdown);
+      insertMarkdownAsYaml(markdown);
     } catch (error) {
       console.error('Upload error:', error);
-      insertMarkdownAsJson('❌ Ошибка загрузки изображения');
+      insertMarkdownAsYaml('❌ Ошибка загрузки изображения');
     } finally {
       setIsUploading(false);
       setTimeout(() => setUploadProgress(null), 500);

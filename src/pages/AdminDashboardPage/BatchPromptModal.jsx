@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Clipboard, Check, Upload, Edit3, Trash2 } from 'lucide-react';
+import { stringify } from 'yaml';
 
 const CREATE_EXAMPLE = [
   {
@@ -31,6 +32,7 @@ const UPDATE_EXAMPLE = [
 const DELETE_EXAMPLE = [1, 2, 3, 4, 5];
 
 const CREATE_RULES = [
+  "Ввод в YAML: каждый блок задания начинается с \"-\" на новой строке, поля — с отступом (см. пример ниже)",
   "task_class — обязательное поле (строка, например \"10\", \"Планиметрия\")",
   "topic_number — обязательное поле (строка, например \"1.1\", \"Трапеция\")",
   "content — обязательное поле (текст задачи, LaTeX через \\\\(...\\\\) для inline и \\\\[...\\\\] для display)",
@@ -63,7 +65,7 @@ export default function BatchPromptModal({ onClose }) {
         ? UPDATE_EXAMPLE
         : DELETE_EXAMPLE;
 
-    const text = JSON.stringify(data, null, 2);
+    const text = stringify(data);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -145,9 +147,9 @@ ${JSON.stringify({ ids: DELETE_EXAMPLE }, null, 2)}`;
               <Clipboard size={20} className="text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-slate-800 uppercase italic">Формат JSON для пакетных операций</h3>
+              <h3 className="text-lg font-black text-slate-800 uppercase italic">Формат YAML для пакетных операций</h3>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                Копируй шаблон, вставляй в текстовое поле и меняй данные
+                Копируй шаблон (YAML), вставляй в текстовое поле и меняй данные. На сервер уходит JSON.
               </p>
             </div>
           </div>
@@ -216,7 +218,7 @@ ${JSON.stringify({ ids: DELETE_EXAMPLE }, null, 2)}`;
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Данные для отправки
+                Отправляется на сервер (JSON)
               </h4>
               <button
                 onClick={() => handleCopyPayload(getPayloadExample())}

@@ -1,53 +1,113 @@
 import React, { useState } from 'react';
 import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { parse as parseYaml } from 'yaml';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
 import BatchPromptModal from './BatchPromptModal';
 import BatchPreview from './BatchPreview';
-import BatchJsonTextarea from './BatchJsonTextarea';
+import BatchYamlTextarea from './BatchYamlTextarea';
 
+const EXAMPLE_CREATE = `- task_class: "10"
+  topic_number: "1.1"
+  content: Решите уравнение \\(x^2 - 5x + 6 = 0\\)
+  answer: 2; 3
+  is_open_answer: true
+  difficulty: 2
+  topic: Алгебра
+  section: Квадратные уравнения
 
-const EXAMPLE_CREATE = `[
-  {
-    "task_class": "10",
-    "topic_number": "1.1",
-    "content": "Решите уравнение \\\\(x^2 - 5x + 6 = 0\\\\)",
-    "answer": "2; 3",
-    "is_open_answer": true,
-    "difficulty": 2,
-    "topic": "Алгебра",
-    "section": "Квадратные уравнения"
-  },
-  {
-    "task_class": "10",
-    "topic_number": "1.1",
-    "content": "Сколько корней имеет уравнение \\\\(x^2 + 1 = 0\\\\)?",
-    "options": ["0", "1", "2", "бесконечно"],
-    "answer": "0",
-    "is_open_answer": false,
-    "difficulty": 1,
-    "hint": "Вспомните дискриминант"
-  }
-]`;
+- task_class: "10"
+  topic_number: "1.1"
+  content: Сколько корней имеет уравнение \\(x^2 + 1 = 0\\)?
+  options:
+    - 0
+    - 1
+    - 2
+    - бесконечно
+  answer: 0
+  is_open_answer: false
+  difficulty: 1
+  hint: Вспомните дискриминант`;
 
-const EXAMPLE_UPDATE = `[
-  { "id": 1, "difficulty": 3, "topic": "Алгебра", "section": "Квадратные уравнения" },
-  { "id": 2, "answer": "4", "hint": "Подумайте о дискриминанте" }
-]`;
+const EXAMPLE_UPDATE = `- id: 1
+  difficulty: 3
+  topic: Алгебра
+  section: Квадратные уравнения
 
-const EXAMPLE_DELETE = `[1, 2, 3, 4, 5]`;
+- id: 2
+  answer: 4
+  hint: Подумайте о дискриминанте`;
+
+const EXAMPLE_DELETE = `- 1
+- 2
+- 3
+- 4
+- 5`;
 
 export default function BatchTab({ onSuccess }) {
   const [mode, setMode] = useState('create'); // create | update | delete
-  const [jsonText, setJsonText] = useState('');
+  const [yamlText, setYamlText] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showExample, setShowExample] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   const [previewError, setPreviewError] = useState(null);
   const [previewMode, setPreviewMode] = useState('create');
+
+  const parseAndValidate = (text, currentMode) => {
+    if (!text.trim()) throw new Error('Пустой ввод');
+    const parsed = parseYaml(text);
+    if (currentMode === 'delete') {
+      if (!Array.isArray(parsed)) throw new Error('Должен быть список ID (каждый с новой строки: - 1, - 2)');
+      if (parsed.length === 0) throw new Error('Список ID не может быть пустым');
+      for (const id of parsed) {
+        if (typeof id !== 'number' || !Number.isInteger(id) || id < 1) {
+          throw new Error(`Некорректный ID: ${id}. Должны быть целые положительные числа.`);
+        }
+      }
+      return parsed;
+    }
+    if (!Array.isArray(parsed)) throw new Error('Должен быть список заданий (каждый блок начинается с "-")');
+    if (parsed.length === 0) throw new Error('Список не может быть пустым');
+    if (parsed.length > 500) throw new Error(`Максимум 500 заданий за раз, у вас ${parsed.length}`);
+    for (let i = 0; i < parsed.length; i++) {
+      const item = parsed[i];
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+        throw new Error(`Элемент [${i}]: должен быть объектом с полями`);
+      }
+      if (currentMode === 'update') {
+        if (!item.id || typeof item.id !== 'number' || !Number.isInteger(item.id)) {
+          throw new Error(`Элемент [${i}]: отсутствует или некорректный id`);
+        }
+      } else {
+        // create
+        if (!item.task_class || !String(item.task_class).trim()) throw new Error(`Элемент [${i}]: отсутствует task_class`);
+        if (!item.topic_number || !String(item.topic_number).trim()) throw new Error(`Элемент [${i}]: отсутствует topic_number`);
+        if (!item.content || !String(item.content).trim()) throw new Error(`Элемент [${i}]: отсутствует content`);
+        if (item.answer === undefined || item.answer === null || String(item.answer).trim() === '') throw new Error(`Элемент [${i}]: отсутствует answer`);
+        if (item.is_open_answer === false && (!item.options || !Array.isArray(item.options) || item.options.length === 0)) throw new Error(`Элемент [${i}]: для закрытого задания нужно options`);
+        if (item.difficulty !== undefined && item.difficulty !== null && (Number(item.difficulty) < 1 || Number(item.difficulty) > 5)) throw new Error(`Элемент [${i}]: difficulty должно быть 1-5`);
+      }
+    }
+    // Нормализация перед отправкой
+    return parsed.map(item => {
+      if (currentMode === 'update') {
+        const copy = { ...item };
+        if (copy.difficulty !== undefined && copy.difficulty !== null) copy.difficulty = Number(copy.difficulty);
+        return copy;
+      }
+      return {
+        ...item,
+        task_class: String(item.task_class),
+        topic_number: String(item.topic_number),
+        is_open_answer: item.is_open_answer !== false,
+        difficulty: item.difficulty !== undefined && item.difficulty !== null ? Number(item.difficulty) : undefined,
+        options: Array.isArray(item.options) ? item.options.map(o => String(o)) : item.options,
+      };
+    });
+  };
+
 
   const updatePreview = (text, currentMode) => {
     if (!text.trim()) {
@@ -56,24 +116,12 @@ export default function BatchTab({ onSuccess }) {
       return;
     }
     try {
-      const parsed = JSON.parse(text);
-      if (currentMode === 'delete') {
-        if (!Array.isArray(parsed)) throw new Error('Должен быть массив чисел (ID заданий)');
-        if (parsed.length === 0) throw new Error('Массив ID не может быть пустым');
-        for (const id of parsed) {
-          if (typeof id !== 'number' || !Number.isInteger(id) || id < 1) {
-            throw new Error(`Некорректный ID: ${id}. Должны быть целые положительные числа.`);
-          }
-        }
-      } else {
-        if (!Array.isArray(parsed)) throw new Error('Должен быть массив объектов');
-        if (parsed.length === 0) throw new Error('Массив не может быть пустым');
-      }
+      const parsed = parseAndValidate(text, currentMode);
       setPreviewData(parsed);
       setPreviewError(null);
     } catch (e) {
       setPreviewData(null);
-      setPreviewError(e.message || 'Некорректный JSON');
+      setPreviewError(e.message || 'Некорректный YAML');
     }
   };
 
@@ -87,7 +135,7 @@ export default function BatchTab({ onSuccess }) {
   };
 
   const handleTextChange = (text) => {
-    setJsonText(text);
+    setYamlText(text);
     setError(null);
     setResult(null);
     updatePreview(text, mode);
@@ -102,65 +150,11 @@ export default function BatchTab({ onSuccess }) {
 
   const handleLoadExample = () => {
     const example = getExample().trim();
-    setJsonText(example);
+    setYamlText(example);
     setError(null);
     setResult(null);
     updatePreview(example, mode);
     setPreviewMode(mode);
-  };
-
-  const validateJSON = (text) => {
-    try {
-      const parsed = JSON.parse(text);
-      if (mode === 'delete') {
-        if (!Array.isArray(parsed)) throw new Error('Должен быть массив чисел (ID заданий)');
-        if (parsed.length === 0) throw new Error('Массив ID не может быть пустым');
-        for (const id of parsed) {
-          if (typeof id !== 'number' || !Number.isInteger(id) || id < 1) {
-            throw new Error(`Некорректный ID: ${id}. Должны быть целые положительные числа.`);
-          }
-        }
-        return parsed;
-      }
-      if (!Array.isArray(parsed)) throw new Error('Должен быть массив объектов');
-      if (parsed.length === 0) throw new Error('Массив не может быть пустым');
-      if (parsed.length > 500) throw new Error(`Максимум 500 заданий за раз, у вас ${parsed.length}`);
-      for (let i = 0; i < parsed.length; i++) {
-        const item = parsed[i];
-        if (typeof item !== 'object' || item === null) {
-          throw new Error(`Элемент [${i}]: должен быть объектом`);
-        }
-        if (mode === 'update') {
-          if (!item.id || typeof item.id !== 'number' || !Number.isInteger(item.id)) {
-            throw new Error(`Элемент [${i}]: отсутствует или некорректный id`);
-          }
-        } else {
-          // create
-          if (!item.task_class || !String(item.task_class).trim()) {
-            throw new Error(`Элемент [${i}]: отсутствует task_class`);
-          }
-          if (!item.topic_number || !String(item.topic_number).trim()) {
-            throw new Error(`Элемент [${i}]: отсутствует topic_number`);
-          }
-          if (!item.content || !String(item.content).trim()) {
-            throw new Error(`Элемент [${i}]: отсутствует content`);
-          }
-          if (item.answer === undefined || item.answer === null || String(item.answer).trim() === '') {
-            throw new Error(`Элемент [${i}]: отсутствует answer`);
-          }
-          if (item.is_open_answer === false && (!item.options || !Array.isArray(item.options) || item.options.length === 0)) {
-            throw new Error(`Элемент [${i}]: для закрытого задания нужно options (массив вариантов)`);
-          }
-          if (item.difficulty !== undefined && (item.difficulty < 1 || item.difficulty > 5)) {
-            throw new Error(`Элемент [${i}]: difficulty должно быть 1-5`);
-          }
-        }
-      }
-      return parsed;
-    } catch (e) {
-      if (e.message.includes('JSON')) throw e;
-      throw e;
-    }
   };
 
   const handleSubmit = async () => {
@@ -169,13 +163,9 @@ export default function BatchTab({ onSuccess }) {
 
     let parsed;
     try {
-      parsed = validateJSON(jsonText);
+      parsed = parseAndValidate(yamlText, mode);
     } catch (e) {
-      if (e instanceof SyntaxError) {
-        setError(`Ошибка JSON: ${e.message}`);
-      } else {
-        setError(e.message);
-      }
+      setError(e.message || 'Некорректный YAML');
       return;
     }
 
@@ -208,12 +198,13 @@ export default function BatchTab({ onSuccess }) {
   };
 
   const modeLabel = mode === 'create' ? 'Создание' : mode === 'update' ? 'Обновление' : 'Удаление';
-  const modeIcon = mode === 'create' ? Upload : mode === 'update' ? Edit3 : Trash2;
+  const ModeIcon = mode === 'create' ? Upload : mode === 'update' ? Edit3 : Trash2;
   const modeColor = mode === 'create'
     ? 'from-emerald-600 to-teal-600'
     : mode === 'update'
       ? 'from-amber-600 to-orange-600'
       : 'from-red-600 to-rose-600';
+
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
@@ -233,49 +224,51 @@ export default function BatchTab({ onSuccess }) {
               </p>
             </div>
           </div>
-            {/* Prompt */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Справка по формату */}
             <button
               onClick={() => setPromptModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl text-[10px] font-black uppercase transition-all"
-              title="Показать AI-промпт классификации"
+              title="Показать справку по формату"
             >
-              <MessageSquare size={12} /> Промпт
+              <MessageSquare size={12} /> Справка
             </button>
             {/* Mode switcher */}
             <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
-            {[
-              { id: 'create', label: 'Создать', icon: Upload },
-              { id: 'update', label: 'Обновить', icon: Edit3 },
-              { id: 'delete', label: 'Удалить', icon: Trash2 },
-            ].map(m => (
-              <button
-                key={m.id}
-                onClick={() => handleModeChange(m.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
-                  mode === m.id
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <m.icon size={14} />
-                {m.label}
-              </button>
-            ))}
+              {[
+                { id: 'create', label: 'Создать', icon: Upload },
+                { id: 'update', label: 'Обновить', icon: Edit3 },
+                { id: 'delete', label: 'Удалить', icon: Trash2 },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => handleModeChange(m.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                    mode === m.id
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <m.icon size={14} />
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* JSON Input + Preview */}
+      {/* YAML Input + Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                JSON {mode === 'delete' ? '(массив ID)' : '(массив заданий)'}
+                YAML {mode === 'delete' ? '(список ID)' : '(список заданий)'}
               </span>
-              {jsonText && (
+              {yamlText && (
                 <span className="text-[9px] font-bold text-slate-400">
-                  {jsonText.split('\n').length} строк
+                  {yamlText.split('\n').length} строк
                 </span>
               )}
             </div>
@@ -293,15 +286,16 @@ export default function BatchTab({ onSuccess }) {
               >
                 Загрузить пример
               </button>
+            </div>
           </div>
-        </div>
 
-        {/* Prompt Modal */}
-        {promptModalOpen && (
-          <BatchPromptModal
-            onClose={() => setPromptModalOpen(false)}
-          />
-        )}
+
+          {/* Справка по формату */}
+          {promptModalOpen && (
+            <BatchPromptModal
+              onClose={() => setPromptModalOpen(false)}
+            />
+          )}
 
           {/* Example panel */}
           {showExample && (
@@ -310,18 +304,20 @@ export default function BatchTab({ onSuccess }) {
             </div>
           )}
 
-          <BatchJsonTextarea
-  value={jsonText}
-  onChange={setJsonText}
-  placeholder="Вставьте JSON. Ctrl+V / перетащите картинку — она вставится как валидная JSON-строка..."
-  className="w-full h-[500px] p-4 font-mono text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y transition-colors"
-  rows={20}
-/>
+          <BatchYamlTextarea
+            value={yamlText}
+            onChange={handleTextChange}
+            placeholder={mode === 'delete'
+              ? 'Введите ID заданий, каждый с новой строки:\n- 1\n- 2\n- 3'
+              : 'Введите задания через YAML. Ctrl+V / перетащите картинку — она вставится как валидная YAML-строка...'}
+            className="w-full h-[500px] p-4 font-mono text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y transition-colors"
+            rows={20}
+          />
 
           {/* Submit */}
           <button
             onClick={handleSubmit}
-            disabled={loading || !jsonText.trim()}
+            disabled={loading || !yamlText.trim()}
             className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm uppercase transition-all ${
               loading
                 ? 'bg-slate-200 text-slate-400 cursor-wait'
@@ -331,19 +327,19 @@ export default function BatchTab({ onSuccess }) {
             {loading ? (
               <><Loader2 size={18} className="animate-spin" /> Обработка...</>
             ) : (
-              <><modeIcon size={18} /> {modeLabel} задания</>
+              <><ModeIcon size={18} /> {modeLabel} задания</>
             )}
           </button>
         </div>
 
-        {/* Preview  panel */}
+        {/* Preview panel */}
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
           <BatchPreview
-  mode={previewMode}
-  parsed={previewData}
-  error={previewError}
-  hasText={!!jsonText.trim()}
-/>
+            mode={previewMode}
+            parsed={previewData}
+            error={previewError}
+            hasText={!!yamlText.trim()}
+          />
         </div>
       </div>
 
@@ -397,3 +393,4 @@ export default function BatchTab({ onSuccess }) {
     </div>
   );
 }
+
