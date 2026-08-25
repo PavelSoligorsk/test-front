@@ -54,6 +54,40 @@ const UPDATE_RULES = [
   "options — если передано, то проверяется что не пустой для закрытых заданий",
 ];
 
+const STEPS = {
+  create: [
+    "Переключи режим вкладки на «Создать» (зелёная кнопка вверху).",
+    "Нажми «Загрузить пример» — или впиши задания вручную. Каждое задание — блок, начинающийся с «-», поля — с отступом в 2 пробела.",
+    "Обязательные поля: task_class, topic_number, content, answer. Остальные — опциональны.",
+    "Тест с вариантами: укажи is_open_answer: false и options — список вариантов (каждый с новой строки с «-»).",
+    "Картинка: поставь курсор после «content: » (или в любое место) и вставь её — Ctrl+V, перетащи мышкой или кнопкой загрузки. Появится \"![имя](url)\".",
+    "Справа живой предпросмотр: количество заданий и ошибки видны сразу.",
+    "Нажми «Создать задания» — задания добавятся в банк.",
+  ],
+  update: [
+    "Переключи режим вкладки на «Обновить» (оранжевая кнопка вверху).",
+    "В каждом блоке обязателен id существующего задания. Остальные поля — только те, что меняешь.",
+    "Поля, которые не указал, не изменятся. Чтобы очистить поле — передай пустую строку: answer: \"\".",
+    "В предпросмотре подтянутся текущие данные задания, а изменённые поля будут помечены.",
+    "Нажми «Обновить задания» — изменения применятся.",
+  ],
+  delete: [
+    "Переключи режим вкладки на «Удалить» (красная кнопка вверху).",
+    "Впиши ID заданий по одному в строку: - 123 (можно несколько строк: - 123, - 456).",
+    "В предпросмотре увидишь, какие задания будут удалены.",
+    "Нажми «Удалить задания». Действие необратимо!",
+  ],
+};
+
+const GENERAL_NOTES = [
+  "Перенос строки в тексте: просто Enter + пустая строка. Не пиши «\\n» буквами.",
+  "Многострочный текст в YAML — блок content: | и строки с отступом (пустые строки сохранятся).",
+  "Формулы: инлайн — $x$, блочная — $$ (на своей строке) … формула … $$ (на своей строке). Пример ниже.",
+  "Картинки вставляются как \"![имя](url)\" (Ctrl+V / drag&drop / кнопка загрузки).",
+  "JSON тоже подойдёт — он совместим с YAML.",
+  "До 500 заданий за раз.",
+];
+
 export default function BatchPromptModal({ onClose }) {
   const [activeTab, setActiveTab] = useState('create');
   const [copied, setCopied] = useState(false);
@@ -191,6 +225,54 @@ ${JSON.stringify({ ids: DELETE_EXAMPLE }, null, 2)}`;
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* Пошаговая инструкция */}
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest mb-2 text-slate-400">
+              Пошаговая инструкция — {active.label}
+            </h4>
+            <div className={`rounded-2xl ${active.bgColor} border ${active.borderColor} p-4`}>
+              <ol className="space-y-2.5">
+                {STEPS[activeTab].map((step, i) => (
+                  <li key={i} className="text-xs font-bold text-slate-700 flex items-start gap-2.5">
+                    <span className={`shrink-0 w-5 h-5 rounded-full bg-gradient-to-br ${active.color} text-white text-[9px] font-black flex items-center justify-center mt-0.5`}>
+                      {i + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+
+          {/* Полезно знать */}
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest mb-2 text-slate-400">Полезно знать</h4>
+            <div className="rounded-2xl bg-violet-50 border border-violet-100 p-4">
+              <ul className="space-y-1.5">
+                {GENERAL_NOTES.map((note, i) => (
+                  <li key={i} className="text-xs font-bold text-slate-700 flex items-start gap-2">
+                    <span className="text-violet-500 mt-0.5 shrink-0">✦</span>
+                    {note}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Примеры формул */}
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest mb-2 text-slate-400">
+              Формулы (LaTeX) — как записывать
+            </h4>
+            <div className="rounded-2xl bg-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed">
+              <div className="text-emerald-400 text-[9px] font-black uppercase mb-1">Блочная — на отдельной строке (центрируется):</div>
+              <pre className="whitespace-pre-wrap">{'$$\nформула\n$$'}</pre>
+              <div className="text-emerald-400 text-[9px] font-black uppercase mt-3 mb-1">Инлайн — внутри текста:</div>
+              <pre className="whitespace-pre-wrap">{'$x^2$ — например: корень $x$ в квадрате'}</pre>
+              <div className="text-amber-300 text-[9px] font-black uppercase mt-3 mb-1">В YAML для многострочной формулы используй блок content: |</div>
+            </div>
+          </div>
+
           {/* Rules */}
           <div>
             <h4 className={`text-[10px] font-black uppercase tracking-widest mb-2 text-slate-400`}>
