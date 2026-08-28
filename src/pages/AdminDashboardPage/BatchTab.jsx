@@ -258,9 +258,9 @@ export default function BatchTab({ onSuccess }) {
         </div>
       </div>
 
-      {/* YAML Input + Preview */}
+      {/* YAML Input + Preview (каждая панель скроллится отдельно) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-4 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -309,7 +309,7 @@ export default function BatchTab({ onSuccess }) {
             onChange={handleTextChange}
             placeholder={mode === 'delete'
               ? 'Введите ID заданий, каждый с новой строки:\n- 1\n- 2\n- 3'
-              : 'Введите задания через YAML. Ctrl+V / перетащите картинку — она вставится как валидная YAML-строка...'}
+              : 'Введите задания через YAML. Ctrl+V / перетащите картинку — вставится как ![имя](url) без кавычек'}
             className="w-full h-[500px] p-4 font-mono text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y transition-colors"
             rows={20}
           />
@@ -333,7 +333,7 @@ export default function BatchTab({ onSuccess }) {
         </div>
 
         {/* Preview panel */}
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
           <BatchPreview
             mode={previewMode}
             parsed={previewData}

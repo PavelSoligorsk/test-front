@@ -34,7 +34,18 @@ export default function BatchYamlTextarea({ value, onChange, placeholder, classN
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
 
-  // Вставляет markdown-ссылку на картинку как валидную YAML-строку в позицию курсора
+  // Применяет вставку text в диапазон [s, e) и ставит курсор после вставки
+  const applyInsertion = (text, s, e) => {
+    const newValue = value.substring(0, s) + text + value.substring(e);
+    onChange(newValue);
+    setTimeout(() => {
+      textareaRef.current.focus();
+      const pos = s + text.length;
+      textareaRef.current.setSelectionRange(pos, pos);
+    }, 0);
+  };
+
+  // Вставляет markdown-ссылку на картинку в позицию курсора (без лишних кавычек)
   const insertMarkdownAsYaml = (markdown) => {
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -43,21 +54,54 @@ export default function BatchYamlTextarea({ value, onChange, placeholder, classN
     }
     const start = textarea.selectionStart ?? value.length;
     const end = textarea.selectionEnd ?? value.length;
-    let insertion;
+
+    // Курсор внутри двойных кавычек — вставляем экранированное содержимое (без новых кавычек)
     if (isInsideDoubleQuoted(value, start)) {
-      // Курсор внутри двойных кавычек: вставляем экранированное содержимое без кавычек
-      insertion = escapeYaml(markdown);
-    } else {
-      // Вне кавычек: вставляем полную YAML-строку в двойных кавычках
-      insertion = `"${escapeYaml(markdown)}"`;
+      applyInsertion(escapeYaml(markdown), start, end);
+      return;
     }
-    const newValue = value.substring(0, start) + insertion + value.substring(end);
-    onChange(newValue);
-    setTimeout(() => {
-      textarea.focus();
-      const pos = start + insertion.length;
-      textarea.setSelectionRange(pos, pos);
-    }, 0);
+
+    // Разбираем текущую строку
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const nextNl = value.indexOf('\n', start);
+    const lineEnd = nextNl === -1 ? value.length : nextNl;
+    const beforeCursor = value.slice(lineStart, start);
+    const afterCursor = value.slice(start, lineEnd);
+    const colonIdx = beforeCursor.indexOf(':');
+    // Колонка, с которой начинается ключ (с учётом "- " маркера списка)
+    let keyStart = 0;
+    while (keyStart < beforeCursor.length && /\s/.test(beforeCursor[keyStart])) keyStart++;
+    if (beforeCursor[keyStart] === '-') {
+      keyStart++;
+      if (beforeCursor[keyStart] === ' ') keyStart++;
+    }
+    // Отступ содержимого блочного скаляра = колонка ключа + 2 (строго больше колонки ключа)
+    const contentIndent = ' '.repeat(keyStart + 2);
+
+    // Уже открыт блочный скаляр "content: |" — картинку кладём на следующую строку
+    if (colonIdx !== -1) {
+      const valueAfterColon = beforeCursor.slice(colonIdx + 1);
+      if (/^\s*[|>][+-]?\s*$/.test(valueAfterColon)) {
+        applyInsertion('\n' + contentIndent + markdown, start, end);
+        return;
+      }
+      // Значение пустое (картинка была бы первой в plain-скаляре) — переводим строку в блочный скаляр
+      if (valueAfterColon.trim() === '' && afterCursor.trim() === '') {
+        const keyPart = beforeCursor.slice(0, colonIdx).replace(/\s+$/, '');
+        const replacement = keyPart + ': |\n' + contentIndent + markdown;
+        const newValue = value.substring(0, lineStart) + replacement + value.substring(lineEnd);
+        onChange(newValue);
+        setTimeout(() => {
+          textarea.focus();
+          const pos = lineStart + replacement.length;
+          textarea.setSelectionRange(pos, pos);
+        }, 0);
+        return;
+      }
+    }
+
+    // По умолчанию — вставляем markdown без кавычек (валидно, т.к. перед картинкой уже есть текст)
+    applyInsertion(markdown, start, end);
   };
 
   const handleUpload = async (file) => {

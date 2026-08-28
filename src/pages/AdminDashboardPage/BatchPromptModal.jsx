@@ -60,7 +60,7 @@ const STEPS = {
     "Нажми «Загрузить пример» — или впиши задания вручную. Каждое задание — блок, начинающийся с «-», поля — с отступом в 2 пробела.",
     "Обязательные поля: task_class, topic_number, content, answer. Остальные — опциональны.",
     "Тест с вариантами: укажи is_open_answer: false и options — список вариантов (каждый с новой строки с «-»).",
-    "Картинка: поставь курсор после «content: » (или в любое место) и вставь её — Ctrl+V, перетащи мышкой или кнопкой загрузки. Появится \"![имя](url)\".",
+    "Картинка: поставь курсор после «content: » (или в любое место) и вставь её — Ctrl+V, перетащи мышкой или кнопкой загрузки. Появится ![имя](url) без кавычек; если значение пустое, строка станет content: |.",
     "Справа живой предпросмотр: количество заданий и ошибки видны сразу.",
     "Нажми «Создать задания» — задания добавятся в банк.",
   ],
@@ -83,14 +83,65 @@ const GENERAL_NOTES = [
   "Перенос строки в тексте: просто Enter + пустая строка. Не пиши «\\n» буквами.",
   "Многострочный текст в YAML — блок content: | и строки с отступом (пустые строки сохранятся).",
   "Формулы: инлайн — $x$, блочная — $$ (на своей строке) … формула … $$ (на своей строке). Пример ниже.",
-  "Картинки вставляются как \"![имя](url)\" (Ctrl+V / drag&drop / кнопка загрузки).",
+  "Картинки вставляются без кавычек: ![имя](url) (Ctrl+V / drag&drop / кнопка загрузки).",
   "JSON тоже подойдёт — он совместим с YAML.",
   "До 500 заданий за раз.",
 ];
 
+const AI_PROMPT = `Ты — помощник по созданию учебных заданий для образовательной платформы.
+
+Это система ПАКЕТНЫХ ОПЕРАЦИЙ с заданиями: ввод в формате YAML, на сервер уходит JSON. Есть 3 режима.
+
+## 1) СОЗДАТЬ (добавить новые задания)
+Каждое задание — блок с "-", поля с отступом в 2 пробела:
+- task_class: "10"
+  topic_number: "1.1"
+  content: Текст задания
+  answer: Правильный ответ
+  is_open_answer: true
+  difficulty: 2
+  topic: Тема
+  section: Раздел
+  hint: Подсказка
+  solution: Решение
+  options:
+    - Вариант А
+    - Вариант Б
+Обязательные поля: task_class, topic_number, content, answer.
+Если is_open_answer: false (тест с вариантами) — обязателен список options.
+difficulty — целое число 1-5. topic, section, hint, solution, options — необязательные.
+
+## 2) ОБНОВИТЬ
+Блок с обязательным id существующего задания и только теми полями, что меняем:
+- id: 123
+  difficulty: 3
+  answer: 5
+Неуказанные поля не изменятся. Очистить поле — пустой строкой: answer: ""
+
+## 3) УДАЛИТЬ
+Список ID заданий по одному в строке:
+- 123
+- 456
+
+## ТЕКСТ, ФОРМУЛЫ, КАРТИНКИ
+- Перенос строки: Enter + пустая строка. НЕ писать буквально \\n.
+- Многострочный текст — блочный скаляр content: | и строки с отступом.
+- Формулы LaTeX/KaTeX:
+  * инлайн — $x^2$
+  * блочная — $$ на своей строке, формула, $$ на своей строке:
+
+$$
+x^2 + y^2 = 1
+$$
+
+- Картинки — markdown без кавычек: ![описание](https://...)
+
+Верни ТОЛЬКО готовый YAML без пояснений.`;
+
 export default function BatchPromptModal({ onClose }) {
   const [activeTab, setActiveTab] = useState('create');
   const [copied, setCopied] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
 
   const handleCopy = () => {
     const data = activeTab === 'create'
@@ -114,6 +165,25 @@ export default function BatchPromptModal({ onClose }) {
       document.body.removeChild(ta);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleCopyPrompt = () => {
+    const text = AI_PROMPT;
+    navigator.clipboard.writeText(text).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
     });
   };
 
@@ -256,6 +326,28 @@ ${JSON.stringify({ ids: DELETE_EXAMPLE }, null, 2)}`;
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+
+          {/* Промт для ИИ */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Промт для ИИ (скопируй и отправь нейросети)
+              </h4>
+              <button
+                onClick={handleCopyPrompt}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${
+                  promptCopied
+                    ? 'bg-emerald-100 text-emerald-600'
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-600'
+                }`}
+              >
+                <Clipboard size={10} /> {promptCopied ? 'Скопировано' : 'Копировать'}
+              </button>
+            </div>
+            <div className="rounded-2xl bg-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap max-h-56 overflow-y-auto">
+              {AI_PROMPT}
             </div>
           </div>
 
