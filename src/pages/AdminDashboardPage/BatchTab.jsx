@@ -22,7 +22,7 @@ const EXAMPLE_CREATE = `- task_class: "10"
 
 - task_class: "10"
   topic_number: "1.1"
-  content: Сколько корней имеет уравнение \\(x^2 + 1 = 0\\)?
+  content: Сколько корней имеет уравнение $x^2 + 1 = 0$?
   options:
     - 0
     - 1
@@ -31,7 +31,30 @@ const EXAMPLE_CREATE = `- task_class: "10"
   answer: 0
   is_open_answer: false
   difficulty: 1
-  hint: Вспомните дискриминант`;
+  hint: Вспомните дискриминант
+
+- task_class: "10"
+  topic_number: "1.1"
+  content: Найдите значение выражения $x^2 + 2x + 1$ при $x = 5$.
+  answer: 36
+  is_open_answer: true
+  difficulty: 3
+  topic: Алгебра
+  section: Квадратные уравнения
+  hint: |
+    Подставьте значение $x$.
+
+    Упростите:
+
+    $$
+    x^2 + 2x + 1 = (x + 1)^2
+    $$
+  solution: |
+    При $x = 5$:
+
+    $$
+    (5 + 1)^2 = 36
+    $$`;
 
 const EXAMPLE_UPDATE = `- id: 1
   difficulty: 3
