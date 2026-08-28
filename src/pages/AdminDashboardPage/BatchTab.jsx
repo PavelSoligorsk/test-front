@@ -8,7 +8,12 @@ import BatchYamlTextarea from './BatchYamlTextarea';
 
 const EXAMPLE_CREATE = `- task_class: "10"
   topic_number: "1.1"
-  content: Решите уравнение \\(x^2 - 5x + 6 = 0\\)
+  content: |
+    Решите уравнение:
+
+    $$
+    x^2 - 5x + 6 = 0
+    $$
   answer: 2; 3
   is_open_answer: true
   difficulty: 2
