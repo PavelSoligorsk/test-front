@@ -123,6 +123,17 @@ difficulty — целое число 1-5. topic, section, hint, solution, option
 - 123
 - 456
 
+## ПРИМЕР МНОГОСТРОЧНОГО ЗАДАНИЯ
+- task_class: "10"
+  topic_number: "1.1"
+  content: |
+    Сколько корней имеет уравнение
+
+    $$
+    y = 2x
+    $$
+  answer: 1
+
 ## ТЕКСТ, ФОРМУЛЫ, КАРТИНКИ
 - Перенос строки: Enter + пустая строка. НЕ писать буквально \\n.
 - Многострочный текст — блочный скаляр content: | и строки с отступом.
@@ -362,6 +373,25 @@ ${JSON.stringify({ ids: DELETE_EXAMPLE }, null, 2)}`;
               <div className="text-emerald-400 text-[9px] font-black uppercase mt-3 mb-1">Инлайн — внутри текста:</div>
               <pre className="whitespace-pre-wrap">{'$x^2$ — например: корень $x$ в квадрате'}</pre>
               <div className="text-amber-300 text-[9px] font-black uppercase mt-3 mb-1">В YAML для многострочной формулы используй блок content: |</div>
+            </div>
+          </div>
+
+          {/* Пример многострочного текста */}
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-widest mb-2 text-slate-400">
+              Многострочный текст (блок content: |)
+            </h4>
+            <div className="rounded-2xl bg-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed">
+              <div className="text-emerald-400 text-[9px] font-black uppercase mb-1">Пример — вопрос + пустая строка + блочная формула:</div>
+              <pre className="whitespace-pre-wrap">{`- task_class: "10"
+  topic_number: "1.1"
+  content: |
+    Сколько корней имеет уравнение
+
+    $$
+    y = 2x
+    $$
+  answer: 1`}</pre>
             </div>
           </div>
 
