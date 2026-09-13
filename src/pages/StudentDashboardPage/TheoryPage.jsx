@@ -7,6 +7,7 @@ import TopicCard from './TopicCard';
 import StudentPageLoading, { ArticleBodySkeleton } from './StudentPageLoading';
 import { fetchTheoryTopics, fetchTheorySections, fetchTheoryByTopicSection } from './api';
 import { theoryArticlePath, theoryTopicPath, STUDENT_PATHS } from './studentPaths';
+import { MAIN_TOPICS } from '../AdminDashboardPage/constants';
 
 export default function TheoryPage() {
   const { topic: topicParam, section: sectionParam } = useParams();
@@ -77,7 +78,9 @@ export default function TheoryPage() {
     navigate(theoryTopicPath(topic.topic));
   };
 
-  const title = selectedTopic?.label || selectedTopic?.topic || 'Теоретический материал';
+  const title = selectedTopic
+    ? (MAIN_TOPICS[selectedTopic.topic] || selectedTopic.label || selectedTopic.topic)
+    : 'Теоретический материал';
   const loadingVariant = sectionKey ? 'theoryArticle' : topicKey ? 'theorySections' : 'theory';
   const loadingHint = sectionKey
     ? sectionKey

@@ -81,6 +81,12 @@ function PrivateRoute({ children, allowedRoles }) {
   return children;
 }
 
+function isAuthSurface(pathname) {
+  return pathname === '/login'
+    || pathname === '/register'
+    || pathname.startsWith('/reset-password');
+}
+
 function isStudentSurface(pathname) {
   return pathname.startsWith('/student')
     || pathname.startsWith('/test/')
@@ -89,11 +95,11 @@ function isStudentSurface(pathname) {
 
 function AppChrome({ children }) {
   const { pathname } = useLocation();
-  const studentSurface = isStudentSurface(pathname);
+  const zincSurface = isStudentSurface(pathname) || isAuthSurface(pathname);
 
   return (
-    <div className={`min-h-screen ${studentSurface ? 'bg-[#fafafa] dark:bg-[#09090b]' : 'bg-slate-50 dark:bg-slate-900'}`}>
-      {!studentSurface && <Navbar />}
+    <div className={`min-h-screen ${zincSurface ? 'bg-[#fafafa] dark:bg-[#09090b]' : 'bg-slate-50 dark:bg-slate-900'}`}>
+      {!zincSurface && <Navbar />}
       {children}
     </div>
   );

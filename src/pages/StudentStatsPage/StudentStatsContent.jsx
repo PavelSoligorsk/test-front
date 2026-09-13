@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart3, ChevronDown, ChevronRight, Inbox, RefreshCw } from 'lucide-react';
 import { fetchMyDetailedStats } from '../StudentDashboardPage/api';
 import StudentPageLoading from '../StudentDashboardPage/StudentPageLoading';
+import { MAIN_TOPICS } from '../AdminDashboardPage/constants';
 
 const PERIODS = [
   { k: 'all', l: 'Всё время' },
@@ -25,6 +26,10 @@ function ruWord(n, one, few, many) {
   if (d === 1) return one;
   if (d >= 2 && d <= 4) return few;
   return many;
+}
+
+function topicLabel(key) {
+  return MAIN_TOPICS[key] || key;
 }
 
 function formatScore(value) {
@@ -211,7 +216,7 @@ export default function StudentStatsContent() {
                             }`}
                           >
                             <MasteryRow
-                              label={topic.topic}
+                              label={topicLabel(topic.topic)}
                               meta={`${topic.correct_tasks} из ${topic.total_tasks}`}
                               percent={topic.mastery_percent}
                               trailing={

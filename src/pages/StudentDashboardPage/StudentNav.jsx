@@ -20,21 +20,21 @@ export default function StudentNav({ displayName, activeKey, onSelect }) {
   };
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-200/80 dark:border-zinc-800/60 py-3">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 shadow-sm">
+    <nav className="sticky top-0 z-50 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-xl border-b border-zinc-200/80 dark:border-zinc-800/60 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-3 md:flex md:justify-between md:gap-4">
+        <div className="col-start-1 row-start-1 flex items-center gap-3 min-w-0">
+          <div className="flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
             <GraduationCap size={16} strokeWidth={2} />
           </div>
           {displayName ? (
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 hidden sm:inline tracking-tight">
+            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate max-w-[10rem] sm:max-w-none">
               {displayName}
             </span>
           ) : null}
         </div>
 
-        <div className="overflow-x-auto scrollbar-none ml-auto">
-          <div className="flex items-center p-1 bg-zinc-100/80 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 w-max">
+        <div className="col-span-3 row-start-2 min-w-0 w-full md:w-max md:ml-auto">
+          <div className="grid grid-cols-5 w-full md:flex md:w-max items-center p-1 bg-zinc-100/80 dark:bg-zinc-900/50 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60">
             {STUDENT_TABS.map((tab) => {
               const isActive = activeKey === tab.key;
               return (
@@ -42,7 +42,7 @@ export default function StudentNav({ displayName, activeKey, onSelect }) {
                   key={tab.key}
                   type="button"
                   onClick={() => onSelect(tab.key)}
-                  className={`relative px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all duration-200 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white ${
+                  className={`relative min-w-0 min-h-11 md:min-h-0 px-0.5 sm:px-3 md:px-4 py-1.5 rounded-lg text-[10px] min-[400px]:text-[11px] sm:text-xs md:text-sm font-medium transition-all duration-200 text-center leading-tight whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white ${
                     isActive
                       ? 'text-zinc-900 dark:text-zinc-100'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
@@ -58,12 +58,12 @@ export default function StudentNav({ displayName, activeKey, onSelect }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          <ThemeToggle />
+        <div className="col-start-3 row-start-1 flex items-center gap-0.5 justify-self-end shrink-0">
+          <ThemeToggle className="min-h-11 min-w-11 md:min-h-0 md:min-w-0" />
           <button
             type="button"
             onClick={handleLogout}
-            className="p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            className="min-h-11 min-w-11 md:min-h-0 md:min-w-0 inline-flex items-center justify-center p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             title="Выйти"
             aria-label="Выйти"
           >

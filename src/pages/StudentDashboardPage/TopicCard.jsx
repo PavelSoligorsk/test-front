@@ -1,9 +1,9 @@
 import React from 'react';
 import { ArrowRight, BookOpen } from 'lucide-react';
-import { TOPIC_STYLES } from './constants';
+import { MAIN_TOPICS } from '../AdminDashboardPage/constants';
 
 export default function TopicCard({ topic, onClick }) {
-  const styles = TOPIC_STYLES[topic.topic] || { label: topic.label };
+  const label = MAIN_TOPICS[topic.topic] || topic.label || topic.topic;
 
   return (
     <button
@@ -17,7 +17,7 @@ export default function TopicCard({ topic, onClick }) {
             <BookOpen size={18} strokeWidth={2} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{styles.label}</h3>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{label}</h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{topic.sections_count} разделов</p>
           </div>
         </div>

@@ -575,22 +575,25 @@ export const TheoryViewer = ({ content, isFullWidth = false, embedded = false })
       </main>
 
       {!isFullWidth && components.length > 0 && (
-        <div className={`fixed ${embedded ? 'bottom-6 right-24' : 'bottom-6 right-6'} z-40`}>
+        <div className="fixed bottom-6 left-6 z-40">
           <button
+            type="button"
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="w-14 h-14 md:w-10 md:h-10 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-zinc-800 dark:hover:bg-zinc-200"
+            className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white"
+            aria-expanded={isNavOpen}
+            aria-label={isNavOpen ? 'Закрыть разделы' : 'Разделы материала'}
           >
-            {isNavOpen ? <X size={18} className="md:w-4 md:h-4" /> : <Menu size={18} className="md:w-4 md:h-4" />}
+            {isNavOpen ? <X size={18} strokeWidth={2} /> : <Menu size={18} strokeWidth={2} />}
           </button>
 
           {isNavOpen && (
             <>
-              <div 
+              <div
                 className="fixed inset-0 bg-black/20 dark:bg-black/50"
                 onClick={() => setIsNavOpen(false)}
               />
-              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-[#09090b] rounded-xl md:rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                <div className="p-3 md:p-2.5 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="fixed left-4 right-4 bottom-[4.75rem] md:absolute md:left-0 md:right-auto md:bottom-14 md:w-72 bg-white dark:bg-[#09090b] rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden max-h-[min(24rem,70vh)] flex flex-col">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
                   <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                     Разделы
                   </p>
@@ -598,42 +601,26 @@ export const TheoryViewer = ({ content, isFullWidth = false, embedded = false })
                     {components.length} в этом материале
                   </p>
                 </div>
-                <div className="max-h-80 md:max-h-64 overflow-y-auto">
-                  {components.map((section, idx) => (
+                <div className="overflow-y-auto min-h-0">
+                  {components.map((section) => (
                     <button
                       key={section.id}
                       type="button"
                       onClick={() => scrollToSection(section.id)}
-                      className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs border-b last:border-0 ${
+                      className={`w-full text-left px-3 py-3 text-sm border-b last:border-0 min-h-11 ${
                         activeId === section.id
                           ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium'
                           : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900'
                       } border-zinc-50 dark:border-zinc-800`}
                     >
-                      <div className="flex items-start gap-2">
-                        <span className={`text-[10px] md:text-[9px] font-mono tabular-nums ${
-                          activeId === section.id 
-                            ? 'text-zinc-900 dark:text-zinc-100' 
-                            : 'text-zinc-400'
-                        }`}>
-                          {String(idx + 1).padStart(2, '0')}
-                        </span>
+                      <div className="flex items-center gap-2">
                         <span className="flex-1 leading-tight line-clamp-2">{section.title}</span>
                         {activeId === section.id && (
-                          <CheckCircle2 size={12} className="text-zinc-900 dark:text-zinc-100 shrink-0" />
+                          <CheckCircle2 size={14} className="text-zinc-900 dark:text-zinc-100 shrink-0" />
                         )}
                       </div>
                     </button>
                   ))}
-                </div>
-                <div className="p-2 md:p-1.5 bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsNavOpen(false)}
-                    className="w-full py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100"
-                  >
-                    Закрыть
-                  </button>
                 </div>
               </div>
             </>
