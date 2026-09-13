@@ -12,7 +12,7 @@ export default function AnswerOptions({ task, userAnswers, onToggleAnswer, onTex
       <input
         key={task.id}
         autoFocus
-        className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2rem] text-xl font-bold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-sm"
+        className="w-full p-5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/80 rounded-3xl text-lg font-semibold text-zinc-900 dark:text-zinc-100 outline-none focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50 focus:border-zinc-300 dark:focus:border-zinc-700 shadow-sm placeholder:text-zinc-400"
         placeholder="Введите значение..."
         value={userAnswers[task.id] || ''}
         onChange={(e) => onTextChange(e.target.value)}
@@ -31,29 +31,30 @@ export default function AnswerOptions({ task, userAnswers, onToggleAnswer, onTex
         return (
           <button
             key={i}
+            type="button"
             onClick={() => onToggleAnswer(i)}
-            className={`p-5 text-left rounded-[1.8rem] border-2 transition-all flex justify-between items-center group relative overflow-hidden ${
+            className={`p-5 text-left rounded-3xl border transition-colors flex justify-between items-center group ${
               isSelected
-                ? 'border-blue-500 bg-blue-50/50 text-blue-700 shadow-md'
-                : 'border-white bg-white hover:border-slate-200 text-slate-600 shadow-sm'
+                ? 'border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm'
+                : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] hover:bg-zinc-50 dark:hover:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300'
             }`}
           >
             <div className="flex gap-4 items-center z-10">
-              <span className={`text-[11px] font-black italic ${isSelected ? 'text-blue-400' : 'text-slate-300'}`}>
+              <span className={`text-sm font-medium tabular-nums ${isSelected ? 'text-white/60 dark:text-zinc-500' : 'text-zinc-400'}`}>
                 {currentVal}.
               </span>
-              <div className="prose-sm pointer-events-none font-bold">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              <div className="prose-sm pointer-events-none font-medium">
+                <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
                   {opt}
                 </ReactMarkdown>
               </div>
             </div>
-            <div className={`w-6 h-6 rounded-xl border-2 flex items-center justify-center shrink-0 transition-all z-10 ${
+            <div className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 z-10 ${
               isSelected
-                ? 'bg-blue-500 border-blue-500 scale-110 shadow-lg shadow-blue-200'
-                : 'border-slate-100 group-hover:border-slate-300'
+                ? 'bg-white dark:bg-zinc-950 border-white dark:border-zinc-950'
+                : 'border-zinc-200 dark:border-zinc-700 group-hover:border-zinc-400'
             }`}>
-              {isSelected && <CheckCircle size={14} className="text-white" strokeWidth={3} />}
+              {isSelected && <CheckCircle size={14} className="text-zinc-900 dark:text-white" strokeWidth={3} />}
             </div>
           </button>
         );

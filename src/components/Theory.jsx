@@ -28,41 +28,41 @@ const markdownComponents = {
     <img 
       src={src} 
       alt={alt} 
-      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-slate-200 dark:border-slate-700 mx-auto shadow-sm transition-colors" 
+      className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-zinc-200 dark:border-zinc-800 mx-auto shadow-sm" 
     />
   ),
   table: ({ children }) => (
-    <div className="overflow-x-auto my-6 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
+    <div className="overflow-x-auto my-6 rounded-lg border border-zinc-200 dark:border-zinc-800">
       <table className="min-w-full text-left text-sm">{children}</table>
     </div>
   ),
   thead: ({ children }) => (
-    <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 transition-colors">
+    <thead className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800">
       {children}
     </thead>
   ),
   th: ({ children }) => (
-    <th className="py-2.5 px-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap transition-colors">
+    <th className="py-2.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="border-b border-slate-100 dark:border-slate-700/50 py-2.5 px-4 text-slate-600 dark:text-slate-300 align-top transition-colors">
+    <td className="border-b border-zinc-100 dark:border-zinc-800/50 py-2.5 px-4 text-zinc-600 dark:text-zinc-300 align-top">
       {children}
     </td>
   ),
   code: ({ children }) => (
-    <code className="bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded text-xs font-mono break-words transition-colors">
+    <code className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 rounded text-xs font-mono break-words">
       {children}
     </code>
   ),
   ul: ({ children }) => (
-    <ul className="list-disc pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300 transition-colors">
+    <ul className="list-disc pl-6 my-4 space-y-2 text-zinc-700 dark:text-zinc-300">
       {children}
     </ul>
   ),
   ol: ({ children }) => (
-    <ol className="list-decimal pl-6 my-4 space-y-2 text-slate-700 dark:text-slate-300 transition-colors">
+    <ol className="list-decimal pl-6 my-4 space-y-2 text-zinc-700 dark:text-zinc-300">
       {children}
     </ol>
   ),
@@ -70,17 +70,17 @@ const markdownComponents = {
     <li className="pl-1 leading-relaxed">{children}</li>
   ),
   blockquote: ({ children }) => (
-    <blockquote className="pl-4 py-2 my-4 border-l-4 border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300 transition-colors">
+    <blockquote className="pl-4 py-2 my-4 border-l border-zinc-300 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300">
       {children}
     </blockquote>
   ),
   hr: () => (
-    <hr className="my-8 border-slate-200 dark:border-slate-700 transition-colors" />
+    <hr className="my-8 border-zinc-200 dark:border-zinc-800" />
   ),
   a: ({ href, children }) => (
     <a 
       href={href} 
-      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors"
+      className="text-zinc-900 dark:text-zinc-100 underline underline-offset-2 decoration-zinc-300 dark:decoration-zinc-600 hover:decoration-zinc-900 dark:hover:decoration-zinc-100"
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -394,7 +394,7 @@ const renderBlocks = (blocks) => {
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
-export const TheoryViewer = ({ content, isFullWidth = false }) => {
+export const TheoryViewer = ({ content, isFullWidth = false, embedded = false }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -402,6 +402,11 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
 
   useEffect(() => {
     const parseContent = () => {
+      if (!content) {
+        setComponents([]);
+        setIsLoading(false);
+        return;
+      }
       const sections = [];
       const sectionRegex = /<Section\s+id="([^"]+)"\s+title="([^"]+)"(?:\s+isHard)?>([\s\S]*?)<\/Section>/g;
       let match;
@@ -422,32 +427,36 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       
       setComponents(sections);
 
-      const triggerLoading = () => {
-        const scrollY = window.scrollY;
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${scrollY}px`;
-        document.body.style.width = '100%';
-        
-        setIsLoading(true);
-        
-        setTimeout(() => {
-          const currentScrollY = document.body.style.top;
-          document.body.style.position = '';
-          document.body.style.top = '';
-          document.body.style.width = '';
-          if (currentScrollY) {
-            window.scrollTo(0, parseInt(currentScrollY || '0', 10) * -1);
-          }
-          setIsLoading(false);
-        }, 1500);
-      };
+      if (embedded) {
+        setIsLoading(false);
+      } else {
+        const triggerLoading = () => {
+          const scrollY = window.scrollY;
+          document.body.style.position = 'fixed';
+          document.body.style.top = `-${scrollY}px`;
+          document.body.style.width = '100%';
 
-      triggerLoading();
+          setIsLoading(true);
+
+          setTimeout(() => {
+            const currentScrollY = document.body.style.top;
+            document.body.style.position = '';
+            document.body.style.top = '';
+            document.body.style.width = '';
+            if (currentScrollY) {
+              window.scrollTo(0, parseInt(currentScrollY || '0', 10) * -1);
+            }
+            setIsLoading(false);
+          }, 1500);
+        };
+
+        triggerLoading();
+      }
       if (sections.length > 0) setActiveId(sections[0].id);
     };
 
     parseContent();
-  }, [content]);
+  }, [content, embedded]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -479,7 +488,7 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
   };
 
   return (
-    <div className={`relative bg-white dark:bg-slate-800 ${isFullWidth ? '' : 'min-h-screen'} transition-colors`}>
+    <div className={`relative ${embedded ? 'bg-transparent' : 'bg-white dark:bg-[#09090b]'} ${isFullWidth || embedded ? '' : 'min-h-screen'}`}>
       <style>{`
         .dynamic-markdown .katex-display {
           overflow-x: auto;
@@ -527,29 +536,29 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
           height: 8px;
         }
         .dark .dynamic-markdown ::-webkit-scrollbar-track {
-          background: #475569;
+          background: #18181b;
           border-radius: 4px;
         }
         .dark .dynamic-markdown ::-webkit-scrollbar-thumb {
-          background: #64748b;
+          background: #3f3f46;
           border-radius: 4px;
         }
         .dark .dynamic-markdown ::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+          background: #52525b;
         }
       `}</style>
 
       <main>
-        {isLoading && (
-          <div className="fixed inset-0 bg-white/80 dark:bg-slate-700/90 backdrop-blur-sm z-50 flex items-center justify-center transition-colors">
+        {isLoading && !embedded && (
+          <div className="fixed inset-0 bg-white/80 dark:bg-zinc-950/90 z-50 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 dark:border-white transition-colors"></div>
-              <p className="text-slate-600 dark:text-slate-300 transition-colors">Загрузка...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-zinc-900 dark:border-zinc-100"></div>
+              <p className="text-zinc-600 dark:text-zinc-300">Загрузка...</p>
             </div>
           </div>
         )}
         
-        <div className={`${isFullWidth ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth ? 'py-0' : 'py-12'} px-4 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`${isFullWidth || embedded ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth || embedded ? 'py-0' : 'py-12'} px-0 ${isLoading && !embedded ? 'opacity-50 pointer-events-none' : ''}`}>
           {components.map((section, idx) => (
             <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
               {renderBlocks(section.orderedBlocks)}  
@@ -566,10 +575,10 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
       </main>
 
       {!isFullWidth && components.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className={`fixed ${embedded ? 'bottom-6 right-24' : 'bottom-6 right-6'} z-40`}>
           <button
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="w-14 h-14 md:w-10 md:h-10 bg-slate-900 dark:bg-slate-600 text-white rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-slate-800 dark:hover:bg-slate-500 transition-all active:scale-95"
+            className="w-14 h-14 md:w-10 md:h-10 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-full shadow-lg md:shadow-md flex items-center justify-center hover:bg-zinc-800 dark:hover:bg-zinc-200"
           >
             {isNavOpen ? <X size={18} className="md:w-4 md:h-4" /> : <Menu size={18} className="md:w-4 md:h-4" />}
           </button>
@@ -577,49 +586,51 @@ export const TheoryViewer = ({ content, isFullWidth = false }) => {
           {isNavOpen && (
             <>
               <div 
-                className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm transition-colors"
+                className="fixed inset-0 bg-black/20 dark:bg-black/50"
                 onClick={() => setIsNavOpen(false)}
               />
-              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-slate-600 rounded-xl md:rounded-lg shadow-xl border border-slate-200 dark:border-slate-500 overflow-hidden transition-colors">
-                <div className="p-3 md:p-2.5 bg-slate-50 dark:bg-slate-600 border-b border-slate-100 dark:border-slate-500 transition-colors">
-                  <div className="text-[9px] md:text-[8px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-300 transition-colors">
-                    Содержание урока
-                  </div>
-                  <div className="text-xs md:text-[10px] font-semibold text-slate-800 dark:text-white mt-0.5 transition-colors">
-                    {components.length} разделов
-                  </div>
+              <div className="absolute bottom-16 right-0 md:bottom-14 w-80 md:w-64 bg-white dark:bg-[#09090b] rounded-xl md:rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <div className="p-3 md:p-2.5 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+                  <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    Разделы
+                  </p>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    {components.length} в этом материале
+                  </p>
                 </div>
                 <div className="max-h-80 md:max-h-64 overflow-y-auto">
                   {components.map((section, idx) => (
                     <button
                       key={section.id}
+                      type="button"
                       onClick={() => scrollToSection(section.id)}
-                      className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs transition-all border-b last:border-0 ${
+                      className={`w-full text-left px-3 md:px-2.5 py-2.5 md:py-2 text-sm md:text-xs border-b last:border-0 ${
                         activeId === section.id
-                          ? 'bg-slate-100 dark:bg-slate-500 text-slate-900 dark:text-white font-medium'
-                          : 'text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-500/50'
-                      } border-slate-50 dark:border-slate-500`}
+                          ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium'
+                          : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                      } border-zinc-50 dark:border-zinc-800`}
                     >
                       <div className="flex items-start gap-2">
-                        <span className={`text-[10px] md:text-[9px] font-mono transition-colors ${
+                        <span className={`text-[10px] md:text-[9px] font-mono tabular-nums ${
                           activeId === section.id 
-                            ? 'text-slate-900 dark:text-white' 
-                            : 'text-slate-400 dark:text-slate-400'
+                            ? 'text-zinc-900 dark:text-zinc-100' 
+                            : 'text-zinc-400'
                         }`}>
                           {String(idx + 1).padStart(2, '0')}
                         </span>
                         <span className="flex-1 leading-tight line-clamp-2">{section.title}</span>
                         {activeId === section.id && (
-                          <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                          <CheckCircle2 size={12} className="text-zinc-900 dark:text-zinc-100 shrink-0" />
                         )}
                       </div>
                     </button>
                   ))}
                 </div>
-                <div className="p-2 md:p-1.5 bg-slate-50 dark:bg-slate-600 border-t border-slate-100 dark:border-slate-500 transition-colors">
+                <div className="p-2 md:p-1.5 bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800">
                   <button
+                    type="button"
                     onClick={() => setIsNavOpen(false)}
-                    className="w-full py-1.5 text-[9px] md:text-[8px] font-medium text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white transition-colors"
+                    className="w-full py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100"
                   >
                     Закрыть
                   </button>

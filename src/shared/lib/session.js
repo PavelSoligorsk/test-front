@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const STORAGE_KEY = 'edu_session';
+const TOKEN_KEY = 'edu_token';
 export const SESSION_EVENT = 'edu_session_change';
 
 function getStorage() {
@@ -85,8 +86,11 @@ export function saveSession(userData) {
 export function clearSession() {
   try {
     getStorage()?.removeItem(STORAGE_KEY);
+    getStorage()?.removeItem(TOKEN_KEY);
     getSessionStorage()?.removeItem(STORAGE_KEY);
+    getSessionStorage()?.removeItem(TOKEN_KEY);
     document.cookie = `${STORAGE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+    document.cookie = `${TOKEN_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
   } catch (e) {}
 
   delete axios.defaults.headers.common['Authorization'];

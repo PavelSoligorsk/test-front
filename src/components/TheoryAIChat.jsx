@@ -47,22 +47,22 @@ const ChatMessage = ({ message, onCopy }) => {
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 ${
           isError 
             ? 'bg-red-100' 
-            : 'bg-gradient-to-br from-violet-600 to-purple-700'
+            : 'bg-zinc-900 dark:bg-white'
         }`}>
           {isError ? (
             <AlertCircle size={16} className="text-red-500" />
           ) : (
-            <Bot size={16} className="text-white" />
+            <Bot size={16} className="text-white dark:text-zinc-950" />
           )}
         </div>
       )}
 
       <div className={`group relative max-w-[85%] ${
         isUser
-          ? 'bg-gradient-to-r from-violet-600 to-purple-700 text-white p-3 rounded-2xl rounded-br-md'
+          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 p-3 rounded-2xl rounded-br-md [&_*]:text-inherit'
           : isError
-            ? 'bg-red-50 text-red-700 border border-red-100 p-3 rounded-2xl rounded-bl-md'
-            : 'bg-slate-100 text-slate-700 p-3 rounded-2xl rounded-bl-md'
+            ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-500/20 p-3 rounded-2xl rounded-bl-md'
+            : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 p-3 rounded-2xl rounded-bl-md border border-zinc-100 dark:border-zinc-800'
       }`}>
         <div className={`text-sm leading-relaxed ${!isExpanded && isLongMessage ? 'max-h-32 overflow-hidden relative' : ''}`}>
           <div className="katex-wrapper">
@@ -70,7 +70,7 @@ const ChatMessage = ({ message, onCopy }) => {
           </div>
 
           {!isExpanded && isLongMessage && (
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-100 to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-zinc-100 dark:from-zinc-800 to-transparent pointer-events-none" />
           )}
         </div>
 
@@ -79,7 +79,7 @@ const ChatMessage = ({ message, onCopy }) => {
             {!isExpanded && (
               <button 
                 onClick={() => setIsExpanded(true)}
-                className="mt-2 text-xs text-violet-600 hover:text-violet-700 font-medium flex items-center gap-1"
+                className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium flex items-center gap-1"
               >
                 <ChevronDown size={14} /> Показать полностью
               </button>
@@ -87,7 +87,7 @@ const ChatMessage = ({ message, onCopy }) => {
             {isExpanded && (
               <button 
                 onClick={() => setIsExpanded(false)}
-                className="mt-2 text-xs text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1"
+                className="mt-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 font-medium flex items-center gap-1"
               >
                 <ChevronUp size={14} /> Свернуть
               </button>
@@ -96,7 +96,7 @@ const ChatMessage = ({ message, onCopy }) => {
         )}
 
         {message.timestamp && (
-          <p className={`text-[9px] mt-2 opacity-50 ${isUser ? 'text-right text-white/70' : 'text-left text-slate-400'}`}>
+          <p className={`text-[9px] mt-2 opacity-50 ${isUser ? 'text-right text-white/70' : 'text-left text-zinc-400'}`}>
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         )}
@@ -104,21 +104,21 @@ const ChatMessage = ({ message, onCopy }) => {
         {!isUser && !isError && (
           <button
             onClick={handleCopy}
-            className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-white rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50"
+            className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-white dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800"
             title="Копировать"
           >
             {copied ? (
-              <CheckCircle2 size={12} className="text-emerald-500" />
+              <CheckCircle2 size={12} className="text-zinc-900 dark:text-zinc-100" />
             ) : (
-              <Copy size={12} className="text-slate-400" />
+              <Copy size={12} className="text-zinc-400" />
             )}
           </button>
         )}
       </div>
 
       {isUser && (
-        <div className="w-8 h-8 bg-slate-200 rounded-xl flex items-center justify-center shrink-0 mt-1">
-          <User size={16} className="text-slate-500" />
+        <div className="w-8 h-8 bg-zinc-100 dark:bg-zinc-800 rounded-xl flex items-center justify-center shrink-0 mt-1">
+          <User size={16} className="text-zinc-500 dark:text-zinc-400" />
         </div>
       )}
     </div>
@@ -257,7 +257,7 @@ const TheoryAIChat = ({
       setError(errorMsg);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `⚠️ ${errorMsg}`,
+        content: errorMsg,
         isError: true,
         timestamp: new Date().toISOString()
       }]);
@@ -296,12 +296,12 @@ const TheoryAIChat = ({
   };
 
   const quickQuestions = [
-    { text: 'Объясни проще', icon: '💡' },
-    { text: 'Приведи пример', icon: '📝' },
-    { text: 'Как это запомнить?', icon: '🧠' },
-    { text: 'Покажи пошагово', icon: '👣' },
-    { text: 'Где это применяется?', icon: '🌍' },
-    { text: 'Основная формула', icon: '📐' },
+    'Объясни проще',
+    'Приведи пример',
+    'Как это запомнить?',
+    'Покажи пошагово',
+    'Где это применяется?',
+    'Основная формула',
   ];
 
   return (
@@ -310,51 +310,50 @@ const TheoryAIChat = ({
       {!isOpen && (
         <button
           onClick={toggleChat}
-          className={`fixed bottom-24 right-6 z-40 group transition-all duration-300 ${className}`}
+          className={`fixed bottom-6 right-6 z-40 group ${className}`}
           title="Спросить AI о теории"
         >
-          <div className="relative w-14 h-14 bg-gradient-to-br from-violet-600 to-purple-700 text-white rounded-2xl shadow-2xl shadow-purple-200 flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
-            <MessageSquare size={22} className="group-hover:animate-pulse" />
+          <div className="relative w-12 h-12 md:w-14 md:h-14 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all border border-zinc-800 dark:border-zinc-200">
+            <MessageSquare size={22} />
           </div>
-          
-          <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full text-[9px] font-black flex items-center justify-center text-white shadow-lg">
-            AI
-          </span>
         </button>
       )}
 
-      {/* ========== БОКОВАЯ ПАНЕЛЬ ========== */}
-{isOpen && (
-  <div 
-    ref={panelRef}
-    className="fixed top-0 right-0 bottom-0 bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300"
-    style={{ 
-      width: `${panelWidth}px`,
-      zIndex: 99999
-    }}
-  >
+      {isOpen && (
+        <div className="fixed inset-0 z-40">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30 dark:bg-black/50"
+            aria-label="Закрыть помощника"
+            onClick={toggleChat}
+          />
+          <div
+            ref={panelRef}
+            className="absolute top-16 right-0 bottom-0 bg-white dark:bg-[#09090b] border-l border-zinc-200 dark:border-zinc-800 flex flex-col shadow-sm max-w-full"
+            style={{ width: `${panelWidth}px` }}
+          >
     {/* Ручка ресайза */}
     <div
       ref={resizeHandleRef}
       className="absolute top-0 -left-2 w-2 bottom-0 cursor-col-resize group z-10"
       onMouseDown={handleResizeStart}
     >
-      <div className="absolute inset-y-0 left-1/2 w-0.5 bg-violet-200/0 group-hover:bg-violet-300 transition-colors" />
+      <div className="absolute inset-y-0 left-1/2 w-0.5 bg-zinc-200/0 group-hover:bg-zinc-300 dark:group-hover:bg-zinc-600 transition-colors" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <GripHorizontal size={16} className="text-violet-400 rotate-90" />
+        <GripHorizontal size={16} className="text-zinc-400 rotate-90" />
       </div>
     </div>
 
     {/* Заголовок */}
-    <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-purple-50 shrink-0">
+    <div className="flex items-center justify-between p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/40 shrink-0">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg">
-          <Bot size={20} className="text-white" />
+        <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center">
+          <Bot size={20} className="text-white dark:text-zinc-950" />
         </div>
         <div>
-          <h4 className="text-sm font-black text-slate-800 uppercase">AI-помощник</h4>
+          <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">AI-помощник</h4>
           {(topic || section) && (
-            <p className="text-[10px] text-slate-500 font-bold truncate max-w-[180px]">
+            <p className="text-xs text-zinc-500 font-medium truncate max-w-[180px]">
               {topic && section ? `${topic} • ${section}` : topic || section}
             </p>
           )}
@@ -367,45 +366,46 @@ const TheoryAIChat = ({
             <button
               onClick={() => {
                 const text = messages.map(m => 
-                  `${m.role === 'user' ? '👤 Вы' : '🤖 AI'} [${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]:\n${m.content}`
+                  `${m.role === 'user' ? 'Вы' : 'AI'} [${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]:\n${m.content}`
                 ).join('\n\n---\n\n');
                 handleCopy(text);
               }}
-              className="p-2 hover:bg-white rounded-lg transition-colors"
+              className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
               title="Копировать весь чат"
             >
-              {copiedId ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Copy size={16} className="text-slate-400" />}
+              {copiedId ? <CheckCircle2 size={16} className="text-zinc-900 dark:text-zinc-100" /> : <Copy size={16} className="text-zinc-400" />}
             </button>
-            <button onClick={handleClearChat} className="p-2 hover:bg-white rounded-lg transition-colors" title="Очистить чат">
-              <Trash2 size={16} className="text-slate-400 hover:text-red-500 transition-colors" />
+            <button onClick={handleClearChat} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors" title="Очистить чат">
+              <Trash2 size={16} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" />
             </button>
           </>
         )}
-        <button onClick={toggleChat} className="p-2 hover:bg-white rounded-lg transition-colors" title="Закрыть">
-          <XCircle size={18} className="text-slate-400 hover:text-red-500 transition-colors" />
+        <button onClick={toggleChat} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors" title="Закрыть">
+          <XCircle size={18} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200" />
         </button>
       </div>
     </div>
 
     {/* Сообщения */}
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-950/20">
       {messages.length === 0 && (
         <div className="text-center py-8 space-y-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-violet-100 to-purple-100 rounded-2xl flex items-center justify-center mx-auto">
-            <Sparkles size={28} className="text-violet-500" />
+          <div className="w-12 h-12 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto">
+            <Sparkles size={22} className="text-zinc-500" />
           </div>
           <div>
-            <p className="text-sm font-black text-slate-700 uppercase">Задайте вопрос</p>
-            <p className="text-xs text-slate-400 font-bold mt-1">Я помогу разобраться в теории</p>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Задайте вопрос</p>
+            <p className="text-xs text-zinc-500 mt-1">Я помогу разобраться в теории</p>
           </div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {quickQuestions.map((q, i) => (
+            {quickQuestions.map((q) => (
               <button
-                key={i}
-                onClick={() => { setInput(q.text); setTimeout(() => inputRef.current?.focus(), 100); }}
-                className="text-[10px] bg-white hover:bg-violet-50 text-slate-600 hover:text-violet-600 px-3 py-1.5 rounded-xl font-bold transition-all hover:scale-105 border border-slate-100 hover:border-violet-200 shadow-sm"
+                key={q}
+                type="button"
+                onClick={() => { setInput(q); setTimeout(() => inputRef.current?.focus(), 100); }}
+                className="text-xs bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-3 py-1.5 rounded-xl font-medium border border-zinc-100 dark:border-zinc-800 shadow-sm"
               >
-                {q.icon} {q.text}
+                {q}
               </button>
             ))}
           </div>
@@ -416,13 +416,13 @@ const TheoryAIChat = ({
 
       {loading && (
         <div className="flex gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-purple-700 rounded-xl flex items-center justify-center shrink-0 mt-1">
-            <Bot size={16} className="text-white" />
+          <div className="w-8 h-8 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center shrink-0 mt-1">
+            <Bot size={16} className="text-white dark:text-zinc-950" />
           </div>
-          <div className="bg-white p-4 rounded-2xl rounded-bl-md shadow-sm border border-slate-100">
+          <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl rounded-bl-md shadow-sm border border-zinc-100 dark:border-zinc-800">
             <div className="flex items-center gap-3">
-              <Loader2 size={16} className="animate-spin text-violet-500" />
-              <span className="text-sm text-slate-500">Генерирую ответ...</span>
+              <Loader2 size={16} className="animate-spin text-zinc-400" />
+              <span className="text-sm text-zinc-500">Генерирую ответ...</span>
             </div>
           </div>
         </div>
@@ -432,7 +432,7 @@ const TheoryAIChat = ({
     </div>
 
     {/* Инпут */}
-    <div className="p-4 border-t border-slate-100 bg-white shrink-0">
+    <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-[#09090b] shrink-0">
       <div className="flex items-center gap-2">
         <input
           ref={inputRef}
@@ -442,23 +442,24 @@ const TheoryAIChat = ({
           onKeyDown={handleKeyDown}
           placeholder={loading ? 'Генерирую ответ...' : 'Напишите вопрос...'}
           disabled={loading}
-          className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium outline-none focus:border-violet-300 focus:bg-white transition-all disabled:opacity-50 placeholder:text-slate-400"
+          className="flex-1 px-4 py-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium outline-none focus:border-zinc-400 dark:focus:border-zinc-600 focus:bg-white dark:focus:bg-zinc-900 transition-all disabled:opacity-50 placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100"
         />
         <button
           onClick={handleSend}
           disabled={!input.trim() || loading}
-          className="w-11 h-11 bg-gradient-to-r from-violet-600 to-purple-700 text-white rounded-xl flex items-center justify-center hover:shadow-lg hover:shadow-violet-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 active:scale-95"
+          className="w-11 h-11 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl flex items-center justify-center hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 active:scale-95"
         >
           {loading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
         </button>
       </div>
-      <p className="text-[9px] text-slate-400 text-center mt-2 font-medium">
-        <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-[8px] font-bold">Enter</kbd> отправить • 
-        <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-[8px] font-bold ml-1">Esc</kbd> закрыть
+      <p className="text-[11px] text-zinc-400 text-center mt-2 font-medium">
+        <kbd className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-[10px] font-medium">Enter</kbd> отправить •
+        <kbd className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-[10px] font-medium ml-1">Esc</kbd> закрыть
       </p>
     </div>
-  </div>
-)}
+          </div>
+        </div>
+      )}
       {/* ========== СТИЛИ ДЛЯ KATEX ========== */}
       <style>{`
         .katex-wrapper .katex-display {

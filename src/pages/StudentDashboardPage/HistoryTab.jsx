@@ -1,66 +1,128 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History, Search, Calendar, RotateCcw } from 'lucide-react';
+import { Search, RotateCcw, LayoutGrid, ChevronRight, Inbox } from 'lucide-react';
 
 export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm, onRetake }) {
   const navigate = useNavigate();
 
-  // Фильтрация тестов после 2000 года
+  // Отсекаем записи с некорректной/битой датой
   const validHistory = filteredHistory.filter(res => {
-    const completedDate = new Date(res.completed_at);
-    return completedDate.getFullYear() >= 2000;
+    const year = new Date(res.completed_at).getFullYear();
+    return !Number.isNaN(year) && year >= 2000;
+  });
+
+  const cleanTitle = title => title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim();
+
+  const formatDate = iso => new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'short', year: 'numeric',
   });
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-[3rem] border border-slate-100 dark:border-slate-700 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="p-6 md:p-8 border-b border-slate-50 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
-        <h2 className="text-xl font-black uppercase italic flex items-center gap-3 text-slate-950 dark:text-white">
-          <History size={22} /> История решений
-        </h2>
-        <div className="relative w-full md:w-64">
-          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="ПОИСК..." value={searchTerm}
+    <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Шапка */}
+      <div className="p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-zinc-100 dark:border-zinc-800/60">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm">
+            <LayoutGrid size={18} strokeWidth={2} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              История решений
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {validHistory.length > 0
+                ? `${validHistory.length} ${validHistory.length === 1 ? 'запись' : 'записей'}`
+                : 'Пока без результатов'}
+            </p>
+          </div>
+        </div>
+
+        {/* Поиск (в стиле Spotlight / Command Palette) */}
+        <div className="relative w-full md:w-72 group">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-zinc-900 dark:group-focus-within:text-zinc-100 transition-colors" />
+          <input
+            type="text"
+            placeholder="Поиск по истории..."
+            value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-700 border-none rounded-xl text-[10px] font-black uppercase dark:text-white" />
+            className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl text-sm font-medium text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50 focus:border-zinc-300 dark:focus:border-zinc-700 transition-all"
+          />
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/50">
-              <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Тест</th>
-              <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Балл</th>
-              <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Дата</th>
-              <th className="px-6 md:px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Действия</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-            {validHistory.length > 0 ? validHistory.map(res => (
-              <tr key={res.id} onClick={() => navigate(`/result/${res.id}`)}
-                className="hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors group">
-                <td className="px-6 md:px-8 py-5 font-black uppercase text-slate-800 dark:text-white text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                  {res.test_title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}
-                </td>
-                <td className="px-6 md:px-8 py-5 text-center font-black italic text-lg text-blue-600">{res.total_points}</td>
-                <td className="px-6 md:px-8 py-5 text-[10px] font-bold text-slate-400 uppercase">
-                  <div className="flex items-center gap-2"><Calendar size={12} /> {new Date(res.completed_at).toLocaleDateString()}</div>
-                </td>
-                <td className="px-6 md:px-8 py-5 text-center">
+
+      {/* Список */}
+      {validHistory.length > 0 ? (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+          {validHistory.map(res => {
+            const title = cleanTitle(res.test_title);
+            return (
+              <li
+                key={res.id}
+                onClick={() => navigate(`/result/${res.id}`)}
+                onKeyDown={e => { if (e.key === 'Enter') navigate(`/result/${res.id}`); }}
+                tabIndex={0}
+                role="button"
+                aria-label={`Открыть результат теста ${title ?? ''}`}
+                className="group flex flex-wrap md:flex-nowrap items-center gap-4 md:gap-6 px-6 md:px-8 py-4 md:py-5 cursor-pointer transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900/40 focus:outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-900/40"
+              >
+                {/* Дата */}
+                <div className="hidden sm:flex shrink-0 w-24">
+                  <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 tabular-nums bg-zinc-100 dark:bg-zinc-800/50 px-2.5 py-1 rounded-md">
+                    {formatDate(res.completed_at)}
+                  </span>
+                </div>
+
+                {/* Название */}
+                <div className="min-w-0 flex-1 w-full md:w-auto">
+                  <p className="font-medium text-sm text-zinc-900 dark:text-zinc-200 truncate group-hover:text-black dark:group-hover:text-white transition-colors">
+                    {title}
+                  </p>
+                  <p className="sm:hidden text-xs text-zinc-500 mt-1.5">
+                    {formatDate(res.completed_at)}
+                  </p>
+                </div>
+
+                {/* Баллы */}
+                <div className="flex flex-col items-end shrink-0 px-2">
+                  <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight tabular-nums">
+                    {res.total_points}
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    баллов
+                  </span>
+                </div>
+
+                {/* Действия (Пересдать + Стрелка) */}
+                <div className="flex items-center gap-3 shrink-0 ml-auto md:ml-0">
                   <button
                     onClick={(e) => { e.stopPropagation(); onRetake(res.id, res.test_id); }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase hover:bg-blue-100 transition-all border border-blue-100"
+                    className="opacity-100 md:opacity-0 md:-translate-x-2 md:group-hover:opacity-100 md:group-hover:translate-x-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-lg text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950 focus-visible:ring-zinc-900 dark:focus-visible:ring-white shadow-sm"
                     title="Пересдать тест"
                   >
-                    <RotateCcw size={11} /> Пересдать
+                    <RotateCcw size={14} strokeWidth={2} />
+                    <span className="hidden sm:inline">Пересдать</span>
                   </button>
-                </td>
-              </tr>
-            )) : (
-              <tr><td colSpan={4} className="text-center py-12 text-slate-300 font-black uppercase text-xs">История пуста</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  <ChevronRight size={18} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-900 dark:group-hover:text-zinc-300 transition-colors" />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        /* Пустое состояние */
+        <div className="flex flex-col items-center justify-center gap-4 py-24 px-6 text-center">
+          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
+            <Inbox size={24} strokeWidth={1.5} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">История пуста</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-[250px] mx-auto leading-relaxed">
+              Ваши результаты появятся здесь сразу после прохождения первого теста.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

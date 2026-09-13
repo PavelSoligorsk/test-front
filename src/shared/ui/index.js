@@ -12,3 +12,4 @@ export { default as QuestionMap } from './QuestionMap';
 export { default as MathHintPreview } from './MathHintPreview';
 export { default as AISolutionPreview } from './AISolutionPreview';
 export { default as MarkdownWithGeoGebra } from './MarkdownWithGeoGebra';
+export { default as ThemeToggle } from './ThemeToggle';

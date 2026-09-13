@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   BarChart3, TrendingUp, Award, Activity, ChevronLeft, ChevronRight,
@@ -42,12 +42,13 @@ export default function StatsPage() {
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
+    if (!userId) return;
     const fetchStats = async () => {
       setLoading(true);
       setError(null);
       try {
         const token = getToken();
-        const baseUrl = userId ? `${API_URL}/admin/users/${userId}/stats` : `${API_URL}/student/me/stats`;
+        const baseUrl = `${API_URL}/admin/users/${userId}/stats`;
         const res = await axios.get(`${baseUrl}?period=${period}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -61,6 +62,10 @@ export default function StatsPage() {
     };
     fetchStats();
   }, [userId, period]);
+
+  if (!userId) {
+    return <Navigate to="/student/stats" replace />;
+  }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">

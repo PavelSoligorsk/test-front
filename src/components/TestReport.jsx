@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { Download, Sparkles, RotateCcw } from 'lucide-react';
-import { MarkdownRenderer as MarkdownViewer  } from '../shared/ui';
+import { MarkdownRenderer as MarkdownViewer, ThemeToggle } from '../shared/ui';
 
 export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId, onRetake }) => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -111,97 +111,96 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Заголовок */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm">
           <div>
-            <h1 className="text-2xl font-black italic text-black">{test?.title || 'Результаты тестирования'}</h1>
-            <p className="text-sm text-black mt-1">Проверено автоматически</p>
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{test?.title || 'Результаты тестирования'}</h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Проверено автоматически</p>
           </div>
-          <div className="flex gap-3 w-full sm:w-auto">
-            <button onClick={onBack} className="px-6 py-3 bg-slate-100 text-black rounded-full text-[10px] font-black uppercase hover:bg-slate-200 transition">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+            <ThemeToggle />
+            <button type="button" onClick={onBack} className="px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
               Назад
             </button>
             {onRetake && (
               <button
+                type="button"
                 onClick={onRetake}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase hover:bg-blue-100 transition border border-blue-200"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
               >
                 <RotateCcw size={16} /> Пересдать
               </button>
             )}
-            <button 
-              onClick={handleDownloadPDF} 
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
               disabled={isGenerating}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase hover:bg-blue-700 transition shadow-lg shadow-blue-200 disabled:bg-blue-400"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition disabled:opacity-50"
             >
-              <Download size={16} /> 
+              <Download size={16} />
               {isGenerating ? 'Генерация...' : 'Скачать PDF'}
             </button>
           </div>
         </div>
 
-        {/* Статистика */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-3xl font-black text-blue-600">{scorePercentage}%</span>
-            <span className="text-[10px] font-black uppercase text-black mt-2 tracking-widest">Результат</span>
+          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{scorePercentage}%</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Результат</span>
           </div>
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-3xl font-black text-green-500">{stats?.correct}</span>
-            <span className="text-[10px] font-black uppercase text-black mt-2 tracking-widest">Верно</span>
+          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{stats?.correct}</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Верно</span>
           </div>
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-3xl font-black text-red-500">{stats?.incorrect}</span>
-            <span className="text-[10px] font-black uppercase text-black mt-2 tracking-widest">Ошибок</span>
+          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{stats?.incorrect}</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Ошибок</span>
           </div>
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-3xl font-black text-black">{stats?.unanswered}</span>
-            <span className="text-[10px] font-black uppercase text-black mt-2 tracking-widest">Пропущено</span>
+          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{stats?.unanswered}</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Пропущено</span>
           </div>
         </div>
 
-        {/* Карточки заданий */}
         <div className="space-y-6">
           {test?.tasks?.map((task, idx) => {
             const answer = userAnswers[task.id];
             const drawing = drawings?.[task.id];
             const isUnanswered = !answer || (Array.isArray(answer) && answer.length === 0);
-            const isCorrect = !isUnanswered && (task.is_open_answer 
+            const isCorrect = !isUnanswered && (task.is_open_answer
               ? String(answer).trim().toLowerCase() === String(task.answer || '').trim().toLowerCase()
               : (Array.isArray(answer) ? answer.sort().join(',') : String(answer)) === (Array.isArray(task.answer) ? task.answer.sort().join(',') : String(task.answer))
             );
 
             return (
-             <div key={task.id} className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm text-black">
-  <div className={`p-4 border-b flex items-center justify-between ${isUnanswered ? 'bg-slate-50' : isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
-    <span className="text-sm font-black uppercase tracking-widest">Задание {idx + 1}</span>
+             <div key={task.id} className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/60 rounded-3xl overflow-hidden shadow-sm text-zinc-900 dark:text-zinc-100">
+  <div className={`p-4 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between ${isUnanswered ? 'bg-zinc-50 dark:bg-zinc-900/40' : isCorrect ? 'bg-emerald-50/60 dark:bg-emerald-500/10' : 'bg-red-50/60 dark:bg-red-500/10'}`}>
+    <span className="text-sm font-medium">Задание {idx + 1}</span>
   </div>
   <div className="p-6 space-y-4">
     <MarkdownViewer>{task.content || '*Условие не указано*'}</MarkdownViewer>
-    
+
     {drawing && (
       <div className="flex justify-center">
-        <img src={drawing} alt="Чертеж" className="max-w-[450px] max-h-[320px] object-contain rounded-xl border" />
+        <img src={drawing} alt="Чертеж" className="max-w-[450px] max-h-[320px] object-contain rounded-xl border border-zinc-200 dark:border-zinc-800" />
       </div>
     )}
-    
+
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="p-4 rounded-2xl border bg-slate-50">
-        <span className="text-[9px] font-black uppercase block mb-1">Ваш ответ</span>
+      <div className="p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40">
+        <span className="text-xs font-medium text-zinc-500 block mb-1">Ваш ответ</span>
         <MarkdownViewer>{renderAnswerMD(task, answer, false)}</MarkdownViewer>
       </div>
-      <div className="p-4 rounded-2xl border bg-blue-50/50 border-blue-100">
-        <span className="text-[9px] font-black uppercase block mb-1">Верный ответ</span>
+      <div className="p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40">
+        <span className="text-xs font-medium text-zinc-500 block mb-1">Верный ответ</span>
         <MarkdownViewer>{renderAnswerMD(task, answer, true)}</MarkdownViewer>
       </div>
     </div>
-    
+
     {task.ai_solution && (
-      <div className="p-4 bg-violet-50 border border-violet-100 rounded-2xl">
-        <div className="flex items-center gap-2 text-violet-700 font-bold text-xs uppercase mb-2">
+      <div className="p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 rounded-2xl">
+        <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-200 font-medium text-xs mb-2">
           <Sparkles size={14} />
           <span>Разбор от ИИ</span>
         </div>

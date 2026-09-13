@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
-import { QuestionMap } from '../../shared/ui';
+import { QuestionMap, ThemeToggle } from '../../shared/ui';
 import DifficultyStats from './DifficultyStats';
 import ResultTaskCard from './ResultTaskCard';
 
@@ -106,24 +106,37 @@ export default function TestResultDetailContent() {
     });
   }, [data]);
 
-  if (loading) return <div className="p-20 text-center font-black uppercase">Загрузка анализа...</div>;
-  if (!data) return <div className="p-20 text-center font-black uppercase text-red-500">Ошибка загрузки данных</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center">
+      <div className="absolute top-4 right-4"><ThemeToggle /></div>
+      <div className="w-8 h-8 border-[3px] border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
+    </div>
+  );
+  if (!data) return (
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center p-6 text-center">
+      <div className="absolute top-4 right-4"><ThemeToggle /></div>
+      <p className="text-sm font-medium text-red-600">Ошибка загрузки данных</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-20">
-      <div className="max-w-3xl mx-auto p-6 space-y-8">
-        <button onClick={() => navigate('/student')} className="flex items-center gap-2 text-slate-400 font-bold uppercase text-[10px]">
-          <ArrowLeft size={14} /> Назад в кабинет
-        </button>
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
+      <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <button type="button" onClick={() => navigate('/student')} className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+            <ArrowLeft size={14} /> Назад в кабинет
+          </button>
+          <ThemeToggle />
+        </div>
 
-        <header className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center">
+        <header className="bg-white dark:bg-[#09090b] p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-4xl font-black uppercase italic tracking-tighter text-black">{data.test_title}</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase mt-2">Результат прохождения</p>
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{data.test_title}</h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Результат прохождения</p>
           </div>
-          <div className="bg-slate-950 text-white px-8 py-6 rounded-[2rem] text-center mt-4 md:mt-0">
-            <div className="text-3xl font-black">{data.total_points} / {data.max_points}</div>
-            <div className="text-[9px] font-bold text-slate-500 uppercase">Баллов набрано</div>
+          <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 px-6 py-4 rounded-2xl text-center">
+            <div className="text-2xl font-semibold tabular-nums tracking-tight">{data.total_points} / {data.max_points}</div>
+            <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">баллов</div>
           </div>
         </header>
 

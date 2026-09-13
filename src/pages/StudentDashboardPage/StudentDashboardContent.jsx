@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { GraduationCap, Search, History, User as UserIcon, Filter, ChevronRight, XCircle, PlusCircle, BookOpen, RefreshCw, Sparkles, Clock, LayoutGrid, Target, ArrowRight, AlertCircle, Check, BarChart3 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { fetchStudentTestsMeta, fetchMyAssignmentsMeta, fetchAiTests, fetchStudentMe, updateStudentProfile, fetchStudentHistory } from './api';
 import { generateAiTest } from './api';
 import { retakeTest } from './api';
@@ -8,7 +8,7 @@ import TestsTab from './TestsTab';
 import HistoryTab from './HistoryTab';
 import ProfileTab from './ProfileTab';
 import TheoryTab from './TheoryTab';
-import StatsTab from './StatsTab';
+import StudentNav from './StudentNav';
 import AiModal from './AiModal';
 import { fetchTheoryTopics, fetchTheorySections, fetchTheoryByTopicSection } from './api';
 
@@ -19,8 +19,12 @@ export default function StudentDashboardContent() {
 
   const [activeTab, setActiveTabState] = useState(() => {
     const urlTab = searchParams.get('tab');
-    if (urlTab) { localStorage.setItem('student_tab', urlTab); return urlTab; }
-    return localStorage.getItem('student_tab') || 'tests';
+    if (urlTab && urlTab !== 'stats') {
+      localStorage.setItem('student_tab', urlTab);
+      return urlTab;
+    }
+    const stored = localStorage.getItem('student_tab');
+    return stored && stored !== 'stats' ? stored : 'tests';
   });
 
   useEffect(() => {
@@ -44,6 +48,10 @@ export default function StudentDashboardContent() {
   }, [activeTab]);
 
   const setActiveTab = (tabId) => {
+    if (tabId === 'stats') {
+      navigate('/student/stats');
+      return;
+    }
     if (tabId === activeTab) return;
     scrollPositions.current[activeTab] = window.scrollY;
     setActiveTabState(tabId);
@@ -51,6 +59,12 @@ export default function StudentDashboardContent() {
     localStorage.setItem('student_scroll_positions', JSON.stringify(scrollPositions.current));
     setSearchParams({ tab: tabId }, { replace: true });
   };
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'stats') {
+      navigate('/student/stats', { replace: true });
+    }
+  }, [navigate, searchParams]);
 
   const [staticTests, setStaticTests] = useState([]);
   const [customTests, setCustomTests] = useState([]);
@@ -120,14 +134,68 @@ export default function StudentDashboardContent() {
 
   useEffect(() => { if (activeTab === 'theory') fetchTheoryTopics().then(setTheoryTopics).catch(console.error); }, [activeTab]);
 
-  const handleLogout = () => { localStorage.clear(); sessionStorage.clear(); navigate('/login', { replace: true }); };
-  const handleUpdateProfile = async (e) => { e.preventDefault(); setSaving(true); try { const res = await updateStudentProfile({ first_name: editForm.first_name, last_name: editForm.last_name, phone: editForm.phone, tg_username: editForm.telegram }); setProfile(prev => ({ ...prev, user: res })); alert('Данные сохранены!'); } catch (err) { alert('Ошибка при сохранении'); } finally { setSaving(false); } };
-  const handleStartTest = (test) => { if (test.is_ai) navigate(`/test/${test.id}?type=ai`); else if (test.assignment_id) navigate(`/test/${test.id}?assignment=${test.assignment_id}`); else navigate(`/test/${test.id}`); };
-  const handleRetake = async (resultId, testIdOverride) => { try { const retakeData = await retakeTest(resultId); navigate(`/test/${testIdOverride || retakeData.test_id || resultId}?retake=1`, { state: { startData: retakeData } }); } catch (err) { alert(err.response?.data?.detail || 'Не удалось начать пересдачу. Проверьте лимит попыток.'); } };
-  const handleGenerateAiTest = async () => { if (!aiPrompt.trim()) return; setAiGenerating(true); try { const newTest = await generateAiTest(aiPrompt, aiTaskCount, aiDifficulty, selectedClass, aiExcludeWeeks, aiUseStats); setShowAiModal(false); setAiPrompt(''); navigate(`/test/${newTest.id}?type=ai`); } catch (err) { alert('Не удалось сгенерировать тест. Попробуйте другой запрос.'); } finally { setAiGenerating(false); } };
-  const handleTopicClickInternal = async (topic) => { const sections = await fetchTheorySections(topic.topic).catch(() => []); if (sections.length === 1) { fetchTheoryByTopicSection(topic.topic, sections[0].section).then(setTheoryContent).catch(console.error); setSelectedTopic(topic); setSelectedSection(sections[0].section); } else if (sections.length > 1) { setSectionsForModal(sections); setSelectedTopic(topic); setShowSectionModal(true); } };
+  const handleUpdateProfile = async (e) => { 
+    e.preventDefault(); 
+    setSaving(true); 
+    try { 
+      const res = await updateStudentProfile({ first_name: editForm.first_name, last_name: editForm.last_name, phone: editForm.phone, tg_username: editForm.telegram }); 
+      setProfile(prev => ({ ...prev, user: res })); 
+      alert('Данные сохранены!'); 
+    } catch (err) { 
+      alert('Ошибка при сохранении'); 
+    } finally { 
+      setSaving(false); 
+    } 
+  };
+  
+  const handleStartTest = (test) => { 
+    if (test.is_ai) navigate(`/test/${test.id}?type=ai`); 
+    else if (test.assignment_id) navigate(`/test/${test.id}?assignment=${test.assignment_id}`); 
+    else navigate(`/test/${test.id}`); 
+  };
+  
+  const handleRetake = async (resultId, testIdOverride) => { 
+    try { 
+      const retakeData = await retakeTest(resultId); 
+      navigate(`/test/${testIdOverride || retakeData.test_id || resultId}?retake=1`, { state: { startData: retakeData } }); 
+    } catch (err) { 
+      alert(err.response?.data?.detail || 'Не удалось начать пересдачу. Проверьте лимит попыток.'); 
+    } 
+  };
+  
+  const handleGenerateAiTest = async () => { 
+    if (!aiPrompt.trim()) return; 
+    setAiGenerating(true); 
+    try { 
+      const newTest = await generateAiTest(aiPrompt, aiTaskCount, aiDifficulty, selectedClass, aiExcludeWeeks, aiUseStats); 
+      setShowAiModal(false); 
+      setAiPrompt(''); 
+      navigate(`/test/${newTest.id}?type=ai`); 
+    } catch (err) { 
+      alert('Не удалось сгенерировать тест. Попробуйте другой запрос.'); 
+    } finally { 
+      setAiGenerating(false); 
+    } 
+  };
+
+  const handleTopicClickInternal = async (topic) => { 
+    const sections = await fetchTheorySections(topic.topic).catch(() => []); 
+    if (sections.length === 1) { 
+      fetchTheoryByTopicSection(topic.topic, sections[0].section).then(setTheoryContent).catch(console.error); 
+      setSelectedTopic(topic); 
+      setSelectedSection(sections[0].section); 
+    } else if (sections.length > 1) { 
+      setSectionsForModal(sections); 
+      setSelectedTopic(topic); 
+      setShowSectionModal(true); 
+    } 
+  };
+  
   const handleBackToTopics = () => { setSelectedSection(null); setTheoryContent(null); setSelectedTopic(null); };
-  const handleFetchTheory = (topic, section) => { fetchTheoryByTopicSection(topic, section).then(data => { setTheoryContent(data); setSelectedSection(section); }).catch(console.error); };
+  
+  const handleFetchTheory = (topic, section) => { 
+    fetchTheoryByTopicSection(topic, section).then(data => { setTheoryContent(data); setSelectedSection(section); }).catch(console.error); 
+  };
 
   const publicStaticTests = staticTests.filter(t => t.is_autocompile !== false);
   const teacherTests = [...customTests.map(t => ({ ...t, type: 'custom' })), ...staticTests.filter(t => t.is_autocompile === false).map(t => ({ ...t, type: 'custom' }))];
@@ -142,50 +210,39 @@ export default function StudentDashboardContent() {
   const searchedTests = (() => { let result = testSearch.trim() ? displayTests.filter(t => t.title?.toLowerCase().includes(testSearch.toLowerCase()) || t.subject?.toLowerCase().includes(testSearch.toLowerCase())) : displayTests; if (examFilter) result = result.filter(t => hasExamKeyword(t.title)); return result; })();
   const filteredHistory = history.filter(item => item.test_title?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  if (loading) return (<div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900"><div className="text-center space-y-4"><div className="w-16 h-16 border-8 border-slate-200 dark:border-slate-700 border-t-blue-600 rounded-full animate-spin mx-auto" /><p className="font-black uppercase tracking-widest text-slate-400 text-[10px]">Загрузка тестов...</p></div></div>);
-
-  const TABS = [
-    { key: 'theory', label: 'Теория', icon: null },
-    { key: 'tests', label: 'Тесты', icon: null },
-    { key: 'history', label: 'История', icon: null },
-    { key: 'profile', label: 'Профиль', icon: null },
-    { key: 'stats', label: 'Статистика', icon: null },
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-[#09090b]">
+        <div className="w-8 h-8 border-[3px] border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-900">
-      {/* Шапочка убрана для телефона */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 dark:bg-slate-900/80 dark:border-slate-800 py-2">
-        <div className="max-w-7xl mx-auto px-3 md:px-8 flex items-center gap-2 md:gap-3">
-          {/* Убираем имя пользователя на телефонах */}
-          <div className="flex items-center gap-2 shrink-0">
-            <GraduationCap size={18} className="text-blue-600" />
-            <span className="text-xs font-black uppercase text-slate-800 dark:text-white hidden sm:inline whitespace-nowrap">{profile?.user.first_name} {profile?.user.last_name}</span>
-          </div>
-          {/* Табы без шапочки */}
-          <div className="overflow-x-auto scrollbar-none ml-auto">
-            <div className="flex items-center gap-1 md:gap-1.5 bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-700 min-w-max">
-              {TABS.map(tab => (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`relative px-2.5 md:px-5 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 ${activeTab === tab.key ? 'text-white' : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-slate-700/50'}`}>
-                  {activeTab === tab.key && <div className="absolute inset-0 bg-blue-600 rounded-xl shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-300" />}
-                  <span className="relative z-10 flex items-center gap-1">{tab.icon ? <tab.icon size={10} className="md:w-[11px] md:h-[11px]" /> : null}{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800">
+      <StudentNav
+        displayName={`${profile?.user.first_name || ''} ${profile?.user.last_name || ''}`.trim()}
+        activeKey={activeTab}
+        onSelect={setActiveTab}
+      />
 
-      <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+      <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
         {activeTab === 'tests' && <TestsTab allTests={allTests} publicStaticTests={publicStaticTests} teacherTests={teacherTests} aiTestsMapped={aiTestsMapped} testTypeFilter={testTypeFilter} setTestTypeFilter={setTestTypeFilter} uniqueClasses={uniqueClasses} selectedClass={selectedClass} setSelectedClass={setSelectedClass} classSearch={classSearch} setClassSearch={setClassSearch} selectedSubject={selectedSubject} setSelectedSubject={setSelectedSubject} subjects={subjects} searchedTests={searchedTests} testSearch={testSearch} setTestSearch={setTestSearch} handleStartTest={handleStartTest} typeFilteredTests={typeFilteredTests} examFilter={examFilter} setExamFilter={setExamFilter} />}
-        {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'history' && <HistoryTab filteredHistory={filteredHistory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onRetake={handleRetake} />}
         {activeTab === 'profile' && <ProfileTab profile={profile} editForm={editForm} setEditForm={setEditForm} handleUpdateProfile={handleUpdateProfile} saving={saving} />}
         {activeTab === 'theory' && <TheoryTab theoryTopics={theoryTopics} theoryLoading={theoryLoading} selectedTopic={selectedTopic} selectedSection={selectedSection} theoryContent={theoryContent} showSectionModal={showSectionModal} sectionsForModal={sectionsForModal} loadingTheoryByTopicSection={theoryLoading} handleTopicClick={handleTopicClickInternal} handleBackToTopics={handleBackToTopics} setShowSectionModal={setShowSectionModal} fetchTheoryByTopicSection={handleFetchTheory} setSelectedTopic={setSelectedTopic} />}
       </main>
 
-      {activeTab !== 'theory' && <button onClick={() => setShowAiModal(true)} className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-full shadow-2xl shadow-purple-200 flex items-center justify-center hover:scale-105 transition-all active:scale-95 group"><Sparkles size={24} className="group-hover:rotate-12 transition-transform" /></button>}
+      {/* Кнопка вызова ИИ */}
+      {activeTab !== 'theory' && (
+        <button 
+          onClick={() => setShowAiModal(true)} 
+          className="fixed bottom-6 right-6 z-50 flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-full shadow-lg shadow-zinc-900/10 dark:shadow-white/10 border border-zinc-800 dark:border-zinc-200 hover:scale-105 active:scale-95 transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white dark:focus-visible:ring-offset-[#09090b]"
+          aria-label="Сгенерировать AI-тест"
+        >
+          <Sparkles size={22} className="group-hover:rotate-12 transition-transform" strokeWidth={1.5} />
+        </button>
+      )}
 
       <AiModal showAiModal={showAiModal} setShowAiModal={setShowAiModal} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} aiTaskCount={aiTaskCount} setAiTaskCount={setAiTaskCount} aiDifficulty={aiDifficulty} setAiDifficulty={setAiDifficulty} aiExcludeWeeks={aiExcludeWeeks} setAiExcludeWeeks={setAiExcludeWeeks} aiUseStats={aiUseStats} setAiUseStats={setAiUseStats} aiGenerating={aiGenerating} handleGenerateAiTest={handleGenerateAiTest} />
     </div>

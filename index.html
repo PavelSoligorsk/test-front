@@ -2,19 +2,28 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Платформа тестирования</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      tailwind.config = {
-        darkMode: 'class',
-      }
+      (function () {
+        try {
+          var saved = localStorage.getItem('edu_theme');
+          var dark = saved
+            ? saved === 'dark'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var root = document.documentElement;
+          root.classList.toggle('dark', dark);
+          root.style.colorScheme = dark ? 'dark' : 'light';
+          root.style.backgroundColor = dark ? '#09090b' : '#fafafa';
+        } catch (e) {}
+      })();
     </script>
     <style>
-      * { transition: background-color .2s, border-color .2s; }
+      html, body { background-color: #fafafa; }
+      html.dark, html.dark body { background-color: #09090b; }
     </style>
   </head>
-  <body class="bg-gray-100 min-h-screen dark:bg-slate-900">
+  <body class="bg-[#fafafa] min-h-screen dark:bg-[#09090b]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -17,10 +17,11 @@ export default function TestQuestionCard({
     if (!hintUsed[taskId]) {
       return (
         <button
+          type="button"
           onClick={() => onFetchHint(taskId)}
-          className="flex items-center gap-2 text-[10px] font-black uppercase text-violet-600 bg-violet-50 px-5 py-3 rounded-2xl hover:bg-violet-100 transition-all border border-violet-200/40 active:scale-95"
+          className="inline-flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/60 px-4 py-2.5 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors border border-zinc-200 dark:border-zinc-700"
         >
-          <Sparkles size={14} className="text-violet-500" />
+          <Sparkles size={14} />
           ИИ-подсказка (1 раз)
         </button>
       );
@@ -28,9 +29,9 @@ export default function TestQuestionCard({
 
     if (hintLoading[taskId]) {
       return (
-        <div className="flex items-center gap-3 p-5 bg-violet-50/50 border border-violet-100 rounded-[2rem]">
-          <Loader2 size={16} className="animate-spin text-violet-400" />
-          <span className="text-[10px] font-black uppercase text-violet-400 tracking-widest">ИИ думает...</span>
+        <div className="flex items-center gap-3 p-5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-3xl">
+          <Loader2 size={16} className="animate-spin text-zinc-400" />
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">ИИ думает...</span>
         </div>
       );
     }
@@ -40,13 +41,13 @@ export default function TestQuestionCard({
       const hintText = typeof hd === 'object' ? hd.hint : hd;
       const hintGeo = typeof hd === 'object' ? hd.geogebra : null;
       return (
-        <div className="p-6 bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200/40 rounded-[2rem] animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-3xl">
           <div className="flex justify-between items-center mb-4">
-            <span className="text-[9px] font-black uppercase text-violet-600 tracking-widest flex items-center gap-2">
-              <Lightbulb size={14} className="text-amber-500" />
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
+              <Lightbulb size={14} />
               Подсказка ИИ
             </span>
-            <span className="text-[8px] font-bold text-violet-400 bg-violet-100 px-2 py-0.5 rounded-lg">использовано</span>
+            <span className="text-[11px] font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md">использовано</span>
           </div>
           <MathHintPreview text={hintText} geogebra={hintGeo} title="" />
         </div>
@@ -58,24 +59,21 @@ export default function TestQuestionCard({
 
   return (
     <div className="space-y-6">
-      {/* Условие */}
-      <div className="p-6 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">
+      <div className="p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] shadow-sm">
+        <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-4">
           Задание №{currentIdx + 1}
         </h4>
-        <div className="prose prose-slate max-w-none text-sm md:text-base text-slate-800
+        <div className="prose prose-zinc dark:prose-invert max-w-none text-sm md:text-base text-zinc-800 dark:text-zinc-200
           [&_img]:rounded-2xl [&_img]:my-6 [&_img]:mx-auto [&_img]:block [&_img]:max-h-64
           [&_.katex-display]:my-4 [&_.katex-display]:text-sm [&_p]:leading-relaxed">
           <MarkdownRenderer>{currentTask.content}</MarkdownRenderer>
         </div>
       </div>
 
-      {/* AI подсказка */}
       <div className="mt-2">
         {renderHintContent()}
       </div>
 
-      {/* Рисовалка */}
       {showDrawing[taskId] && DrawingPadComponent && (
         <DrawingPadComponent
           ref={canvasRef}
@@ -85,16 +83,13 @@ export default function TestQuestionCard({
         />
       )}
 
-      {/* Ответы */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 ml-2">
-            <div className="w-1 h-4 bg-blue-500 rounded-full" />
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Ваш вариант ответа:</p>
-          </div>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 ml-1">Ваш вариант ответа</p>
           <button
+            type="button"
             onClick={() => onToggleDrawing(taskId)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-2xl text-[10px] font-black uppercase text-slate-600 transition"
+            className="flex items-center gap-2 px-3.5 py-2 bg-zinc-100 dark:bg-zinc-800/60 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl text-xs font-medium text-zinc-600 dark:text-zinc-300 transition-colors"
           >
             <Pencil size={14} />
             {showDrawing[taskId] ? 'Скрыть рисовалку' : 'Показать рисовалку'}

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, LayoutGrid, ScrollText, ArrowUp } from 'lucide-react';
+import { ThemeToggle } from '../../shared/ui';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import { retakeTest } from '../StudentDashboardPage/api';
@@ -542,38 +543,34 @@ export default function TestPassingContent() {
     const isNoTasks = /не содержит заданий/i.test(blockError);
 
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8 text-center space-y-5">
-          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto ${
-            isExamNotStarted ? 'bg-blue-50' :
-            isExamEnded || isTimeUp ? 'bg-red-50' :
-            isAttemptsExhausted ? 'bg-amber-50' :
-            'bg-red-50'
-          }`}>
-            {isExamNotStarted ? <CalendarIcon size={32} className="text-blue-500" /> :
-             isExamEnded || isTimeUp ? <Clock size={32} className="text-red-400" /> :
-             isAttemptsExhausted ? <RotateCcw size={32} className="text-amber-500" /> :
-             <AlertTriangle size={32} className="text-red-400" />}
+      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center p-4">
+        <div className="absolute top-4 right-4"><ThemeToggle /></div>
+        <div className="max-w-md w-full bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm p-8 text-center space-y-5">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
+            {isExamNotStarted ? <CalendarIcon size={22} /> :
+             isExamEnded || isTimeUp ? <Clock size={22} /> :
+             isAttemptsExhausted ? <RotateCcw size={22} /> :
+             <AlertTriangle size={22} />}
           </div>
-          <h2 className="text-xl font-black text-slate-800 uppercase">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
             {isExamNotStarted ? 'Экзамен ещё не начался' :
              isExamEnded ? 'Экзамен завершён' :
              isAttemptsExhausted ? 'Лимит попыток исчерпан' :
              isTimeUp ? 'Время вышло' :
              'Тест недоступен'}
           </h2>
-          <p className="text-sm font-bold text-slate-500 leading-relaxed">{blockError}</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{blockError}</p>
           <div className="flex gap-3 justify-center pt-2">
             <button
               onClick={() => navigate('/student')}
-              className="px-8 py-3 bg-slate-900 text-white rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition"
+              className="px-5 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
             >
               К тестам
             </button>
             {isExamNotStarted && (
               <button
                 onClick={() => navigate(`/result/${resultId}`)}
-                className="px-8 py-3 bg-blue-50 text-blue-600 rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-blue-100 transition border border-blue-200"
+                className="px-5 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
               >
                 К результатам
               </button>
@@ -585,8 +582,9 @@ export default function TestPassingContent() {
   }
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
-      <Loader2 className="animate-spin text-blue-500" size={32} />
+    <div className="h-screen flex items-center justify-center bg-[#fafafa] dark:bg-[#09090b]">
+      <div className="absolute top-4 right-4"><ThemeToggle /></div>
+      <Loader2 className="animate-spin text-zinc-400" size={28} />
     </div>
   );
 
@@ -607,24 +605,25 @@ export default function TestPassingContent() {
   if (submitError) {
     const isRetryable = submitError && !/Экзамен|исчерпали|Время вышло|деактивирован|Срок/i.test(submitError);
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8 text-center space-y-5">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto">
-            <XCircle size={32} className="text-red-400" />
+      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center p-4">
+        <div className="absolute top-4 right-4"><ThemeToggle /></div>
+        <div className="max-w-md w-full bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm p-8 text-center space-y-5">
+          <div className="w-12 h-12 bg-red-50 dark:bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto">
+            <XCircle size={22} className="text-red-500" />
           </div>
-          <h2 className="text-xl font-black text-slate-800 uppercase">Ошибка отправки</h2>
-          <p className="text-sm font-bold text-slate-500 leading-relaxed">{submitError}</p>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Ошибка отправки</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{submitError}</p>
           <div className="flex gap-3 justify-center pt-2">
             <button
               onClick={() => navigate('/student')}
-              className="px-8 py-3 bg-slate-100 text-slate-600 rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition"
+              className="px-5 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
             >
               К тестам
             </button>
             {isRetryable && (
               <button
                 onClick={() => { setSubmitError(null); submittedRef.current = false; doSubmit(userAnswers); }}
-                className="px-8 py-3 bg-blue-600 text-white rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-200"
+                className="px-5 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
               >
                 Повторить
               </button>
@@ -639,39 +638,41 @@ export default function TestPassingContent() {
   const attemptsLeft = maxAttempts != null ? maxAttempts - attemptsUsed : null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-20">
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
       <div className={`${viewMode === 'cards' ? 'max-w-2xl' : 'max-w-4xl'} mx-auto p-4 md:p-8 space-y-6`}>
-        {/* ── Timer bar ── */}
+        {viewMode === 'scroll' && (
+          <div className="flex justify-end"><ThemeToggle /></div>
+        )}
         {hasTimer && (
-          <div className={`flex items-center justify-between px-5 py-3 rounded-2xl border shadow-sm transition-colors ${
-            timerWarning ? 'bg-red-50 border-red-200 animate-pulse' : 'bg-white border-slate-100'
+          <div className={`flex items-center justify-between px-5 py-3 rounded-2xl border shadow-sm ${
+            timerWarning
+              ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
+              : 'bg-white dark:bg-[#09090b] border-zinc-200 dark:border-zinc-800/60'
           }`}>
             <div className="flex items-center gap-3">
-              <Clock size={18} className={timerWarning ? 'text-red-500' : 'text-slate-400'} />
-              <span className={`text-sm font-black uppercase tracking-widest ${timerWarning ? 'text-red-600' : 'text-slate-600'}`}>
+              <Clock size={18} className={timerWarning ? 'text-red-500' : 'text-zinc-400'} />
+              <span className={`text-sm font-medium ${timerWarning ? 'text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-300'}`}>
                 Осталось времени
               </span>
             </div>
-            <span className={`text-xl font-black italic tabular-nums ${timerWarning ? 'text-red-600' : 'text-slate-900'}`}>
+            <span className={`text-xl font-semibold tabular-nums tracking-tight ${timerWarning ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
               {formatTime(timeRemaining)}
             </span>
           </div>
         )}
 
-        {/* ── Attempts indicator ── */}
         {attemptsLeft != null && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-100 rounded-2xl text-[10px] font-bold text-slate-500 shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/60 rounded-2xl text-xs font-medium text-zinc-500 dark:text-zinc-400 shadow-sm">
             <RotateCcw size={12} />
             Попытка {attemptsUsed + 1} из {maxAttempts}{' '}
             {attemptsLeft <= 1 && (
-              <span className="text-amber-600 ml-1">(последняя)</span>
+              <span className="text-zinc-700 dark:text-zinc-200 ml-1">(последняя)</span>
             )}
           </div>
         )}
 
-        {/* ── Exam window info ── */}
         {examStart && examEnd && !blockError && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 border border-purple-100 rounded-2xl text-[10px] font-bold text-purple-600">
+          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
             <CalendarIcon size={12} />
             Экзамен:{' '}
             {new Date(examStart).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -680,9 +681,8 @@ export default function TestPassingContent() {
           </div>
         )}
 
-        {/* ── Mode hints ── */}
         {!hasTimer && allowInterruptions && (
-          <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-2xl text-[10px] font-bold text-blue-600">
+          <div className="flex items-center justify-between gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
             <div className="flex items-center gap-2">
               <AlertTriangle size={12} />
               Прогресс сохраняется на сервере — можно выйти и продолжить позже
@@ -690,7 +690,7 @@ export default function TestPassingContent() {
             <button
               onClick={handleExitClick}
               disabled={isExiting}
-              className="flex items-center gap-1 px-3 py-1 bg-blue-100 hover:bg-blue-200 rounded-xl text-[10px] font-black uppercase transition disabled:opacity-50"
+              className="flex items-center gap-1 px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-xl text-xs font-medium transition disabled:opacity-50"
             >
               <LogOut size={12} />
               {isExiting ? 'Сохранение...' : 'Выйти'}
@@ -698,7 +698,7 @@ export default function TestPassingContent() {
           </div>
         )}
         {hasTimer && !allowInterruptions && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-100 rounded-2xl text-[10px] font-bold text-amber-600">
+          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
             <AlertTriangle size={12} />
             Тест нужно пройти за один присест. При выходе попытка будет потеряна.
           </div>
@@ -771,7 +771,7 @@ export default function TestPassingContent() {
             <button
               disabled={currentIdx === 0}
               onClick={() => setCurrentIdx(v => v - 1)}
-              className="flex items-center gap-3 text-slate-400 font-black text-[10px] uppercase tracking-widest disabled:opacity-0 p-4 hover:text-slate-600 transition-colors"
+              className="flex items-center gap-2 text-zinc-400 text-sm font-medium disabled:opacity-0 p-3 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
             >
               <ChevronLeft size={18} /> Назад
             </button>
@@ -780,14 +780,14 @@ export default function TestPassingContent() {
               <button
                 onClick={handleSubmitClick}
                 disabled={isSubmitting}
-                className="px-12 py-5 bg-blue-600 text-white rounded-full font-black uppercase text-[11px] tracking-[0.15em] shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300"
+                className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all disabled:opacity-40"
               >
                 {isSubmitting ? 'Отправка...' : 'Завершить работу'}
               </button>
             ) : (
               <button
                 onClick={() => setCurrentIdx(v => v + 1)}
-                className="flex items-center gap-3 px-10 py-5 bg-slate-900 text-white rounded-full font-black uppercase text-[11px] tracking-[0.15em] shadow-xl active:scale-95 transition-all"
+                className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all"
               >
                 Следующий шаг <ChevronRight size={18} />
               </button>
@@ -798,7 +798,7 @@ export default function TestPassingContent() {
             <button
               onClick={handleSubmitClick}
               disabled={isSubmitting}
-              className="px-12 py-5 bg-blue-600 text-white rounded-full font-black uppercase text-[11px] tracking-[0.15em] shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300"
+              className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all disabled:opacity-40"
             >
               {isSubmitting ? 'Отправка...' : 'Завершить работу'}
             </button>
@@ -808,14 +808,13 @@ export default function TestPassingContent() {
 
       {/* ── Floating buttons (bottom left) ── */}
 <div className="fixed left-4 bottom-4 flex flex-row gap-2 z-50">
-  {/* View mode toggle */}
-  <div className="flex flex-row gap-1 bg-white border border-slate-200 rounded-full shadow-lg p-1">
+  <div className="flex flex-row gap-1 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg p-1">
     <button
       onClick={() => handleModeSwitch('cards')}
       className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-        viewMode === 'cards' 
-          ? 'bg-slate-900 text-white' 
-          : 'text-slate-500 hover:bg-slate-100'
+        viewMode === 'cards'
+          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
+          : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
       }`}
       title="По одному"
     >
@@ -824,9 +823,9 @@ export default function TestPassingContent() {
     <button
       onClick={() => handleModeSwitch('scroll')}
       className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-        viewMode === 'scroll' 
-          ? 'bg-slate-900 text-white' 
-          : 'text-slate-500 hover:bg-slate-100'
+        viewMode === 'scroll'
+          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
+          : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
       }`}
       title="Все сразу"
     >
@@ -834,11 +833,10 @@ export default function TestPassingContent() {
     </button>
   </div>
 
-  {/* Scroll to top button (only in scroll mode) */}
   {viewMode === 'scroll' && (
     <button
       onClick={scrollToTop}
-      className="w-10 h-10 bg-white border border-slate-200 rounded-full shadow-lg flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
+      className="w-10 h-10 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all active:scale-95"
       title="Наверх"
     >
       <ArrowUp size={18} />

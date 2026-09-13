@@ -22,16 +22,16 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
 
   if (isLoading) {
     return (
-      <div className="relative p-6 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <div className="relative p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] shadow-sm">
         {onClose && (
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-slate-100 rounded-full transition-colors">
-            <XCircle size={18} className="text-slate-400" />
+          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+            <XCircle size={18} className="text-zinc-400" />
           </button>
         )}
-        <h4 className="text-[10px] font-black uppercase text-green-600 tracking-widest mb-4">🤖 AI-РЕШЕНИЕ</h4>
+        <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-4">AI-решение</h4>
         <div className="flex items-center space-x-3 py-4">
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-green-500" />
-          <p className="text-sm text-slate-500">Генерирую решение...</p>
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-zinc-100" />
+          <p className="text-sm text-zinc-500">Генерирую решение...</p>
         </div>
       </div>
     );
@@ -39,13 +39,13 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
 
   if (error) {
     return (
-      <div className="relative p-6 rounded-[2rem] border border-red-200 bg-red-50 shadow-sm">
+      <div className="relative p-6 rounded-3xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 shadow-sm">
         {onClose && (
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-red-100 rounded-full transition-colors">
+          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-full transition-colors">
             <XCircle size={18} className="text-red-400" />
           </button>
         )}
-        <h4 className="text-[10px] font-black uppercase text-red-600 tracking-widest mb-4">🤖 AI-РЕШЕНИЕ</h4>
+        <h4 className="text-xs font-medium text-red-600 dark:text-red-400 mb-4">AI-решение</h4>
         <div className="flex items-center gap-2 p-3 bg-red-100 rounded-xl">
           <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
           <p className="text-sm text-red-700">{error}</p>
@@ -66,17 +66,17 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
 
   if (!isSuccess || !hasSolution) {
     return (
-      <div className="relative p-6 rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm">
+      <div className="relative p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 shadow-sm">
         {onClose && (
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-amber-100 rounded-full transition-colors">
-            <XCircle size={18} className="text-amber-400" />
+          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+            <XCircle size={18} className="text-zinc-400" />
           </button>
         )}
         <div className="flex items-center gap-2 mb-3">
-          <AlertCircle size={16} className="text-amber-600" />
-          <h4 className="text-[10px] font-black uppercase text-amber-700 tracking-widest">🤖 AI-РЕШЕНИЕ</h4>
+          <AlertCircle size={16} className="text-zinc-500" />
+          <h4 className="text-xs font-medium text-zinc-700 dark:text-zinc-200">AI-решение</h4>
         </div>
-        <p className="text-sm text-amber-700">{data.message || "Не удалось получить решение от ИИ."}</p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">{data.message || "Не удалось получить решение от ИИ."}</p>
       </div>
     );
   }
@@ -89,7 +89,7 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
   const hasAnswerSection = solutionParts.length > 1;
 
   return (
-    <div className="relative p-6 rounded-[2rem] border shadow-sm bg-white">
+    <div className="relative p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm bg-white dark:bg-[#09090b]">
       {onClose && (
         <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-slate-100 rounded-full transition-colors z-10">
           <XCircle size={18} className="text-slate-400 hover:text-slate-600" />
@@ -98,24 +98,24 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
 
       <div className="flex items-center justify-between flex-wrap gap-2 mb-4 pr-6">
         <div className="flex items-center gap-2 flex-wrap">
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-green-600">🤖 AI-РЕШЕНИЕ</h4>
+          <h4 className="text-xs font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">AI-решение</h4>
           {isVerified ? (
-            <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <CheckCircle2 size={10} /> ✓ ПРОВЕРЕНО
+            <span className="text-[11px] font-medium bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <CheckCircle2 size={10} /> Проверено
             </span>
           ) : (
-            <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <AlertCircle size={10} /> ⚠ НЕ ПРОВЕРЕНО
+            <span className="text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <AlertCircle size={10} /> Не проверено
             </span>
           )}
           {data.context?.difficulty && (
-            <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+            <span className="text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full">
               Сложность: {data.context.difficulty}/5
             </span>
           )}
         </div>
-        <button onClick={handleCopy} className="text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1">
-          {copied ? <><CheckCircle2 size={10} /> СКОПИРОВАНО</> : <>📋 КОПИРОВАТЬ</>}
+        <button onClick={handleCopy} className="text-[11px] font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors flex items-center gap-1">
+          {copied ? <><CheckCircle2 size={10} /> Скопировано</> : <>Копировать</>}
         </button>
       </div>
 
@@ -131,10 +131,10 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
             <MarkdownWithGeoGebra>{solutionBeforeAnswer}</MarkdownWithGeoGebra>
           )}
           {hasAnswerSection && (
-            <div className="my-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+            <div className="my-4 p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 rounded-2xl">
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 size={14} className="text-emerald-600" />
-                <span className="text-[9px] font-black uppercase text-emerald-700 tracking-widest">Ответ</span>
+                <CheckCircle2 size={14} className="text-zinc-500" />
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Ответ</span>
               </div>
               <MarkdownWithGeoGebra>{answerSection}</MarkdownWithGeoGebra>
             </div>
@@ -143,11 +143,11 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
             <MarkdownWithGeoGebra>{data.ai_solution}</MarkdownWithGeoGebra>
           )}
         </div>
-        {!isExpanded && <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent pointer-events-none" />}
+        {!isExpanded && <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-[#09090b] to-transparent pointer-events-none" />}
       </div>
 
       {!isExpanded && (
-        <button onClick={() => setIsExpanded(true)} className="mt-2 text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
+        <button onClick={() => setIsExpanded(true)} className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium flex items-center gap-1">
           <ChevronDown size={14} /> Показать полное решение
         </button>
       )}
@@ -188,7 +188,7 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
       )}
 
       <div className="mt-3">
-        <p className="text-[9px] text-slate-400 italic">🤖 Решение сгенерировано ИИ. Возможны ошибки. Проверяйте самостоятельно.</p>
+        <p className="text-[11px] text-zinc-400">Решение сгенерировано ИИ. Возможны ошибки. Проверяйте самостоятельно.</p>
       </div>
     </div>
   );
