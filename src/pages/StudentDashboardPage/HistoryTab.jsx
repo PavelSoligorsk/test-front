@@ -14,7 +14,7 @@ export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm,
   const cleanTitle = title => title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim();
 
   const formatDate = iso => new Date(iso).toLocaleDateString('ru-RU', {
-    day: 'numeric', month: 'short', year: 'numeric',
+    day: '2-digit', month: '2-digit', year: 'numeric',
   });
 
   return (
@@ -64,23 +64,25 @@ export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm,
                 tabIndex={0}
                 role="button"
                 aria-label={`Открыть результат теста ${title ?? ''}`}
-                className="group flex flex-wrap md:flex-nowrap items-center gap-4 md:gap-6 px-6 md:px-8 py-4 md:py-5 cursor-pointer transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900/40 focus:outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-900/40"
+                className="group flex items-center gap-4 md:gap-6 px-6 md:px-8 py-4 md:py-5 cursor-pointer transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900/40 focus:outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-900/40"
               >
-                {/* Дата */}
-                <div className="hidden sm:flex shrink-0 w-24">
-                  <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 tabular-nums bg-zinc-100 dark:bg-zinc-800/50 px-2.5 py-1 rounded-md">
-                    {formatDate(res.completed_at)}
-                  </span>
-                </div>
+                <time
+                  dateTime={res.completed_at}
+                  className="hidden sm:block shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap"
+                >
+                  {formatDate(res.completed_at)}
+                </time>
 
-                {/* Название */}
-                <div className="min-w-0 flex-1 w-full md:w-auto">
+                <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm text-zinc-900 dark:text-zinc-200 truncate group-hover:text-black dark:group-hover:text-white transition-colors">
                     {title}
                   </p>
-                  <p className="sm:hidden text-xs text-zinc-500 mt-1.5">
+                  <time
+                    dateTime={res.completed_at}
+                    className="sm:hidden block text-xs text-zinc-500 mt-1.5 tabular-nums whitespace-nowrap"
+                  >
                     {formatDate(res.completed_at)}
-                  </p>
+                  </time>
                 </div>
 
                 {/* Баллы */}
@@ -94,7 +96,7 @@ export default function HistoryTab({ filteredHistory, searchTerm, setSearchTerm,
                 </div>
 
                 {/* Действия (Пересдать + Стрелка) */}
-                <div className="flex items-center gap-3 shrink-0 ml-auto md:ml-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <button
                     onClick={(e) => { e.stopPropagation(); onRetake(res.id, res.test_id); }}
                     className="opacity-100 md:opacity-0 md:-translate-x-2 md:group-hover:opacity-100 md:group-hover:translate-x-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-lg text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950 focus-visible:ring-zinc-900 dark:focus-visible:ring-white shadow-sm"

@@ -133,7 +133,7 @@ function HistorySkeleton() {
       <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
         {Array.from({ length: 7 }).map((_, i) => (
           <li key={i} className="px-6 md:px-8 py-4 md:py-5 flex items-center gap-4 md:gap-6">
-            <Pulse className="hidden sm:block w-24 h-6 rounded-md" />
+            <Pulse className="hidden sm:block w-[4.75rem] h-4 rounded-md" />
             <Pulse className="h-4 flex-1" />
             <Pulse className="w-10 h-6" />
             <Pulse className="w-4 h-4 rounded-full" />
