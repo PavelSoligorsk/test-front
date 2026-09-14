@@ -54,6 +54,14 @@ export const fetchMyDetailedStats = async (period = 'all') => {
   return res.data;
 };
 
+export const fetchUserDetailedStats = async (userId, period = 'all', role = 'admin') => {
+  const path = role === 'teacher'
+    ? `/teacher/students/${userId}/stats?period=${period}`
+    : `/admin/users/${userId}/stats?period=${period}`;
+  const res = await axios.get(`${API_BASE}${path}`, authConfig());
+  return res.data;
+};
+
 // Theory
 export const fetchTheoryTopics = async () => {
   const res = await axios.get(`${API_BASE}/student/theory/topics`, authConfig());

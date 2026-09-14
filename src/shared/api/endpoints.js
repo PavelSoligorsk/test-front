@@ -40,6 +40,7 @@ export const ENDPOINTS = {
   ADMIN_TEST_TASKS: (id) => `/admin/tests/${id}/tasks`,
   ADMIN_USERS_PROFILE: (userId) => `/admin/users/${userId}/profile`,
   ADMIN_USERS_HISTORY: (userId) => `/admin/users/${userId}/history`,
+  ADMIN_USER_STATS: (userId, period = 'all') => `/admin/users/${userId}/stats?period=${period}`,
   ADMIN_RESULT: (resultId) => `/admin/results/${resultId}`,
   ADMIN_UPLOAD_IMAGE: '/admin/upload-image',
   ADMIN_ALLOWED_EMAILS: '/admin/allowed/emails',
@@ -91,14 +92,16 @@ export const ENDPOINTS = {
   TEACHER_PROFILE: '/teacher/profile',
 
   // Учитель — статистика ученика
-  TEACHER_STUDENT_STATS: (studentId) => `/teacher/students/${studentId}/stats`,
+  TEACHER_STUDENT_STATS: (studentId, period = 'all') => `/teacher/students/${studentId}/stats?period=${period}`,
 
   // Статистика
   STATS_ME: '/stats/me',
+  STATS_ME_FULL: '/stats/me/full',
   STATS_ME_PERIOD: (period) => `/stats/me/period?period=${period}`,
   STATS_ME_TOPICS: (period) => `/stats/me/topics?period=${period}`,
   STATS_ME_DIFFICULTY: (period) => `/stats/me/difficulty?period=${period}`,
   STATS_USER: (userId) => `/stats/user/${userId}`,
+  STATS_USER_FULL: (userId) => `/stats/user/${userId}/full`,
   STATS_USER_PERIOD: (userId, period) => `/stats/user/${userId}/period?period=${period}`,
   STATS_USER_TOPICS: (userId, period) => `/stats/user/${userId}/topics?period=${period}`,
   STATS_USER_DIFFICULTY: (userId, period) => `/stats/user/${userId}/difficulty?period=${period}`,

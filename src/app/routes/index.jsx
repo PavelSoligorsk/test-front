@@ -97,6 +97,7 @@ function isZincSurface(pathname) {
     || pathname.startsWith('/result/')
     || pathname.startsWith('/teacher')
     || pathname.startsWith('/admin')
+    || pathname.startsWith('/stats')
     || isAuthSurface(pathname);
 }
 
@@ -169,7 +170,7 @@ export default function AppRoutes() {
               <Route path="/test/:testId" element={<PrivateRoute><TestPassing /></PrivateRoute>} />
               <Route path="/result/:resultId" element={<PrivateRoute><TestResultDetail /></PrivateRoute>} />
               <Route path="/stats" element={<PrivateRoute><StatsPage /></PrivateRoute>} />
-              <Route path="/stats/:userId" element={<PrivateRoute><StatsPage /></PrivateRoute>} />
+              <Route path="/stats/:userId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><StatsPage /></PrivateRoute>} />
               <Route path="/" element={<HomePage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

@@ -257,35 +257,49 @@ function StatsSkeleton() {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-zinc-100 dark:divide-zinc-800/60">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="px-6 md:px-8 py-8 space-y-3">
-              <Pulse className="h-9 w-20" />
-              <Pulse className="h-3 w-28" />
-            </div>
-          ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[17rem_minmax(0,1fr)] divide-y lg:divide-y-0 lg:divide-x divide-zinc-100 dark:divide-zinc-800/60">
+          <div className="px-6 md:px-8 py-8 flex justify-center">
+            <Pulse className="w-[156px] h-[156px] rounded-full" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-zinc-100 dark:divide-zinc-800/60">
+            {[0, 1].map((i) => (
+              <div key={i} className="px-6 md:px-8 py-8 space-y-3">
+                <Pulse className="h-9 w-20" />
+                <Pulse className="h-3 w-28" />
+              </div>
+            ))}
+          </div>
         </div>
       </Sheet>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {[0, 1].map((sheet) => (
-          <Sheet key={sheet} className="p-6 md:p-8 space-y-5">
-            <Pulse className="h-5 w-24" />
-            <div className="flex justify-between">
-              <Pulse className="h-3 w-6" />
-              <Pulse className="h-3 w-6" />
-              <Pulse className="h-3 w-8" />
+        <Sheet className="p-6 md:p-8 space-y-5">
+          <Pulse className="h-5 w-24" />
+          <div className="flex justify-between">
+            <Pulse className="h-3 w-6" />
+            <Pulse className="h-3 w-6" />
+            <Pulse className="h-3 w-8" />
+          </div>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="space-y-2">
+              <div className="flex justify-between gap-4">
+                <Pulse className="h-3 w-32" />
+                <Pulse className="h-3 w-10" />
+              </div>
+              <Pulse className="h-2.5 w-full rounded-full" />
             </div>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="space-y-2">
-                <div className="flex justify-between gap-4">
-                  <Pulse className="h-3 w-32" />
-                  <Pulse className="h-3 w-10" />
-                </div>
-                <Pulse className="h-2.5 w-full rounded-full" />
+          ))}
+        </Sheet>
+        <Sheet className="p-6 md:p-8 space-y-5">
+          <Pulse className="h-5 w-28" />
+          <div className="flex items-end justify-between gap-3 h-44 pt-4">
+            {['h-1/3', 'h-2/3', 'h-1/2', 'h-3/4', 'h-2/5'].map((height, i) => (
+              <div key={i} className="flex-1 flex flex-col justify-end gap-2">
+                <Pulse className={`w-full ${height} rounded-lg`} />
+                <Pulse className="h-3 w-8 mx-auto" />
               </div>
             ))}
-          </Sheet>
-        ))}
+          </div>
+        </Sheet>
       </div>
     </div>
   );

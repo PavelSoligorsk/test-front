@@ -18,8 +18,16 @@ export const statsApi = {
     return apiClient.get(ENDPOINTS.STATS_ME_DIFFICULTY(period));
   },
 
+  getMyFullStats() {
+    return apiClient.get(ENDPOINTS.STATS_ME_FULL);
+  },
+
   getUserStats(userId) {
     return apiClient.get(ENDPOINTS.STATS_USER(userId));
+  },
+
+  getUserFullStats(userId) {
+    return apiClient.get(ENDPOINTS.STATS_USER_FULL(userId));
   },
 
   getUserStatsByPeriod(userId, period) {
@@ -32,5 +40,13 @@ export const statsApi = {
 
   getUserDifficultyStats(userId, period) {
     return apiClient.get(ENDPOINTS.STATS_USER_DIFFICULTY(userId, period));
+  },
+
+  getTeacherStudentStats(studentId, period = 'all') {
+    return apiClient.get(ENDPOINTS.TEACHER_STUDENT_STATS(studentId, period));
+  },
+
+  getAdminUserStats(userId, period = 'all') {
+    return apiClient.get(ENDPOINTS.ADMIN_USER_STATS(userId, period));
   },
 };

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, LayoutGrid, ScrollText, ArrowUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, BookOpen, ClipboardList } from 'lucide-react';
 import { ThemeToggle } from '../../shared/ui';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
@@ -11,6 +11,7 @@ import DrawingPad from '../../components/DrawingPad';
 import TestProgressBar from './TestProgressBar';
 import TestQuestionCard from './TestQuestionCard';
 import TestResultReport from './TestResultReport';
+import TestTheoryPanel from './TestTheoryPanel';
 
 function formatTime(seconds) {
   if (seconds == null || seconds <= 0) return '0:00';
@@ -35,8 +36,7 @@ export default function TestPassingContent() {
   const isAi = searchParams.get('type') === 'ai';
   const startData = location.state?.startData;
 
-  // ── View mode state ──
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'scroll'
+  const [theoryOpen, setTheoryOpen] = useState(false);
 
   // ── Constraint / block error ──
   const [blockError, setBlockError] = useState(null);
@@ -78,11 +78,6 @@ export default function TestPassingContent() {
   const canvasRef = useRef(null);
   const submitRef = useRef(null);
   const finishedRef = useRef(false);
-  const questionRefs = useRef({});
-  const scrollPositionsRef = useRef({
-    cards: 0,
-    scroll: 0
-  });
   const currentTaskId = test?.tasks?.[currentIdx]?.id;
 
   const savedToServerRef = useRef(false);
@@ -106,10 +101,9 @@ export default function TestPassingContent() {
         drawings,
         timestamp: Date.now(),
         timeRemaining,
-        viewMode,
       }));
     }
-  }, [currentIdx, userAnswers, drawings, testId, test, timeRemaining, allowInterruptions, viewMode]);
+  }, [currentIdx, userAnswers, drawings, testId, test, timeRemaining, allowInterruptions]);
 
   // Save progress to server (incremental persistence)
   const saveProgressToServer = useCallback(async (answersOverride) => {
@@ -187,48 +181,17 @@ export default function TestPassingContent() {
     return () => { saveCurrentDrawing(); };
   }, [currentTaskId, saveCurrentDrawing]);
 
-  // ── Save scroll position on scroll ──
-  useEffect(() => {
-    const handleScroll = () => {
-      scrollPositionsRef.current[viewMode] = window.scrollY;
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [viewMode]);
-
-  // ── Handle mode switch with position preservation ──
-  const handleModeSwitch = (mode) => {
-    if (mode === viewMode) return;
-    
-    // Save current scroll position
-    scrollPositionsRef.current[viewMode] = window.scrollY;
-    
-    setViewMode(mode);
-    
-    setTimeout(() => {
-      if (mode === 'scroll') {
-        // Scroll to saved scroll position or current question
-        const savedPosition = scrollPositionsRef.current.scroll;
-        if (savedPosition > 0) {
-          window.scrollTo({ top: savedPosition, behavior: 'auto' });
-        } else {
-          // Scroll to current question if no saved position
-          const element = questionRefs.current[currentTaskId];
-          if (element) {
-            element.scrollIntoView({ behavior: 'auto', block: 'start' });
-          }
-        }
-      } else {
-        // Restore cards mode scroll position
-        const savedPosition = scrollPositionsRef.current.cards;
-        window.scrollTo({ top: savedPosition, behavior: 'auto' });
-      }
-    }, 50);
+  const openTheory = async () => {
+    if (theoryOpen) return;
+    saveCurrentDrawing();
+    await saveProgress();
+    setTheoryOpen(true);
+    window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
-  // ── Scroll to top button ──
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const closeTheory = () => {
+    setTheoryOpen(false);
+    window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
   // ── Submit function ──
@@ -418,9 +381,6 @@ export default function TestPassingContent() {
                 setCurrentIdx(parsed.currentIdx || 0);
                 setUserAnswers(parsed.answers || {});
                 setDrawings(parsed.drawings || {});
-                if (parsed.viewMode) {
-                  setViewMode(parsed.viewMode);
-                }
                 if (parsed.timeRemaining != null && limit != null) {
                   setTimeRemaining(Math.max(0, parsed.timeRemaining));
                   timeSpentRef.current = totalSec - parsed.timeRemaining;
@@ -639,11 +599,8 @@ export default function TestPassingContent() {
   const attemptsLeft = maxAttempts != null ? maxAttempts - attemptsUsed : null;
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
-      <div className={`${viewMode === 'cards' ? 'max-w-2xl' : 'max-w-4xl'} mx-auto p-4 md:p-8 space-y-6`}>
-        {viewMode === 'scroll' && (
-          <div className="flex justify-end"><ThemeToggle /></div>
-        )}
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-24">
+      <div className={`${theoryOpen ? 'max-w-7xl' : 'max-w-2xl'} mx-auto p-4 md:p-8 space-y-6`}>
         {hasTimer && (
           <div className={`flex items-center justify-between px-5 py-3 rounded-2xl border shadow-sm ${
             timerWarning
@@ -656,13 +613,22 @@ export default function TestPassingContent() {
                 Осталось времени
               </span>
             </div>
-            <span className={`text-xl font-semibold tabular-nums tracking-tight ${timerWarning ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
-              {formatTime(timeRemaining)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xl font-semibold tabular-nums tracking-tight ${timerWarning ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                {formatTime(timeRemaining)}
+              </span>
+              {theoryOpen && <ThemeToggle />}
+            </div>
           </div>
         )}
 
-        {attemptsLeft != null && (
+        {!hasTimer && theoryOpen && (
+          <div className="flex justify-end">
+            <ThemeToggle />
+          </div>
+        )}
+
+        {!theoryOpen && attemptsLeft != null && (
           <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/60 rounded-2xl text-xs font-medium text-zinc-500 dark:text-zinc-400 shadow-sm">
             <RotateCcw size={12} />
             Попытка {attemptsUsed + 1} из {maxAttempts}{' '}
@@ -672,7 +638,7 @@ export default function TestPassingContent() {
           </div>
         )}
 
-        {examStart && examEnd && !blockError && (
+        {!theoryOpen && examStart && examEnd && !blockError && (
           <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
             <CalendarIcon size={12} />
             Экзамен:{' '}
@@ -682,7 +648,7 @@ export default function TestPassingContent() {
           </div>
         )}
 
-        {!hasTimer && allowInterruptions && (
+        {!theoryOpen && !hasTimer && allowInterruptions && (
           <div className="flex items-center justify-between gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
             <div className="flex items-center gap-2">
               <AlertTriangle size={12} />
@@ -698,152 +664,87 @@ export default function TestPassingContent() {
             </button>
           </div>
         )}
-        {hasTimer && !allowInterruptions && (
+        {!theoryOpen && hasTimer && !allowInterruptions && (
           <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
             <AlertTriangle size={12} />
             Тест нужно пройти за один присест. При выходе попытка будет потеряна.
           </div>
         )}
 
-        {/* ── Progress bar (only in cards mode) ── */}
-        {viewMode === 'cards' && (
-          <TestProgressBar
-            test={test}
-            currentIdx={currentIdx}
-            userAnswers={userAnswers}
-            onNavigate={(idx) => setCurrentIdx(idx)}
-          />
-        )}
-
-        {/* ── Questions rendering ── */}
-        {viewMode === 'cards' ? (
-          <TestQuestionCard
-            currentTask={currentTask}
-            currentIdx={currentIdx}
-            userAnswers={userAnswers}
-            onToggleAnswer={(index) => handleToggleAnswer(currentTask?.id, index)}
-            onTextChange={(val) => handleTextChange(currentTask?.id, val)}
-            hintUsed={hintUsed}
-            hintLoading={hintLoading}
-            hintData={hintData}
-            onFetchHint={fetchHint}
-            showDrawing={showDrawing}
-            onToggleDrawing={toggleDrawing}
-            canvasRef={canvasRef}
-            drawings={drawings}
-            onDrawingSave={handleDrawingSave}
-            onDrawingDataChange={handleDrawingDataChange}
-            DrawingPadComponent={DrawingPad}
-          />
+        {theoryOpen ? (
+          <TestTheoryPanel />
         ) : (
-          <div className="space-y-6">
-            {test.tasks.map((task, idx) => (
-              <div 
-                key={task.id} 
-                ref={el => questionRefs.current[task.id] = el}
-                className="relative scroll-mt-24"
-              >
-                <TestQuestionCard
-                  currentTask={task}
-                  currentIdx={idx}
-                  userAnswers={userAnswers}
-                  onToggleAnswer={(index) => handleToggleAnswer(task.id, index)}
-                  onTextChange={(val) => handleTextChange(task.id, val)}
-                  hintUsed={hintUsed}
-                  hintLoading={hintLoading}
-                  hintData={hintData}
-                  onFetchHint={fetchHint}
-                  showDrawing={showDrawing}
-                  onToggleDrawing={toggleDrawing}
-                  canvasRef={idx === currentIdx ? canvasRef : null}
-                  drawings={drawings}
-                  onDrawingSave={handleDrawingSave}
-                  onDrawingDataChange={handleDrawingDataChange}
-                  DrawingPadComponent={DrawingPad}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+          <>
+            <TestProgressBar
+              test={test}
+              currentIdx={currentIdx}
+              userAnswers={userAnswers}
+              onNavigate={(idx) => setCurrentIdx(idx)}
+            />
 
-        {/* ── Footer navigation ── */}
-        {viewMode === 'cards' ? (
-          <footer className="flex justify-between items-center pt-8">
-            <button
-              disabled={currentIdx === 0}
-              onClick={() => setCurrentIdx(v => v - 1)}
-              className="flex items-center gap-2 text-zinc-400 text-sm font-medium disabled:opacity-0 p-3 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-            >
-              <ChevronLeft size={18} /> Назад
-            </button>
+            <TestQuestionCard
+              currentTask={currentTask}
+              currentIdx={currentIdx}
+              userAnswers={userAnswers}
+              onToggleAnswer={(index) => handleToggleAnswer(currentTask?.id, index)}
+              onTextChange={(val) => handleTextChange(currentTask?.id, val)}
+              hintUsed={hintUsed}
+              hintLoading={hintLoading}
+              hintData={hintData}
+              onFetchHint={fetchHint}
+              showDrawing={showDrawing}
+              onToggleDrawing={toggleDrawing}
+              canvasRef={canvasRef}
+              drawings={drawings}
+              onDrawingSave={handleDrawingSave}
+              onDrawingDataChange={handleDrawingDataChange}
+              DrawingPadComponent={DrawingPad}
+            />
 
-            {currentIdx === test.tasks.length - 1 ? (
+            <footer className="flex justify-between items-center pt-8">
               <button
-                onClick={handleSubmitClick}
-                disabled={isSubmitting}
-                className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all disabled:opacity-40"
+                disabled={currentIdx === 0}
+                onClick={() => setCurrentIdx(v => v - 1)}
+                className="flex items-center gap-2 text-zinc-400 text-sm font-medium disabled:opacity-0 p-3 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
               >
-                {isSubmitting ? 'Отправка...' : 'Завершить работу'}
+                <ChevronLeft size={18} /> Назад
               </button>
-            ) : (
-              <button
-                onClick={() => setCurrentIdx(v => v + 1)}
-                className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all"
-              >
-                Следующий шаг <ChevronRight size={18} />
-              </button>
-            )}
-          </footer>
-        ) : (
-          <footer className="flex justify-center pt-8">
-            <button
-              onClick={handleSubmitClick}
-              disabled={isSubmitting}
-              className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all disabled:opacity-40"
-            >
-              {isSubmitting ? 'Отправка...' : 'Завершить работу'}
-            </button>
-          </footer>
+
+              {currentIdx === test.tasks.length - 1 ? (
+                <button
+                  onClick={handleSubmitClick}
+                  disabled={isSubmitting}
+                  className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all disabled:opacity-40"
+                >
+                  {isSubmitting ? 'Отправка...' : 'Завершить работу'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setCurrentIdx(v => v + 1)}
+                  className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all"
+                >
+                  Следующий шаг <ChevronRight size={18} />
+                </button>
+              )}
+            </footer>
+          </>
         )}
       </div>
 
-      {/* ── Floating buttons (bottom left) ── */}
-<div className="fixed left-4 bottom-4 flex flex-row gap-2 z-50">
-  <div className="flex flex-row gap-1 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg p-1">
-    <button
-      onClick={() => handleModeSwitch('cards')}
-      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-        viewMode === 'cards'
-          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
-          : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-      }`}
-      title="По одному"
-    >
-      <LayoutGrid size={18} />
-    </button>
-    <button
-      onClick={() => handleModeSwitch('scroll')}
-      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-        viewMode === 'scroll'
-          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
-          : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-      }`}
-      title="Все сразу"
-    >
-      <ScrollText size={18} />
-    </button>
-  </div>
-
-  {viewMode === 'scroll' && (
-    <button
-      onClick={scrollToTop}
-      className="w-10 h-10 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all active:scale-95"
-      title="Наверх"
-    >
-      <ArrowUp size={18} />
-    </button>
-  )}
-</div>
+      <button
+        type="button"
+        onClick={theoryOpen ? closeTheory : openTheory}
+        className={`fixed left-6 bottom-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium shadow-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white dark:focus-visible:ring-offset-[#09090b] ${
+          theoryOpen
+            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200'
+            : 'bg-white dark:bg-[#09090b] text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+        }`}
+        title={theoryOpen ? 'Вернуться к тесту' : 'Открыть теорию'}
+        aria-label={theoryOpen ? 'К тесту' : 'Теория'}
+      >
+        {theoryOpen ? <ClipboardList size={14} /> : <BookOpen size={14} />}
+        {theoryOpen ? 'К тесту' : 'Теория'}
+      </button>
     </div>
   );
 }
