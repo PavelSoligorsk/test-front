@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { QuestionMap, ThemeToggle } from '../../shared/ui';
+import { getHomeRoute, getUserRole } from '../../features/auth';
 
 export default function TestProgressBar({ test, currentIdx, userAnswers, onNavigate }) {
   const navigate = useNavigate();
@@ -28,8 +29,10 @@ export default function TestProgressBar({ test, currentIdx, userAnswers, onNavig
         <ThemeToggle />
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(getHomeRoute(getUserRole()))}
           className="p-2 rounded-xl text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+          aria-label="Выйти к дашборду"
+          title="Выйти"
         >
           <X size={20} />
         </button>

@@ -1,9 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Search, ChevronRight, Edit3, Trash2, PlusCircle, CheckCircle2, Send, Database, GraduationCap, Shield, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree } from 'lucide-react';
+import { Search, ChevronRight, Edit3, Trash2, Send, Shield, GraduationCap, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree, Inbox } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
+import { useAdminWorkspace } from './AdminWorkspace';
+import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
 
 const hasExamKeyword = (text) => {
@@ -12,9 +15,9 @@ const hasExamKeyword = (text) => {
 };
 
 const getDifficultyColor = (lvl) => {
-  if (lvl >= 4) return 'text-red-500 bg-red-50 border-red-100';
-  if (lvl >= 3) return 'text-amber-500 bg-amber-50 border-amber-100';
-  return 'text-emerald-500 bg-emerald-50 border-emerald-100';
+  if (lvl >= 4) return 'text-red-600 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/40';
+  if (lvl >= 3) return 'text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800';
+  return 'text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800';
 };
 
 const copyJSONToClipboard = async (tasks, setFeedback) => {
@@ -34,10 +37,9 @@ const copyJSONToClipboard = async (tasks, setFeedback) => {
   })), null, 2);
   try {
     await navigator.clipboard.writeText(data);
-    if (setFeedback) setFeedback('✅ JSON скопирован в буфер обмена');
+    if (setFeedback) setFeedback('JSON скопирован в буфер обмена');
     setTimeout(() => setFeedback?.(null), 2000);
   } catch {
-    // Fallback for non-HTTPS
     const ta = document.createElement('textarea');
     ta.value = data;
     ta.style.position = 'fixed';
@@ -46,12 +48,13 @@ const copyJSONToClipboard = async (tasks, setFeedback) => {
     ta.select();
     document.execCommand('copy');
     document.body.removeChild(ta);
-    if (setFeedback) setFeedback('✅ JSON скопирован в буфер');
+    if (setFeedback) setFeedback('JSON скопирован в буфер');
     setTimeout(() => setFeedback?.(null), 2000);
   }
 };
 
 export default function BankTab({ tasksMeta, availableClasses, bankClass, setBankClass, bankTopic, setBankTopic, onEditTask, onTasksUpdate }) {
+  const { showError, showSuccess } = useAdminWorkspace();
   const [feedback, setFeedback] = useState(null);
   const [openSolutions, setOpenSolutions] = useState({});
   const [openHints, setOpenHints] = useState({});
@@ -60,19 +63,14 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   const [topicSearch, setTopicSearch] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
 
-  // Navigation mode: 'class' (class → topic_number) or 'topic' (topic → section)
   const [navMode, setNavMode] = useState('class');
-  
-  // Topic-section nav state
   const [selectedNavTopic, setSelectedNavTopic] = useState(null);
   const [selectedNavSection, setSelectedNavSection] = useState(null);
-  const [topicSectionMeta, setTopicSectionMeta] = useState(null); // { topic: { section: count } }
+  const [topicSectionMeta, setTopicSectionMeta] = useState(null);
 
-  // Lazy loading state
   const [loadedTasks, setLoadedTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
-  // Load topic-section meta
   useEffect(() => {
     if (navMode !== 'topic') return;
     let cancelled = false;
@@ -88,7 +86,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     return () => { cancelled = true; };
   }, [navMode]);
 
-  // Load tasks by class+topic
   useEffect(() => {
     if (navMode !== 'class' || !bankClass || !bankTopic) {
       if (navMode === 'class') setLoadedTasks([]);
@@ -111,7 +108,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     return () => { cancelled = true; };
   }, [navMode, bankClass, bankTopic]);
 
-  // Load tasks by topic+section
   useEffect(() => {
     if (navMode !== 'topic' || !selectedNavTopic || !selectedNavSection) {
       if (navMode === 'topic') setLoadedTasks([]);
@@ -134,7 +130,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     return () => { cancelled = true; };
   }, [navMode, selectedNavTopic, selectedNavSection]);
 
-  // Refresh tasks
   const refreshCurrentTasks = useCallback(async () => {
     let data = [];
     try {
@@ -148,7 +143,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     if (onTasksUpdate) onTasksUpdate();
   }, [navMode, bankClass, bankTopic, selectedNavTopic, selectedNavSection, onTasksUpdate, loadedTasks.length]);
 
-  // Classify
   const [classifyRunning, setClassifyRunning] = useState(false);
   const [classifyResult, setClassifyResult] = useState(null);
   const [classifyModal, setClassifyModal] = useState(false);
@@ -176,16 +170,16 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     try {
       await deleteTask(taskId);
       await refreshCurrentTasks();
-    } catch (error) { alert('Ошибка при удалении'); }
+      showSuccess('Задание удалено');
+    } catch (error) { showError(error, 'Ошибка при удалении'); }
   };
 
   const handleSendTg = async (taskId) => {
     try {
       await sendTaskToTelegram(taskId);
-      alert('Задача успешно улетела в Telegram! 🚀');
+      showSuccess('Задача отправлена в Telegram');
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || 'Ошибка при отправке в Telegram';
-      alert(`Косяк: ${errorMsg}`);
+      showError(err, 'Ошибка при отправке в Telegram');
     }
   };
 
@@ -193,21 +187,21 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     try {
       await updateTask(taskId, { ...task, topic: newTopic, section: '' });
       await refreshCurrentTasks();
-    } catch (err) { alert('Ошибка при обновлении темы'); }
+    } catch (err) { showError(err, 'Ошибка при обновлении темы'); }
   };
 
   const handleSectionChange = async (taskId, task, newSection) => {
     try {
       await updateTask(taskId, { ...task, section: newSection });
       await refreshCurrentTasks();
-    } catch (err) { alert('Ошибка при обновлении раздела'); }
+    } catch (err) { showError(err, 'Ошибка при обновлении раздела'); }
   };
 
   const handleDifficultyChange = async (taskId, task, newDiff) => {
     try {
       await updateTask(taskId, { ...task, difficulty: parseInt(newDiff) });
       await refreshCurrentTasks();
-    } catch (err) { alert('Ошибка при обновлении сложности'); }
+    } catch (err) { showError(err, 'Ошибка при обновлении сложности'); }
   };
 
   const handleExportJSON = () => {
@@ -217,28 +211,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   const [classifyAll, setClassifyAll] = useState(false);
   const [reestimateDifficulty, setReestimateDifficulty] = useState(false);
   const [skipClassification, setSkipClassification] = useState(false);
-  const handleClassify = async () => {
-    setClassifyRunning(true);
-    setClassifyResult(null);
-    try {
-      const ids = currentTasks.map(t => t.id);
-      const res = await classifyTasks({
-        task_ids: ids,
-        include_classified: classifyAll,
-        reestimate_difficulty: reestimateDifficulty,
-        skip_classification: reestimateDifficulty && skipClassification,
-      });
-      setClassifyResult(res);
-      setClassifyModal(true);
-      await refreshCurrentTasks();
-    } catch (err) {
-      alert('Ошибка при запуске классификатора: ' + (err.response?.data?.detail || err.message));
-    } finally {
-      setClassifyRunning(false);
-    }
-  };
 
-  // --- Class mode filters ---
   const filteredClasses = useMemo(() => {
     return availableClasses.filter(cls =>
       cls.toLowerCase().includes(classSearch.toLowerCase())
@@ -256,7 +229,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     );
   }, [topicsForClass, topicSearch]);
 
-  // --- Topic-section mode filters ---
   const filteredNavTopics = useMemo(() => {
     if (!topicSectionMeta) return [];
     return Object.keys(topicSectionMeta)
@@ -269,7 +241,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     return Object.keys(topicSectionMeta[selectedNavTopic]).sort();
   }, [selectedNavTopic, topicSectionMeta]);
 
-  // --- Current task list ---
   const currentTasks = useMemo(() => {
     let list = loadedTasks;
     if (examFilter) list = list.filter(t => hasExamKeyword(t.content));
@@ -287,130 +258,137 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     });
   }, [loadedTasks, examFilter, taskSearch]);
 
+  const handleClassify = async () => {
+    setClassifyRunning(true);
+    setClassifyResult(null);
+    try {
+      const ids = currentTasks.map(t => t.id);
+      const res = await classifyTasks({
+        task_ids: ids,
+        include_classified: classifyAll,
+        reestimate_difficulty: reestimateDifficulty,
+        skip_classification: reestimateDifficulty && skipClassification,
+      });
+      setClassifyResult(res);
+      setClassifyModal(true);
+      await refreshCurrentTasks();
+    } catch (err) {
+      showError(err, 'Ошибка при запуске классификатора');
+    } finally {
+      setClassifyRunning(false);
+    }
+  };
+
   const tasksCountByTopic = (cls, topic) => {
     return tasksMeta?.[cls]?.[topic] || 0;
   };
 
-  // Are we at task list level?
-  const isShowingTasks = (navMode === 'class' && bankClass && bankTopic) || 
+  const isShowingTasks = (navMode === 'class' && bankClass && bankTopic) ||
                           (navMode === 'topic' && selectedNavTopic && selectedNavSection);
+
+  const navTileClass = 'w-full bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors p-5 text-left';
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-200">
+      <Sheet className="p-5 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Shield size={20} className="text-white" />
-            </div>
+            <IconWell><Shield size={18} strokeWidth={2} /></IconWell>
             <div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-800 uppercase italic tracking-tighter">Банк заданий</h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Банк заданий</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
                 {navMode === 'class'
-                  ? (bankClass ? `${bankClass} раздел${bankTopic ? ` → ${bankTopic}` : ' → выберите подраздел'}` : `${availableClasses.length} разделов доступно`)
+                  ? (bankClass ? `${bankClass}${bankTopic ? ` → ${bankTopic}` : ' → выберите подраздел'}` : `${availableClasses.length} разделов доступно`)
                   : (selectedNavTopic ? `${selectedNavTopic}${selectedNavSection ? ` → ${selectedNavSection}` : ' → выберите раздел'}` : `${filteredNavTopics.length} тем доступно`)
                 }
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Nav mode switch */}
-            <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-xl">
+            <div className="flex gap-0.5 bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-xl">
               <button
+                type="button"
                 onClick={() => { setNavMode('class'); setBankClass(null); setBankTopic(null); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
-                  navMode === 'class' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  navMode === 'class' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
               >
                 <GraduationCap size={12} /> Классы
               </button>
               <button
+                type="button"
                 onClick={() => { setNavMode('topic'); setSelectedNavTopic(null); setSelectedNavSection(null); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
-                  navMode === 'topic' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  navMode === 'topic' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
               >
                 <FolderTree size={12} /> Топики
               </button>
             </div>
             <button
+              type="button"
               onClick={() => setExamFilter(!examFilter)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${
-                examFilter
-                  ? "bg-amber-500 text-white shadow-lg"
-                  : "bg-white border border-slate-200 text-slate-500 hover:border-amber-300"
-              }`}
+              className={`${examFilter ? primaryBtnClass : secondaryBtnClass} !py-1.5 text-xs`}
             >
-              {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
+              {examFilter ? '✓ Экзамен' : 'ЦТ/ЦЭ/РТ'}
             </button>
-            {/* JSON Export */}
             {loadedTasks.length > 0 && (
-              <button
-                onClick={handleExportJSON}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-black uppercase transition-all"
-                title="Копировать JSON в буфер обмена"
-              >
+              <button type="button" onClick={handleExportJSON} className={`${secondaryBtnClass} !py-1.5 text-xs`} title="Копировать JSON в буфер обмена">
                 <Copy size={12} /> JSON
               </button>
             )}
-            {/* Back button */}
             {(bankTopic || selectedNavSection) ? (
-              <button onClick={() => {
+              <button type="button" onClick={() => {
                 if (navMode === 'class') { setBankTopic(null); setTaskSearch(''); setExamFilter(false); }
                 else { setSelectedNavSection(null); setTaskSearch(''); setExamFilter(false); }
-              }}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-600 transition-all">
+              }} className={`${secondaryBtnClass} !py-1.5 text-xs`}>
                 <ChevronRight size={14} className="rotate-180" /> Назад
               </button>
             ) : (bankClass || selectedNavTopic) && (
-              <button onClick={() => {
+              <button type="button" onClick={() => {
                 if (navMode === 'class') { setBankClass(null); setClassSearch(''); }
                 else { setSelectedNavTopic(null); setTopicSearch(''); }
-              }}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-600 transition-all">
+              }} className={`${secondaryBtnClass} !py-1.5 text-xs`}>
                 <ChevronRight size={14} className="rotate-180" /> Ко всем
               </button>
             )}
           </div>
         </div>
-      </div>
+      </Sheet>
 
       {!tasksMeta && navMode === 'class' && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 size={32} className="animate-spin text-slate-400" />
+          <Loader2 size={32} className="animate-spin text-zinc-400" />
         </div>
       )}
 
-      {/* ==================== CLASS MODE ==================== */}
       {navMode === 'class' && (
         <>
-          {/* Level 1: Class selection */}
           {!bankClass && (
             <div className="space-y-4">
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input type="text" placeholder="Поиск раздела..." value={classSearch}
                   onChange={e => setClassSearch(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+                  className={`${fieldClass} pl-10`} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredClasses.map(cls => {
                   const topicsCount = Object.keys(tasksMeta[cls] || {}).length;
                   const totalTasks = Object.values(tasksMeta[cls] || {}).reduce((sum, count) => sum + count, 0);
                   return (
-                    <button key={cls} onClick={() => { setBankClass(cls); setBankTopic(null); }}
-                      className="w-full bg-white rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all p-5 text-left">
+                    <button key={cls} type="button" onClick={() => { setBankClass(cls); setBankTopic(null); }}
+                      className={navTileClass}>
                       <div className="flex items-center gap-4">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-black text-slate-800 text-sm uppercase truncate">{cls} раздел</h3>
+                          <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{cls} раздел</h3>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-bold text-slate-400">{topicsCount} подразделов</span>
-                            <span className="text-[10px] text-slate-300">•</span>
-                            <span className="text-[10px] font-bold text-slate-400">{totalTasks} заданий</span>
+                            <span className="text-xs text-zinc-500">{topicsCount} подразделов</span>
+                            <span className="text-xs text-zinc-300">•</span>
+                            <span className="text-xs text-zinc-500 tabular-nums">{totalTasks} заданий</span>
                           </div>
                         </div>
-                        <ChevronRight size={18} className="text-slate-300 shrink-0" />
+                        <ChevronRight size={18} className="text-zinc-300 shrink-0" />
                       </div>
                     </button>
                   );
@@ -419,28 +397,27 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
             </div>
           )}
 
-          {/* Level 2: Topic selection */}
           {bankClass && !bankTopic && (
             <div className="space-y-4">
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input type="text" placeholder="Поиск подраздела..." value={topicSearch}
                   onChange={e => setTopicSearch(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+                  className={`${fieldClass} pl-10`} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {filteredTopics.map((topic, index) => {
                   const count = tasksCountByTopic(bankClass, topic);
                   return (
-                    <button key={topic} onClick={() => setBankTopic(topic)}
-                      className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-blue-300 hover:shadow-lg transition-all text-left">
+                    <button key={topic} type="button" onClick={() => setBankTopic(topic)}
+                      className={`${navTileClass} p-4`}>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm shrink-0">{index + 1}</div>
+                        <div className="w-8 h-8 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-center text-zinc-700 dark:text-zinc-300 font-semibold text-sm shrink-0 tabular-nums">{index + 1}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-700 text-sm leading-tight truncate">{topic}</p>
-                          <p className="text-[9px] font-bold text-slate-400 mt-0.5">{count} заданий</p>
+                          <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200 leading-tight truncate">{topic}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">{count} заданий</p>
                         </div>
-                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
+                        <ChevronRight size={16} className="text-zinc-300 shrink-0" />
                       </div>
                     </button>
                   );
@@ -451,21 +428,19 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         </>
       )}
 
-      {/* ==================== TOPIC-SECTION MODE ==================== */}
       {navMode === 'topic' && (
         <>
-          {/* Level 1: Topic selection */}
           {!selectedNavTopic && (
             <div className="space-y-4">
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input type="text" placeholder="Поиск темы..." value={topicSearch}
                   onChange={e => setTopicSearch(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+                  className={`${fieldClass} pl-10`} />
               </div>
               {!topicSectionMeta && (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 size={24} className="animate-spin text-slate-400" />
+                  <Loader2 size={24} className="animate-spin text-zinc-400" />
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -474,47 +449,49 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                   const sectionCount = Object.keys(sections).length;
                   const totalTasks = Object.values(sections).reduce((s, c) => s + c, 0);
                   return (
-                    <button key={topic} onClick={() => { setSelectedNavTopic(topic); setSelectedNavSection(null); }}
-                      className="w-full bg-white rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all p-5 text-left">
+                    <button key={topic} type="button" onClick={() => { setSelectedNavTopic(topic); setSelectedNavSection(null); }}
+                      className={navTileClass}>
                       <div className="flex items-center gap-4">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-black text-slate-800 text-sm truncate">{topic}</h3>
+                          <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{topic}</h3>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-bold text-slate-400">{sectionCount} разделов</span>
-                            <span className="text-[10px] text-slate-300">•</span>
-                            <span className="text-[10px] font-bold text-slate-400">{totalTasks} заданий</span>
+                            <span className="text-xs text-zinc-500">{sectionCount} разделов</span>
+                            <span className="text-xs text-zinc-300">•</span>
+                            <span className="text-xs text-zinc-500 tabular-nums">{totalTasks} заданий</span>
                           </div>
                         </div>
-                        <ChevronRight size={18} className="text-slate-300 shrink-0" />
+                        <ChevronRight size={18} className="text-zinc-300 shrink-0" />
                       </div>
                     </button>
                   );
                 })}
               </div>
               {!loadingTasks && filteredNavTopics.length === 0 && topicSectionMeta && (
-                <div className="text-center py-12">
-                  <p className="font-black text-slate-400 uppercase">Нет тем</p>
+                <div className="flex flex-col items-center gap-3 py-12 text-zinc-400">
+                  <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                    <Inbox size={20} />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-500">Нет тем</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Level 2: Section selection */}
           {selectedNavTopic && !selectedNavSection && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {sectionsForNavTopic.map((section, index) => {
                   const count = topicSectionMeta?.[selectedNavTopic]?.[section] || 0;
                   return (
-                    <button key={section} onClick={() => setSelectedNavSection(section)}
-                      className="group p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-300 hover:shadow-lg transition-all text-left">
+                    <button key={section} type="button" onClick={() => setSelectedNavSection(section)}
+                      className={`${navTileClass} p-4`}>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 font-black text-sm shrink-0">{index + 1}</div>
+                        <div className="w-8 h-8 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-center text-zinc-700 dark:text-zinc-300 font-semibold text-sm shrink-0 tabular-nums">{index + 1}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-700 text-sm leading-tight truncate">{section}</p>
-                          <p className="text-[9px] font-bold text-slate-400 mt-0.5">{count} заданий</p>
+                          <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200 leading-tight truncate">{section}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">{count} заданий</p>
                         </div>
-                        <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all shrink-0" />
+                        <ChevronRight size={16} className="text-zinc-300 shrink-0" />
                       </div>
                     </button>
                   );
@@ -525,83 +502,77 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         </>
       )}
 
-      {/* ==================== TASK LIST ==================== */}
       {isShowingTasks && (
         loadingTasks ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 size={32} className="animate-spin text-blue-500" />
+            <Loader2 size={32} className="animate-spin text-zinc-400" />
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex gap-3">
-              <div className="relative flex-1">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="flex gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input type="text" placeholder="Поиск по тексту задания..." value={taskSearch}
                   onChange={e => setTaskSearch(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400" />
+                  className={`${fieldClass} pl-10`} />
               </div>
               {loadedTasks.length > 0 && (
-                <button
-                  onClick={handleExportJSON}
-                  className="flex items-center gap-1.5 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-black uppercase transition-all"
-                >
+                <button type="button" onClick={handleExportJSON} className={secondaryBtnClass}>
                   <Copy size={14} /> JSON
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => setExamFilter(!examFilter)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                  examFilter
-                    ? "bg-amber-500 text-white shadow-lg"
-                    : "bg-white border border-slate-200 text-slate-500 hover:border-amber-300"
-                }`}
+                className={examFilter ? primaryBtnClass : secondaryBtnClass}
               >
-                {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
+                {examFilter ? '✓ Экзамен' : 'ЦТ/ЦЭ/РТ'}
               </button>
             </div>
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase">
+              <span className="text-sm text-zinc-500 dark:text-zinc-400 tabular-nums">
                 {taskSearch ? `Найдено: ${currentTasks.length} из ${loadedTasks.length}` : `${currentTasks.length} заданий`}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {classifyResult && !classifyModal && (
                   <button
+                    type="button"
                     onClick={() => setClassifyModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] font-black text-amber-700 hover:bg-amber-100 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
                   >
                     <AlertTriangle size={12} />
                     {classifyResult.failed || 0} ошибок
                   </button>
                 )}
-                <div className="flex items-center gap-1">
-                  <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all select-none"
-                    style={{ color: classifyAll ? '#7c3aed' : '#94a3b8', background: classifyAll ? '#f5f3ff' : '#f8fafc' }}>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <label className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors select-none ${
+                    classifyAll ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-500'
+                  }`}>
                     <input type="checkbox" checked={classifyAll} onChange={e => setClassifyAll(e.target.checked)}
-                      className="w-3 h-3 accent-purple-600 cursor-pointer" />
+                      className="w-3 h-3 accent-zinc-900 cursor-pointer" />
                     Все
                   </label>
-                  <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all select-none"
-                    style={{ color: reestimateDifficulty ? '#0ea5e9' : '#94a3b8', background: reestimateDifficulty ? '#f0f9ff' : '#f8fafc' }}>
+                  <label className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors select-none ${
+                    reestimateDifficulty ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-500'
+                  }`}>
                     <input type="checkbox" checked={reestimateDifficulty} onChange={e => setReestimateDifficulty(e.target.checked)}
-                      className="w-3 h-3 accent-sky-600 cursor-pointer" />
+                      className="w-3 h-3 accent-zinc-900 cursor-pointer" />
                     Сложность
                   </label>
                   {reestimateDifficulty && (
-                    <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all select-none"
-                      style={{ color: skipClassification ? '#f59e0b' : '#cbd5e1', background: skipClassification ? '#fffbeb' : '#f8fafc' }}>
+                    <label className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors select-none ${
+                      skipClassification ? 'bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-950' : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-400'
+                    }`}>
                       <input type="checkbox" checked={skipClassification} onChange={e => setSkipClassification(e.target.checked)}
-                        className="w-3 h-3 accent-amber-500 cursor-pointer" />
+                        className="w-3 h-3 accent-zinc-900 cursor-pointer" />
                       Только сложность
                     </label>
                   )}
                   <button
+                    type="button"
                     onClick={handleClassify}
                     disabled={classifyRunning || currentTasks.length === 0}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                      classifyRunning
-                        ? 'bg-slate-200 text-slate-400 cursor-wait'
-                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200'
-                    }`}
+                    className={primaryBtnClass}
                   >
                     {classifyRunning ? (
                       <><Clock size={14} className="animate-spin" /> Идёт...</>
@@ -613,107 +584,107 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               </div>
             </div>
             <div className="space-y-4">
-              {currentTasks.map((t, index) => {
-                const isSolOpen = openSolutions[t.id];
-                const isHintOpen = openHints[t.id];
-                return (
-                  <div key={t.id} data-task-id={t.id}
-                    className={`bg-white rounded-[2rem] border shadow-sm hover:border-slate-300 transition-all ${
-                      failedTaskIds.has(t.id)
-                        ? 'border-red-300 ring-2 ring-red-100 bg-red-50/30'
-                        : (!t.topic || !t.section)
-                          ? 'border-amber-200 bg-amber-50/20'
-                          : 'border-slate-200'
-                    }`}>
-                    <div className="p-6 space-y-6">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900">
-                          Задание №{index + 1}
-                        </h4>
-                        <div className="flex items-center gap-1.5 ml-auto">
-                          {failedTaskIds.has(t.id) && (
-                            <span className="flex items-center gap-1 text-[9px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-lg" title="Ошибка классификации">
-                              <AlertTriangle size={10} /> Ошибка
-                            </span>
-                          )}
-                          {(!t.topic || !t.section) && !failedTaskIds.has(t.id) && (
-                            <span className="flex items-center gap-1 text-[9px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-lg" title="Не классифицировано">
-                              <Zap size={10} /> Без темы
-                            </span>
-                          )}
-                          <span className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">ID: {t.id}</span>
-                          <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || "?"}</div>
-                          <span className="text-[9px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">{t.is_open_answer ? "Открытый" : "Тест"}</span>
-                        </div>
+              {currentTasks.map((t, index) => (
+                <div
+                  key={t.id}
+                  data-task-id={t.id}
+                  className={`bg-white dark:bg-[#09090b] rounded-3xl border shadow-sm overflow-hidden transition-colors ${
+                    failedTaskIds.has(t.id)
+                      ? 'border-red-300 dark:border-red-900/50 ring-1 ring-red-100 dark:ring-red-900/30'
+                      : (!t.topic || !t.section)
+                        ? 'border-zinc-300 dark:border-zinc-700'
+                        : 'border-zinc-200 dark:border-zinc-800/60'
+                  }`}
+                >
+                  <div className="p-6 space-y-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                        Задание №{index + 1}
+                      </h4>
+                      <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+                        {failedTaskIds.has(t.id) && (
+                          <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 rounded-lg" title="Ошибка классификации">
+                            <AlertTriangle size={10} /> Ошибка
+                          </span>
+                        )}
+                        {(!t.topic || !t.section) && !failedTaskIds.has(t.id) && (
+                          <span className="flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-lg" title="Не классифицировано">
+                            <Zap size={10} /> Без темы
+                          </span>
+                        )}
+                        <span className="text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-lg tabular-nums">ID: {t.id}</span>
+                        <div className={`px-2 py-0.5 rounded-lg border text-xs font-semibold tabular-nums ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || '?'}</div>
+                        <span className="text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-lg">{t.is_open_answer ? 'Открытый' : 'Тест'}</span>
                       </div>
+                    </div>
 
-                      <MarkdownPreview text={t.content} title="Условие задания" type="default" />
-                      {!t.is_open_answer && t.options && (
-                        <MarkdownPreview type="default"
-                          text={(Array.isArray(t.options) ? t.options : t.options.split(';')).map(opt => opt.trim()).filter(opt => opt !== "").map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')} />
-                      )}
+                    <MarkdownPreview text={t.content} title="Условие задания" type="default" />
+                    {!t.is_open_answer && t.options && (
+                      <MarkdownPreview type="default"
+                        text={(Array.isArray(t.options) ? t.options : t.options.split(';')).map(opt => opt.trim()).filter(opt => opt !== '').map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')} />
+                    )}
 
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-[10px] font-black text-slate-500">Ответ:</span>
-                        <span className="text-sm font-black text-emerald-600">{t.answer}</span>
-                        {t.hint && <button onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className="px-4 py-2 rounded-2xl bg-slate-100 text-slate-700 text-[10px] font-black hover:bg-slate-200 transition-all">Подсказка</button>}
-                        {t.solution && <button onClick={() => setOpenSolutions(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className="px-4 py-2 rounded-2xl bg-slate-100 text-slate-700 text-[10px] font-black hover:bg-slate-200 transition-all">Решение</button>}
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-sm font-medium text-zinc-500">Ответ:</span>
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">{t.answer}</span>
+                      {t.hint && <button type="button" onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className={secondaryBtnClass + ' !py-1.5 text-xs'}>Подсказка</button>}
+                      {t.solution && <button type="button" onClick={() => setOpenSolutions(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className={secondaryBtnClass + ' !py-1.5 text-xs'}>Решение</button>}
+                    </div>
+
+                    {openHints[t.id] && <MarkdownPreview text={t.hint} title="Подсказка" type="hint" />}
+                    {openSolutions[t.id] && <MarkdownPreview text={t.solution} title="Полное решение" type="solution" />}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                      <select value={t.topic || ''} onChange={e => handleTopicChange(t.id, t, e.target.value)}
+                        className="text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 cursor-pointer outline-none">
+                        <option value="">Без темы</option>
+                        {Object.entries(MAIN_TOPICS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
+                      </select>
+                      <select value={t.section || ''} onChange={e => handleSectionChange(t.id, t, e.target.value)} disabled={!t.topic}
+                        className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 truncate max-w-[180px] cursor-pointer outline-none disabled:opacity-50">
+                        <option value="">Без раздела</option>
+                        {t.topic && SECTIONS_BY_TOPIC[t.topic]?.map(section => (<option key={section} value={section}>{section}</option>))}
+                      </select>
+                      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl border ${getDifficultyColor(t.difficulty)}`}>
+                        <span className="text-xs font-medium">LVL</span>
+                        <select value={t.difficulty || 1} onChange={e => handleDifficultyChange(t.id, t, e.target.value)}
+                          className="text-sm font-semibold leading-none bg-transparent border-none outline-none cursor-pointer tabular-nums">
+                          {[1, 2, 3, 4, 5].map(n => (<option key={n} value={n}>{n}</option>))}
+                        </select>
                       </div>
-
-                      {openHints[t.id] && <div className="p-5 rounded-[2rem] bg-amber-50/50 border border-amber-200/40"><MarkdownPreview text={t.hint} title="ПОДСКАЗКА" type="hint" /></div>}
-                      {openSolutions[t.id] && <div className="p-5 rounded-[2rem] bg-blue-50/50 border border-blue-200/40"><MarkdownPreview text={t.solution} title="ПОЛНОЕ РЕШЕНИЕ" type="solution" /></div>}
-
-                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-                        <select value={t.topic || ''} onChange={e => handleTopicChange(t.id, t, e.target.value)}
-                          className="text-[9px] font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors outline-none">
-                          <option value="">Без темы</option>
-                          {Object.entries(MAIN_TOPICS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
-                        </select>
-                        <select value={t.section || ''} onChange={e => handleSectionChange(t.id, t, e.target.value)} disabled={!t.topic}
-                          className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg truncate max-w-[180px] cursor-pointer hover:bg-slate-200 transition-colors outline-none disabled:opacity-50 disabled:cursor-not-allowed">
-                          <option value="">Без раздела</option>
-                          {t.topic && SECTIONS_BY_TOPIC[t.topic]?.map(section => (<option key={section} value={section}>{section}</option>))}
-                        </select>
-                        <div className={`flex items-center gap-2 px-2 py-1 rounded-xl border ${getDifficultyColor(t.difficulty)}`}>
-                          <span className="text-[9px] font-black uppercase tracking-tight">LVL</span>
-                          <select value={t.difficulty || 1} onChange={e => handleDifficultyChange(t.id, t, e.target.value)}
-                            className="text-sm font-black italic leading-none bg-transparent border-none outline-none cursor-pointer">
-                            {[1, 2, 3, 4, 5].map(n => (<option key={n} value={n}>{n}</option>))}
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-1 ml-auto">
-                          <button onClick={() => handleSendTg(t.id)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white text-[10px] font-bold uppercase rounded-xl transition-all shadow-sm">
-                            <Send size={12} /> ТГ
-                          </button>
-                          <button onClick={() => onEditTask(t)}
-                            className="p-2 bg-white text-slate-400 hover:text-blue-600 rounded-xl border border-slate-200 active:scale-90 hover:shadow-md transition-all">
-                            <Edit3 size={14} />
-                          </button>
-                          <button onClick={() => handleDelete(t.id)}
-                            className="p-2 bg-white text-slate-400 hover:text-red-500 rounded-xl border border-slate-200 active:scale-90 hover:shadow-md transition-all">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button type="button" onClick={() => handleSendTg(t.id)} className={`${primaryBtnClass} !py-1.5 !px-3 text-xs`}>
+                          <Send size={12} /> ТГ
+                        </button>
+                        <button type="button" onClick={() => onEditTask(t)}
+                          className="p-2 bg-white dark:bg-zinc-950 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-colors">
+                          <Edit3 size={14} />
+                        </button>
+                        <button type="button" onClick={() => handleDelete(t.id)}
+                          className="p-2 bg-white dark:bg-zinc-950 text-zinc-400 hover:text-red-600 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
             {!currentTasks.length && (
-              <div className="text-center py-16 space-y-3">
-                <p className="font-black text-slate-400 uppercase">Нет заданий</p>
+              <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">
+                <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                  <Inbox size={20} />
+                </div>
+                <p className="text-sm font-medium text-zinc-500">Нет заданий</p>
               </div>
             )}
           </div>
         )
       )}
 
-      {/* Feedback toast */}
       {feedback && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-black uppercase animate-in slide-in-from-right-2 duration-300">
-          {feedback}
+        <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 shadow-sm px-5 py-3 rounded-3xl text-sm font-medium animate-in slide-in-from-right-2 duration-300">
+          <InlineNotice tone="success">{feedback}</InlineNotice>
         </div>
       )}
 
@@ -721,50 +692,47 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         <TaskMap tasks={loadedTasks} onScroll={(taskId) => { const el = document.querySelector(`[data-task-id="${taskId}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
       )}
 
-      {/* Classify Results Modal */}
       {classifyModal && classifyResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setClassifyModal(false)}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] bg-white dark:bg-[#09090b] rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <Sparkles size={20} className="text-white" />
-                </div>
+                <IconWell><Sparkles size={18} strokeWidth={2} /></IconWell>
                 <div>
-                  <h3 className="text-lg font-black text-slate-800 uppercase italic">Результаты классификации</h3>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Результаты классификации</h3>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 tabular-nums">
                     Обработано: {classifyResult.total_processed} заданий
                   </p>
                 </div>
               </div>
-              <button onClick={() => setClassifyModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-600">
+              <button type="button" onClick={() => setClassifyModal(false)}
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="px-6 py-4 grid grid-cols-4 gap-3 shrink-0">
+            <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
               {[
-                { label: 'Сложность', value: classifyResult.difficulty_assigned, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-                { label: 'Решено', value: classifyResult.solved_correctly, color: 'bg-blue-50 text-blue-700 border-blue-200' },
-                { label: 'Классиф.', value: classifyResult.classified, color: 'bg-purple-50 text-purple-700 border-purple-200' },
-                { label: 'Ошибок', value: classifyResult.failed, color: classifyResult.failed > 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-400 border-slate-200' },
+                { label: 'Сложность', value: classifyResult.difficulty_assigned },
+                { label: 'Решено', value: classifyResult.solved_correctly },
+                { label: 'Классиф.', value: classifyResult.classified },
+                { label: 'Ошибок', value: classifyResult.failed },
               ].map(stat => (
-                <div key={stat.label} className={`px-3 py-2 rounded-xl border text-center ${stat.color}`}>
-                  <div className="text-[9px] font-black uppercase opacity-60">{stat.label}</div>
-                  <div className="text-2xl font-black italic">{stat.value}</div>
+                <div key={stat.label} className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-center">
+                  <div className="text-xs font-medium text-zinc-500">{stat.label}</div>
+                  <div className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{stat.value}</div>
                 </div>
               ))}
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-2">
-              <div className="rounded-2xl bg-slate-900 p-5 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto">
+              <div className="rounded-xl bg-zinc-900 p-5 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto">
                 {classifyResult.log.map((line, i) => {
-                  let lineClass = 'text-slate-300';
+                  let lineClass = 'text-zinc-300';
                   if (line.includes('❌') || line.includes('не совпал') || line.includes('ошибок')) lineClass = 'text-red-400';
-                  else if (line.includes('✅') || line.includes('🎯') || line.includes('📊')) lineClass = 'text-emerald-400';
-                  else if (line.includes('🔍') || line.includes('📚') || line.includes('──')) lineClass = 'text-blue-400';
-                  else if (line.includes('⚠️')) lineClass = 'text-amber-400';
+                  else if (line.includes('✅') || line.includes('🎯') || line.includes('📊')) lineClass = 'text-zinc-100';
+                  else if (line.includes('🔍') || line.includes('📚') || line.includes('──')) lineClass = 'text-zinc-400';
+                  else if (line.includes('⚠️')) lineClass = 'text-zinc-200';
 
                   const idMatch = line.match(/#(\d+)/);
                   return (
@@ -773,16 +741,17 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                         <>
                           {line.substring(0, line.indexOf('#' + idMatch[1]))}
                           <button
+                            type="button"
                             onClick={() => {
                               setClassifyModal(false);
                               const el = document.querySelector(`[data-task-id="${idMatch[1]}"]`);
                               el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                               if (el) {
-                                el.style.outline = '3px solid #ef4444';
+                                el.style.outline = '2px solid #18181b';
                                 setTimeout(() => { el.style.outline = ''; }, 3000);
                               }
                             }}
-                            className="text-amber-300 underline hover:text-amber-100 font-bold"
+                            className="text-zinc-100 underline hover:text-white font-semibold"
                           >
                             #{idMatch[1]}
                           </button>
@@ -797,13 +766,11 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 flex items-center justify-between shrink-0">
-              <p className="text-[10px] font-bold text-slate-400">
+            <div className="p-6 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between shrink-0 gap-4">
+              <p className="text-sm text-zinc-500">
                 Проблемные задания подсвечены в банке
-                <span className="inline-block w-3 h-3 rounded-full bg-red-100 border border-red-300 ml-2 align-middle" />
               </p>
-              <button onClick={() => setClassifyModal(false)}
-                className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase hover:bg-slate-800 transition-all">
+              <button type="button" onClick={() => setClassifyModal(false)} className={primaryBtnClass}>
                 Понятно
               </button>
             </div>

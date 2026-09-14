@@ -1,26 +1,40 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search, Users } from 'lucide-react';
 import UserRow from './UserRow';
+import { Sheet, IconWell, fieldClass } from '../../shared/ui';
+
+const ROLE_LABELS = { all: 'Все', admin: 'Admin', teacher: 'Teacher', student: 'Student' };
 
 export default function UsersTab({ users, filteredUsers, userSearch, setUserSearch, userRoleFilter, setUserRoleFilter, navigate, onUsersUpdate }) {
   return (
-    <div className="bg-white rounded-[3rem] shadow-xl border border-slate-200 overflow-hidden">
-      <div className="p-10 bg-slate-50/50 border-b border-slate-100 space-y-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-black italic uppercase text-slate-950">Студенты & Состав</h2>
-          <span className="text-[10px] font-black text-white bg-blue-600 px-4 py-1.5 rounded-full uppercase">{filteredUsers.length} найдено</span>
+    <Sheet className="overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800/60 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <IconWell><Users size={18} strokeWidth={2} /></IconWell>
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Студенты и состав</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+                {filteredUsers.length} найдено
+              </p>
+            </div>
+          </div>
         </div>
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-            <input type="text" placeholder="Поиск..." className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-sm outline-none"
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+            <input type="text" placeholder="Поиск..." className={`${fieldClass} pl-10`}
               value={userSearch} onChange={e => setUserSearch(e.target.value)} />
           </div>
-          <div className="flex bg-slate-200/50 p-1 rounded-2xl">
+          <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl">
             {['all', 'admin', 'teacher', 'student'].map(role => (
-              <button key={role} onClick={() => setUserRoleFilter(role)}
-                className={`flex-1 px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${userRoleFilter === role ? 'bg-white text-blue-600 shadow-md scale-105' : 'text-slate-400'}`}>
-                {role === 'all' ? 'Все' : role}
+              <button key={role} type="button" onClick={() => setUserRoleFilter(role)}
+                className={`flex-1 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
+                  userRoleFilter === role
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                }`}>
+                {ROLE_LABELS[role]}
               </button>
             ))}
           </div>
@@ -29,20 +43,20 @@ export default function UsersTab({ users, filteredUsers, userSearch, setUserSear
       <div className="overflow-x-auto">
         <table className="w-full text-left min-w-[600px]">
           <thead>
-            <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-              <th className="p-4 sm:p-8">Пользователь</th>
-              <th className="p-4 sm:p-8">Роль</th>
-              <th className="p-4 sm:p-8">Преподаватель</th>
-              <th className="p-4 sm:p-8 text-right">Управление</th>
+            <tr className="border-b border-zinc-100 dark:border-zinc-800/60 text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="px-6 md:px-8 py-3">Пользователь</th>
+              <th className="px-6 md:px-8 py-3">Роль</th>
+              <th className="px-6 md:px-8 py-3">Преподаватель</th>
+              <th className="px-6 md:px-8 py-3 text-right">Управление</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
             {filteredUsers.map(u => (
               <UserRow key={u.id} user={u} users={users} navigate={navigate} onUsersUpdate={onUsersUpdate} />
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </Sheet>
   );
 }

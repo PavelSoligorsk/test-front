@@ -5,19 +5,22 @@ import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 
 export const MarkdownPreview = ({ text, title, type }) => (
-  <div className={`p-6 rounded-[2rem] border shadow-sm ${
-    type === 'hint' ? 'bg-amber-50/40 border-amber-100' : 
-    type === 'solution' ? 'bg-emerald-50/40 border-emerald-100' : 'bg-white border-slate-200'
+  <div className={`p-5 md:p-6 rounded-3xl border shadow-sm ${
+    type === 'hint'
+      ? 'bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800'
+      : type === 'solution'
+        ? 'bg-white dark:bg-[#09090b] border-zinc-200 dark:border-zinc-800/60'
+        : 'bg-white dark:bg-[#09090b] border-zinc-200 dark:border-zinc-800/60'
   }`}>
-    <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${
-      type === 'hint' ? 'text-amber-500' : type === 'solution' ? 'text-emerald-500' : 'text-slate-400'
-    }`}>{title}</h4>
-    <div className="prose prose-slate max-w-none text-sm text-slate-800 text-left
-      [&_img]:rounded-2xl [&_img]:shadow-xl [&_img]:my-6 [&_img]:block [&_img]:max-h-64
-      [&_.katex-display]:my-6 [&_.katex-display]:text-center [&_.katex-display]:w-full
+    {title ? (
+      <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">{title}</h4>
+    ) : null}
+    <div className="prose prose-zinc dark:prose-invert max-w-none text-sm text-zinc-800 dark:text-zinc-200 text-left
+      [&_img]:rounded-xl [&_img]:shadow-sm [&_img]:my-4 [&_img]:block [&_img]:max-h-64
+      [&_.katex-display]:my-4 [&_.katex-display]:text-center [&_.katex-display]:w-full
       [&_table]:w-full [&_table]:border-collapse [&_table]:my-4
-      [&_th]:border [&_th]:border-slate-300 [&_th]:px-4 [&_th]:py-2 [&_th]:bg-slate-100 [&_th]:font-semibold
-      [&_td]:border [&_td]:border-slate-300 [&_td]:px-4 [&_td]:py-2">
+      [&_th]:border [&_th]:border-zinc-200 dark:[&_th]:border-zinc-700 [&_th]:px-4 [&_th]:py-2 [&_th]:bg-zinc-50 dark:[&_th]:bg-zinc-900 [&_th]:font-semibold
+      [&_td]:border [&_td]:border-zinc-200 dark:[&_td]:border-zinc-700 [&_td]:px-4 [&_td]:py-2">
       <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
         {text || '*Пусто...*'}
       </ReactMarkdown>

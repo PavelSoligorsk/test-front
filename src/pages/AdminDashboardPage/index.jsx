@@ -1,3 +1,1 @@
-// FSD barrel - Admin Dashboard Page
-export { default } from './AdminDashboardContent';
-
+export { default } from './AdminLayout';

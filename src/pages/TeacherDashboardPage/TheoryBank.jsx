@@ -25,8 +25,8 @@ const MAIN_TOPICS = {
 
 const getDifficultyColor = (lvl) => {
   if (lvl >= 4) return "text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border-red-100 dark:border-red-800";
-  if (lvl >= 3) return "text-amber-500 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-100 dark:border-amber-800";
-  return "text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border-emerald-100 dark:border-emerald-800";
+  if (lvl >= 3) return "text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800";
+  return "text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800";
 };
 
 export default function TheoryBank({ 
@@ -193,17 +193,17 @@ export default function TheoryBank({
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       {/* Заголовок */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+      <div className="bg-white dark:bg-[#09090b] rounded-3xl p-5 md:p-6 shadow-sm border border-zinc-200 dark:border-zinc-800/60">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-emerald-500 dark:to-emerald-600 rounded-xl flex items-center justify-center">
-              <BookOpen size={20} className="text-white" />
+            <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center">
+              <BookOpen size={20} className="text-white dark:text-zinc-950" />
             </div>
             <div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">
+              <h2 className="text-2xl md:text-3xl font-semibold text-zinc-900 dark:text-white tracking-tight">
                 Банк заданий
               </h2>
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
+              <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 tracking-tight mt-1">
                 {activeTopic ? 
                   `${availableTopics[activeTopic]?.label || activeTopic}${activeSection ? ` → ${activeSection}` : " → выберите раздел"}` : 
                   `${Object.keys(availableTopics).length} тем доступно`
@@ -214,18 +214,14 @@ export default function TheoryBank({
           <div className="flex items-center gap-3">
             <button
               onClick={() => setExamFilter(!examFilter)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                examFilter
-                  ? "bg-amber-500 dark:bg-amber-600 text-white shadow-lg"
-                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-300 dark:hover:border-amber-500/50"
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${ examFilter ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-lg" : "bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-500/50" }`}
             >
               {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
             </button>
             {(activeTopic || activeSection) && (
               <button 
                 onClick={activeSection ? handleBackToSections : handleBackToTopics}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-xl text-xs font-black uppercase text-slate-600 dark:text-slate-300 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-300 transition-all"
               >
                 <ChevronRight size={14} className="rotate-180" />
                 {activeSection ? "К разделам" : "Ко всем темам"}
@@ -239,19 +235,19 @@ export default function TheoryBank({
       {!activeTopic && (
         <div className="space-y-4">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
             <input 
               type="text" 
               placeholder="Поиск темы..." 
               value={topicSearch} 
               onChange={(e) => setTopicSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-blue-400 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" 
+              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 dark:focus:border-zinc-300 dark:focus:border-zinc-700 placeholder:text-zinc-400 dark:placeholder:text-zinc-500" 
             />
           </div>
           {examFilter && loadingExamCache ? (
             <div className="text-center py-16 space-y-3">
-              <div className="w-10 h-10 border-4 border-slate-200 dark:border-slate-700 border-t-blue-600 dark:border-t-emerald-500 rounded-full animate-spin mx-auto" />
-              <p className="font-black text-slate-400 dark:text-slate-500 uppercase text-xs">Анализ заданий...</p>
+              <div className="w-10 h-10 border-4 border-zinc-200 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-500 rounded-full animate-spin mx-auto" />
+              <p className="font-semibold text-zinc-400 dark:text-zinc-500 text-xs">Анализ заданий...</p>
             </div>
           ) : (
             <>
@@ -260,25 +256,25 @@ export default function TheoryBank({
               <button 
                 key={topic.key} 
                 onClick={() => setActiveTopic(topic.key)}
-                className="w-full bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-emerald-500/50 hover:shadow-lg dark:hover:shadow-emerald-500/5 transition-all p-5 text-left"
+                className="w-full bg-white dark:bg-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-500/50 hover:shadow-lg dark:hover:shadow-sm transition-all p-5 text-left"
               >
                 <div className="flex items-center gap-4">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-black text-slate-800 dark:text-slate-100 text-sm uppercase truncate">{topic.label}</h3>
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm truncate">{topic.label}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{topic.sections.length} разделов</span>
-                      <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
-                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{topic.count} заданий</span>
+                      <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500">{topic.sections.length} разделов</span>
+                      <span className="text-[10px] text-zinc-300 dark:text-zinc-600">•</span>
+                      <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500">{topic.count} заданий</span>
                     </div>
                   </div>
-                  <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 shrink-0" />
+                  <ChevronRight size={18} className="text-zinc-300 dark:text-zinc-600 shrink-0" />
                 </div>
               </button>
             ))}
           </div>
           {filteredTopics.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-slate-400 dark:text-slate-500 text-sm">Темы не найдены</p>
+              <p className="text-zinc-400 dark:text-zinc-500 text-sm">Темы не найдены</p>
             </div>
           )}
           </>
@@ -290,13 +286,13 @@ export default function TheoryBank({
       {activeTopic && !activeSection && (
         <div className="space-y-4">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
             <input 
               type="text" 
               placeholder="Поиск раздела..." 
               value={sectionSearch} 
               onChange={(e) => setSectionSearch(e.target.value)}
-              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-blue-400 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" 
+              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 dark:focus:border-zinc-300 dark:focus:border-zinc-700 placeholder:text-zinc-400 dark:placeholder:text-zinc-500" 
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -307,26 +303,26 @@ export default function TheoryBank({
                   setActiveSection(section);
                   loadSectionTasks(activeTopic, section);
                 }}
-                className="group p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-blue-300 dark:hover:border-emerald-500/50 hover:shadow-lg transition-all text-left"
+                className="group p-4 bg-white dark:bg-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-800/60 hover:border-zinc-300 dark:hover:border-zinc-500/50 hover:shadow-lg transition-all text-left"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-50 dark:bg-slate-700 rounded-lg flex items-center justify-center text-blue-600 dark:text-slate-300 font-black text-sm shrink-0">
+                  <div className="w-8 h-8 bg-zinc-50 dark:bg-zinc-700 rounded-lg flex items-center justify-center text-zinc-600 dark:text-zinc-300 font-semibold text-sm shrink-0">
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-700 dark:text-slate-200 text-sm leading-tight truncate">{section}</p>
-                    <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
+                    <p className="font-bold text-zinc-700 dark:text-zinc-200 text-sm leading-tight truncate">{section}</p>
+                    <p className="text-[9px] font-bold text-zinc-400 dark:text-zinc-500 mt-0.5">
                       {tasksMeta?.[activeTopic]?.[section] ?? 0} заданий
                     </p>
                   </div>
-                  <ChevronRight size={16} className="text-slate-300 dark:text-slate-600 group-hover:text-blue-500 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all shrink-0" />
+                  <ChevronRight size={16} className="text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-500 dark:group-hover:text-zinc-400 group-hover:translate-x-1 transition-all shrink-0" />
                 </div>
               </button>
             ))}
           </div>
           {filteredSections.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-slate-400 dark:text-slate-500 text-sm">Разделы не найдены</p>
+              <p className="text-zinc-400 dark:text-zinc-500 text-sm">Разделы не найдены</p>
             </div>
           )}
         </div>
@@ -337,29 +333,25 @@ export default function TheoryBank({
         <div className="space-y-4">
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
               <input 
                 type="text" 
                 placeholder="Поиск по тексту задания..." 
                 value={taskSearch} 
                 onChange={(e) => setTaskSearch(e.target.value)}
-                className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:border-blue-400 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500" 
+                className="w-full pl-10 pr-10 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 dark:focus:border-zinc-300 dark:focus:border-zinc-700 placeholder:text-zinc-400 dark:placeholder:text-zinc-500" 
               />
             </div>
             <button
               onClick={() => setExamFilter(!examFilter)}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase transition-all whitespace-nowrap ${
-                examFilter
-                  ? "bg-amber-500 dark:bg-amber-600 text-white shadow-lg"
-                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-amber-300 dark:hover:border-amber-500/50"
-              }`}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${ examFilter ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-lg" : "bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-500/50" }`}
             >
               {examFilter ? "✓ Экзамен" : "ЦТ/ЦЭ/РТ"}
             </button>
           </div>
           
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase">
+            <span className="text-sm font-medium text-zinc-500 dark:text-zinc-500">
               {taskSearch ? 
                 `Найдено: ${filteredTasks.length} из ${(sectionTasks[`${activeTopic}/${activeSection}`] || []).length}` : 
                 `${(sectionTasks[`${activeTopic}/${activeSection}`] || []).length} заданий`
@@ -369,8 +361,8 @@ export default function TheoryBank({
 
           {loadingTasks ? (
             <div className="text-center py-16 space-y-3">
-              <div className="w-10 h-10 border-4 border-slate-200 dark:border-slate-700 border-t-blue-600 dark:border-t-emerald-500 rounded-full animate-spin mx-auto" />
-              <p className="font-black text-slate-400 dark:text-slate-500 uppercase">Загрузка заданий...</p>
+              <div className="w-10 h-10 border-4 border-zinc-200 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-500 rounded-full animate-spin mx-auto" />
+              <p className="font-semibold text-zinc-400 dark:text-zinc-500">Загрузка заданий...</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -379,35 +371,33 @@ export default function TheoryBank({
                 return (
                   <div 
                     key={t.id} 
-                    className={`rounded-[2rem] border transition-all ${
-                      isSelected ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-500/50 shadow-lg" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm hover:border-slate-300 dark:hover:border-slate-600"
-                    }`}
+                    className={`rounded-3xl border transition-all ${ isSelected ? "bg-zinc-50 dark:bg-zinc-900/20 border-zinc-300 dark:border-zinc-500/50 shadow-lg" : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-600" }`}
                   >
                     <div className="p-6 space-y-6">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-slate-300">
+                        <h4 className="text-[10px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-300">
                           Задание №{index + 1}
                         </h4>
                         <div className="flex items-center gap-1.5 ml-auto">
-                          <span className="text-[9px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-lg">ID: {t.id}</span>
-                          <div className={`px-2 py-0.5 rounded-lg border text-[9px] font-black ${getDifficultyColor(t.difficulty)}`}>
+                          <span className="text-[9px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 rounded-lg">ID: {t.id}</span>
+                          <div className={`px-2 py-0.5 rounded-lg border text-xs font-medium ${getDifficultyColor(t.difficulty)}`}>
                             LVL {t.difficulty || "?"}
                           </div>
-                          <span className="text-[9px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-lg">
+                          <span className="text-[9px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 rounded-lg">
                             {t.is_open_answer ? "Открытый" : "Тест"}
                           </span>
                         </div>
                       </div>
 
-                      <div className="text-slate-900 dark:text-slate-200 text-base leading-relaxed">
+                      <div className="text-zinc-900 dark:text-zinc-200 text-base leading-relaxed">
                         <MarkdownRenderer>{t.content}</MarkdownRenderer>
                       </div>
                       
                       {!t.is_open_answer && t.options && (
                         <div className="space-y-2">
                           {Array.isArray(t.options) ? t.options.map((opt, i) => (
-                            <div key={i} className="flex items-start gap-3 text-slate-900 dark:text-slate-200 font-bold">
-                              <span className="text-slate-400 dark:text-slate-500 shrink-0">{i+1}.</span>
+                            <div key={i} className="flex items-start gap-3 text-zinc-900 dark:text-zinc-200 font-bold">
+                              <span className="text-zinc-400 dark:text-zinc-500 shrink-0">{i+1}.</span>
                               <span><MarkdownRenderer>{opt}</MarkdownRenderer></span>
                             </div>
                           )) : (
@@ -417,12 +407,12 @@ export default function TheoryBank({
                       )}
                       
                       <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400">Ответ:</span>
-                        <span className="text-sm font-black text-slate-900 dark:text-emerald-400">{t.answer}</span>
+                        <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">Ответ:</span>
+                        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-400">{t.answer}</span>
                         {t.hint && (
                           <button 
                             onClick={() => onToggleHint(t.id)} 
-                            className="px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
+                            className="px-4 py-2 rounded-2xl bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[10px] font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
                           >
                             Подсказка
                           </button>
@@ -430,36 +420,34 @@ export default function TheoryBank({
                         {t.solution && (
                           <button 
                             onClick={() => onToggleSolution(t.id)} 
-                            className="px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
+                            className="px-4 py-2 rounded-2xl bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[10px] font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all"
                           >
                             Решение
                           </button>
                         )}
                         <button 
                           onClick={() => onTaskToggle(t)} 
-                          className={`ml-auto px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all active:scale-95 ${
-                            isSelected ? "bg-emerald-600 dark:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20" : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-emerald-100 dark:hover:bg-emerald-500 hover:text-emerald-700 dark:hover:text-white"
-                          }`}
+                          className={`ml-auto px-5 py-2.5 rounded-2xl text-[10px] font-semibold transition-all active:scale-95 ${ isSelected ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm" : "bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-white" }`}
                         >
                           {isSelected ? "✓ В тесте" : "+ В тест"}
                         </button>
                       </div>
                       
                       {openHints?.[t.id] && (
-                        <div className="p-5 rounded-[2rem] bg-amber-50/50 dark:bg-amber-900/20 border border-amber-200/40 dark:border-amber-800/40">
-                          <span className="text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-widest flex items-center gap-2 mb-3">
+                        <div className="p-5 rounded-3xl bg-zinc-50/50 dark:bg-zinc-900/20 border border-zinc-200/40 dark:border-zinc-800/40">
+                          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 tracking-tight flex items-center gap-2 mb-3">
                             <span>Подсказка</span>
                           </span>
-                          <div className="text-slate-900 dark:text-slate-200"><MarkdownRenderer>{t.hint}</MarkdownRenderer></div>
+                          <div className="text-zinc-900 dark:text-zinc-200"><MarkdownRenderer>{t.hint}</MarkdownRenderer></div>
                         </div>
                       )}
                       
                       {openSolutions?.[t.id] && (
-                        <div className="p-5 rounded-[2rem] bg-blue-50/50 dark:bg-blue-900/20 border border-blue-200/40 dark:border-blue-800/40">
-                          <span className="text-[9px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-widest flex items-center gap-2 mb-3">
+                        <div className="p-5 rounded-3xl bg-zinc-50/50 dark:bg-zinc-900/20 border border-zinc-200/40 dark:border-zinc-800/40">
+                          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 tracking-tight flex items-center gap-2 mb-3">
                             <span>Решение</span>
                           </span>
-                          <div className="text-slate-900 dark:text-slate-200"><MarkdownRenderer>{t.solution}</MarkdownRenderer></div>
+                          <div className="text-zinc-900 dark:text-zinc-200"><MarkdownRenderer>{t.solution}</MarkdownRenderer></div>
                         </div>
                       )}
                     </div>
@@ -471,7 +459,7 @@ export default function TheoryBank({
                 sectionTasks[`${activeTopic}/${activeSection}`].length === 0) && 
                 !loadingTasks && (
                 <div className="text-center py-16 space-y-3">
-                  <p className="font-black text-slate-400 dark:text-slate-500 uppercase">Нет заданий в этом разделе</p>
+                  <p className="font-semibold text-zinc-400 dark:text-zinc-500">Нет заданий в этом разделе</p>
                 </div>
               )}
             </div>

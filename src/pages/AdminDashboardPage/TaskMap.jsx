@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { MapPin, XCircle } from 'lucide-react';
+import { MapPin, X } from 'lucide-react';
+import { primaryBtnClass } from '../../shared/ui';
 
 export const TaskMap = ({ tasks, onScroll }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -11,23 +12,34 @@ export const TaskMap = ({ tasks, onScroll }) => {
   return (
     <>
       <div className="fixed bottom-6 right-6 z-50">
-        <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white border border-slate-700 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-800 transition-all shadow-2xl shadow-slate-900/20">
-          <MapPin size={14} /> Карта <span className="bg-white/20 px-2 py-0.5 rounded-full text-[9px]">{sortedTasks?.length || 0}</span>
+        <button type="button" onClick={() => setIsExpanded(!isExpanded)} className={`${primaryBtnClass} shadow-lg`}>
+          <MapPin size={14} /> Карта
+          <span className="bg-white/20 dark:bg-zinc-900/20 px-2 py-0.5 rounded-lg text-xs tabular-nums">
+            {sortedTasks?.length || 0}
+          </span>
         </button>
       </div>
       {isExpanded && (
         <>
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={() => setIsExpanded(false)} />
-          <div className="fixed bottom-24 right-6 bg-white border border-slate-200 rounded-[2rem] p-5 shadow-2xl z-50 w-80 animate-in slide-in-from-bottom-2 duration-200 max-h-[70vh] overflow-y-auto">
+          <div className="fixed bottom-24 right-6 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/60 rounded-3xl p-5 shadow-sm z-50 w-80 animate-in slide-in-from-bottom-2 duration-200 max-h-[70vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Задания ({sortedTasks?.length || 0})</span>
-              <button onClick={() => setIsExpanded(false)} className="p-1 bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all">
-                <XCircle size={14} />
+              <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                Задания ({sortedTasks?.length || 0})
+              </span>
+              <button type="button" onClick={() => setIsExpanded(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors">
+                <X size={14} />
               </button>
             </div>
             <div className="grid grid-cols-5 gap-2">
               {sortedTasks?.map((task, idx) => (
-                <button key={task.id} onClick={() => { onScroll(task.id); setIsExpanded(false); }} className="aspect-square rounded-xl flex items-center justify-center text-xs font-black transition-all hover:scale-110 bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700">
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => { onScroll(task.id); setIsExpanded(false); }}
+                  className="aspect-square rounded-xl flex items-center justify-center text-xs font-semibold tabular-nums transition-colors bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-900 hover:text-white dark:hover:bg-white dark:hover:text-zinc-950"
+                >
                   {idx + 1}
                 </button>
               ))}

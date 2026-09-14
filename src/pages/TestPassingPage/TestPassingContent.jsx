@@ -6,6 +6,7 @@ import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import { retakeTest } from '../StudentDashboardPage/api';
 import { ENDPOINTS } from '../../shared/api/endpoints';
+import { getHomeRoute, getUserRole } from '../../features/auth';
 import DrawingPad from '../../components/DrawingPad';
 import TestProgressBar from './TestProgressBar';
 import TestQuestionCard from './TestQuestionCard';
@@ -513,7 +514,7 @@ export default function TestPassingContent() {
       await saveProgressToServer();
       localStorage.removeItem(`test_progress_${testId}`);
       localStorage.removeItem(`test_restored_${testId}`);
-      navigate('/student');
+      navigate(getHomeRoute(getUserRole()));
     } catch {
       setIsExiting(false);
       alert('Не удалось сохранить прогресс. Проверьте интернет-соединение.');
@@ -562,7 +563,7 @@ export default function TestPassingContent() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{blockError}</p>
           <div className="flex gap-3 justify-center pt-2">
             <button
-              onClick={() => navigate('/student')}
+              onClick={() => navigate(getHomeRoute(getUserRole()))}
               className="px-5 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
             >
               К тестам
@@ -594,7 +595,7 @@ export default function TestPassingContent() {
         test={test}
         userAnswers={userAnswers}
         drawings={drawings}
-        onBack={() => navigate('/student')}
+        onBack={() => navigate(getHomeRoute(getUserRole()))}
         testId={testId}
         resultId={resultId}
         onRetake={handleRetakeInReport}
@@ -615,7 +616,7 @@ export default function TestPassingContent() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{submitError}</p>
           <div className="flex gap-3 justify-center pt-2">
             <button
-              onClick={() => navigate('/student')}
+              onClick={() => navigate(getHomeRoute(getUserRole()))}
               className="px-5 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
             >
               К тестам

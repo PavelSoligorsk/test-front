@@ -1,72 +1,89 @@
 import React from 'react';
 import { Send, PlusCircle } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
-import { MarkdownPreview } from './MarkdownPreview';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
+import { Sheet, IconWell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
 export default function TaskForm({ taskData, setTaskData, onSubmit, onCancel }) {
   const handleTopicChange = (topicKey) => {
     setTaskData({ ...taskData, topic: topicKey, section: '' });
   };
 
+  const segBtn = (active) =>
+    `flex-1 sm:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
+      active
+        ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm'
+        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+    }`;
+
   return (
-    <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-slate-800 uppercase italic">
-          {taskData.id ? `Редактор #${taskData.id}` : 'Конструктор'}
-        </h2>
-        <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 sm:gap-2">
+    <Sheet className="p-6 md:p-8 space-y-6 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <IconWell><PlusCircle size={18} strokeWidth={2} /></IconWell>
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              {taskData.id ? `Редактор #${taskData.id}` : 'Конструктор'}
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {taskData.id ? 'Правка существующего задания' : 'Новое задание'}
+            </p>
+          </div>
+        </div>
+        <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl gap-1">
           <button type="button" onClick={() => setTaskData({ ...taskData, is_open_answer: true })}
-            className={`flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-xl text-[8px] sm:text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${taskData.is_open_answer ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-            ОТКРЫТЫЙ
+            className={segBtn(taskData.is_open_answer)}>
+            Открытый
           </button>
           <button type="button" onClick={() => setTaskData({ ...taskData, is_open_answer: false })}
-            className={`flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-xl text-[8px] sm:text-[10px] md:text-xs font-black transition-all whitespace-nowrap ${!taskData.is_open_answer ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-            ТЕСТ
+            className={segBtn(!taskData.is_open_answer)}>
+            Тест
           </button>
         </div>
       </div>
       <form onSubmit={onSubmit} className="space-y-5">
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Сложность</span>
-            <div className="flex gap-1 bg-slate-50 p-1 rounded-xl">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <span className={labelClass}>Сложность</span>
+            <div className="flex gap-1 bg-zinc-50 dark:bg-zinc-900/50 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} type="button" onClick={() => setTaskData({ ...taskData, difficulty: n })}
-                  className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all ${taskData.difficulty === n ? 'bg-white text-blue-600 shadow-sm scale-110' : 'text-slate-400'}`}>
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium tabular-nums transition-colors ${
+                    taskData.difficulty === n
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                  }`}>
                   {n}
                 </button>
               ))}
             </div>
           </div>
-          <label className="block space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Класс</span>
-            <input type="text" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold"
+          <label className="block space-y-1.5">
+            <span className={labelClass}>Класс</span>
+            <input type="text" className={fieldClass}
               value={taskData.task_class} onChange={e => setTaskData({ ...taskData, task_class: e.target.value })} />
           </label>
-          <label className="block space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Тема №</span>
-            <input type="text" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold"
+          <label className="block space-y-1.5">
+            <span className={labelClass}>Тема №</span>
+            <input type="text" className={fieldClass}
               value={taskData.topic_number} onChange={e => setTaskData({ ...taskData, topic_number: e.target.value })} />
           </label>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="block space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Основная тема</span>
-            <select className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm appearance-none cursor-pointer"
-              value={taskData.topic} onChange={e => handleTopicChange(e.target.value)}
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '36px' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="block space-y-1.5">
+            <span className={labelClass}>Основная тема</span>
+            <select className={fieldClass}
+              value={taskData.topic} onChange={e => handleTopicChange(e.target.value)}>
               <option value="">— Выберите тему —</option>
               {Object.entries(MAIN_TOPICS).map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
               ))}
             </select>
           </label>
-          <label className="block space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Раздел (подтема)</span>
-            <select className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              value={taskData.section} onChange={e => setTaskData({ ...taskData, section: e.target.value })} disabled={!taskData.topic}
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '36px' }}>
+          <label className="block space-y-1.5">
+            <span className={labelClass}>Раздел (подтема)</span>
+            <select className={`${fieldClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+              value={taskData.section} onChange={e => setTaskData({ ...taskData, section: e.target.value })} disabled={!taskData.topic}>
               <option value="">— Выберите раздел —</option>
               {taskData.topic && SECTIONS_BY_TOPIC[taskData.topic]?.map(section => (
                 <option key={section} value={section}>{section}</option>
@@ -77,36 +94,35 @@ export default function TaskForm({ taskData, setTaskData, onSubmit, onCancel }) 
         <ImageAwareTextarea required value={taskData.content}
           onChange={(value) => setTaskData({ ...taskData, content: value })}
           placeholder="Текст задачи (можно вставить изображение)..."
-          className="w-full p-6 bg-slate-50 border-none rounded-[2rem] min-h-[120px] font-mono text-sm resize-y" rows={4} />
+          className={`${fieldClass} min-h-[120px] font-mono resize-y`} rows={4} />
         <ImageAwareTextarea value={taskData.solution}
           onChange={(value) => setTaskData({ ...taskData, solution: value })}
           placeholder="Решение (можно вставить изображение)..."
-          className="w-full p-6 bg-emerald-50/30 border-none rounded-[2rem] min-h-[100px] font-mono text-sm resize-y" rows={3} />
+          className={`${fieldClass} min-h-[100px] font-mono resize-y`} rows={3} />
         {!taskData.is_open_answer && (
           <ImageAwareTextarea value={taskData.options}
             onChange={(value) => setTaskData({ ...taskData, options: value })}
             placeholder="Вариант А; Вариант Б; Вариант В (можно вставить изображение)..."
-            className="w-full p-4 bg-blue-50/50 border-2 border-dashed border-blue-100 rounded-2xl font-bold text-sm min-h-[80px] resize-y" rows={2} />
+            className={`${fieldClass} min-h-[80px] resize-y border-dashed`} rows={2} />
         )}
-        <div className="grid grid-cols-2 gap-4">
-          <input required className="w-full p-4 bg-emerald-50 text-emerald-700 border-none rounded-2xl font-black text-center"
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <input required className={`${fieldClass} text-center font-semibold`}
             placeholder="Ответ" value={taskData.answer}
             onChange={e => setTaskData({ ...taskData, answer: e.target.value })} />
           <ImageAwareTextarea value={taskData.hint}
             onChange={(value) => setTaskData({ ...taskData, hint: value })}
             placeholder="Подсказка (можно вставить изображение)..."
-            className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-sm resize-y" rows={2} />
+            className={`${fieldClass} resize-y`} rows={2} />
         </div>
-        <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3">
-          <Send size={20} /> {taskData.id ? 'ОБНОВИТЬ' : 'ОПУБЛИКОВАТЬ'}
+        <button type="submit" className={`${primaryBtnClass} w-full py-3`}>
+          <Send size={16} /> {taskData.id ? 'Обновить' : 'Опубликовать'}
         </button>
         {taskData.id && (
-          <button type="button" onClick={onCancel}
-            className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors">
+          <button type="button" onClick={onCancel} className={`${secondaryBtnClass} w-full`}>
             Отменить редактирование
           </button>
         )}
       </form>
-    </div>
+    </Sheet>
   );
 }

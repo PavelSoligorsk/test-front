@@ -1,3 +1,1 @@
-// FSD barrel - Teacher Dashboard Page
-export { default } from './TeacherDashboardContent';
-
+export { default } from './TeacherLayout';

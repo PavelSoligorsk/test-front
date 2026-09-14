@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../../shared/config';
 import { QuestionMap, ThemeToggle } from '../../shared/ui';
+import { getHomeRoute, getUserRole } from '../../features/auth';
 import DifficultyStats from './DifficultyStats';
 import ResultTaskCard from './ResultTaskCard';
 
@@ -123,7 +124,7 @@ export default function TestResultDetailContent() {
     <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
       <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-6">
         <div className="flex items-center justify-between">
-          <button type="button" onClick={() => navigate('/student')} className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+          <button type="button" onClick={() => navigate(getHomeRoute(getUserRole()))} className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
             <ArrowLeft size={14} /> Назад в кабинет
           </button>
           <ThemeToggle />

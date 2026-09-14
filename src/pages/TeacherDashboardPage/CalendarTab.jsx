@@ -197,19 +197,19 @@ export default function CalendarTab({ students, groups, onRefresh }) {
   ];
 
   return (
-    <div className="bg-white dark:bg-slate-800/50 rounded-[3rem] shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+    <div className="bg-white dark:bg-[#09090b] rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden">
       {/* Header */}
-      <div className="p-4 md:p-8 bg-slate-50/50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700">
+      <div className="p-4 md:p-8 bg-zinc-50/50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-800/60">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-500">
-              <Calendar size={22} />
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm">
+              <Calendar size={18} strokeWidth={2} />
             </div>
             <div>
-              <h2 className="text-xl md:text-2xl font-black italic uppercase text-slate-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
                 Календарь занятий
               </h2>
-              <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest">
+              <p className="text-sm text-zinc-500 mt-0.5">
                 {currentTitle}
               </p>
             </div>
@@ -217,24 +217,16 @@ export default function CalendarTab({ students, groups, onRefresh }) {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* View toggle */}
-            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-xl p-1">
+            <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-xl p-1 border border-zinc-200 dark:border-zinc-800">
               <button
                 onClick={() => setViewMode('timeGridWeek')}
-                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
-                  viewMode === 'timeGridWeek'
-                    ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                }`}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${viewMode === 'timeGridWeek' ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}
               >
                 Неделя
               </button>
               <button
                 onClick={() => setViewMode('dayGridMonth')}
-                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
-                  viewMode === 'dayGridMonth'
-                    ? 'bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                }`}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${viewMode === 'dayGridMonth' ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}
               >
                 Месяц
               </button>
@@ -244,19 +236,19 @@ export default function CalendarTab({ students, groups, onRefresh }) {
             <div className="flex items-center gap-1">
               <button
                 onClick={handlePrev}
-                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-600 dark:text-slate-300 transition-all"
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-300 transition-all"
               >
                 <ChevronLeft size={18} />
               </button>
               <button
                 onClick={handleToday}
-                className="px-3 py-2 text-[10px] font-black uppercase bg-slate-200 dark:bg-slate-700 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-all"
+                className="px-3 py-2 text-xs font-medium bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-all"
               >
                 Сегодня
               </button>
               <button
                 onClick={handleNext}
-                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-600 dark:text-slate-300 transition-all"
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-300 transition-all"
               >
                 <ChevronRight size={18} />
               </button>
@@ -265,14 +257,14 @@ export default function CalendarTab({ students, groups, onRefresh }) {
             {/* Create button */}
             <button
               onClick={() => { setCreateDate(null); setShowCreateModal(true); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase transition-all shadow-lg shadow-emerald-200"
+              className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 rounded-xl text-xs font-medium transition-all shadow-sm"
             >
               <PlusCircle size={14} />
               Создать
             </button>
             <button
               onClick={() => setShowSchedulesList(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-2xl text-[10px] font-black uppercase transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-medium transition-all"
             >
               <Repeat size={14} />
               Расписания
@@ -288,7 +280,7 @@ export default function CalendarTab({ students, groups, onRefresh }) {
                 className="w-3 h-3 rounded-sm inline-block"
                 style={{ backgroundColor: item.color }}
               />
-              <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+              <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
                 {item.label}
               </span>
             </div>
@@ -306,8 +298,8 @@ export default function CalendarTab({ students, groups, onRefresh }) {
 
         {loading && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={24} className="animate-spin text-emerald-500" />
-            <span className="ml-2 text-sm font-bold text-slate-500">Загрузка...</span>
+            <Loader2 size={24} className="animate-spin text-zinc-500" />
+            <span className="ml-2 text-sm font-bold text-zinc-500">Загрузка...</span>
           </div>
         )}
 

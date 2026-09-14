@@ -39,94 +39,192 @@ export default function TeacherResultViewContent() {
     });
   }, [data]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]"><div className="text-center font-black uppercase tracking-widest text-slate-400 animate-pulse">Загрузка...</div></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#fafafa] dark:bg-[#09090b]">
+        <div className="w-8 h-8 border-[3px] border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
   if (!data) return null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-20">
-      <div className="max-w-3xl mx-auto p-6 space-y-8">
-        <button onClick={() => navigate('/teacher')} className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors font-bold uppercase text-[10px] tracking-widest"><ArrowLeft size={14} /> Назад в учительскую</button>
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
+      <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-6">
+        <button
+          type="button"
+          onClick={() => navigate('/teacher')}
+          className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+        >
+          <ArrowLeft size={14} /> Назад в учительскую
+        </button>
 
-        <header className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+        <header className="bg-white dark:bg-[#09090b] p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-4xl font-black uppercase italic tracking-tighter text-slate-900 leading-none">{data.test_title.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}</h1>
-            <p className="text-[10px] font-black text-emerald-600 uppercase mt-3 tracking-[0.2em]">{data.user.first_name} {data.user.last_name}</p>
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              {data.test_title.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}
+            </h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              {data.user.first_name} {data.user.last_name}
+            </p>
           </div>
-          <div className="bg-slate-950 text-white px-10 py-7 rounded-[2.5rem] text-center shadow-xl shadow-slate-200">
-            <div className="text-4xl font-black tabular-nums">{data.total_points} / {data.max_points}</div>
-            <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Баллов набрано</div>
+          <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 px-6 py-4 rounded-2xl text-center">
+            <div className="text-2xl font-semibold tabular-nums tracking-tight">{data.total_points} / {data.max_points}</div>
+            <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">баллов</div>
           </div>
         </header>
 
         {data.difficulty_stats && (
           <section className="space-y-4">
-            <div className="flex items-center gap-2 px-2"><BarChart3 size={14} className="text-slate-400" /><h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Аналитика по сложностям</h2></div>
+            <div className="flex items-center gap-2 px-1">
+              <BarChart3 size={14} className="text-zinc-400" />
+              <h2 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Аналитика по сложностям</h2>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:flex gap-4">
-              {Object.entries(data.difficulty_stats).map(([level, stat]) => stat.total > 0 && <DifficultyBadge key={level} level={parseInt(level)} correct={stat.correct} total={stat.total} />)}
+              {Object.entries(data.difficulty_stats).map(([level, stat]) =>
+                stat.total > 0 && (
+                  <DifficultyBadge key={level} level={parseInt(level)} correct={stat.correct} total={stat.total} />
+                )
+              )}
             </div>
           </section>
         )}
 
         <div className="space-y-6">
           {sortedDetails.map((item, idx) => {
-            const hasNoAnswer = item.user_answer === "Нет ответа" || !item.user_answer;
+            const hasNoAnswer = item.user_answer === 'Нет ответа' || !item.user_answer;
             const isSolutionOpen = openSolutions[item.task_id];
             const diff = parseInt(item.difficulty) || 1;
             return (
-              <div key={item.task_id} data-task-id={item.task_id} className={`bg-white rounded-[2.5rem] border-2 transition-all duration-500 overflow-hidden ${hasNoAnswer ? 'border-slate-100 opacity-80' : item.is_correct ? 'border-emerald-500/10' : 'border-red-500/10'}`}>
-                <div className="p-8">
-                  <div className="flex justify-between items-start mb-8">
-                    <div className="flex gap-8">
-                      <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Вопрос №{idx + 1}</span><span className="text-[9px] font-bold text-emerald-500 uppercase mt-0.5">Начислено: {item.points_earned || 0} / {item.max_task_points || 0} б.</span></div>
-                      <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1.5 opacity-50">Сложность</span><div className="flex gap-0.5">{[1,2,3,4,5].map((step) => <div key={step} className={`w-1 h-3 rounded-full transition-all ${step <= diff ? (diff >= 4 ? 'bg-red-500' : diff >= 3 ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-slate-100'}`} />)}</div></div>
+              <div
+                key={item.task_id}
+                data-task-id={item.task_id}
+                className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm overflow-hidden"
+              >
+                <div className="p-6 md:p-8">
+                  <div className="flex justify-between items-start mb-6 gap-4">
+                    <div className="flex gap-6">
+                      <div>
+                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block mb-1.5">Вопрос №{idx + 1}</span>
+                        <span className="text-xs font-medium text-zinc-400">
+                          Начислено: {item.points_earned || 0} / {item.max_task_points || 0} б.
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block mb-1.5">Сложность</span>
+                        <div className="flex gap-0.5 items-center">
+                          {[1, 2, 3, 4, 5].map((step) => (
+                            <div
+                              key={step}
+                              className={`w-1 h-3 rounded-full ${
+                                step <= diff ? 'bg-zinc-900 dark:bg-white' : 'bg-zinc-100 dark:bg-zinc-800'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <div className={`flex items-center gap-2 font-black uppercase text-[10px] px-5 py-2 rounded-full tracking-wider ${hasNoAnswer ? 'bg-slate-100 text-slate-500' : item.is_correct ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                    <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full ${
+                      hasNoAnswer
+                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                        : item.is_correct
+                          ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'
+                    }`}>
                       {hasNoAnswer ? <AlertCircle size={12} /> : item.is_correct ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
                       {hasNoAnswer ? 'Пропущено' : item.is_correct ? 'Верно' : 'Ошибка'}
                     </div>
                   </div>
-                  <div className="mb-10 text-slate-800 font-medium leading-relaxed"><MarkdownRenderer>{item.content}</MarkdownRenderer></div>
+
+                  <div className="mb-8 text-zinc-800 dark:text-zinc-200 font-medium leading-relaxed">
+                    <MarkdownRenderer>{item.content}</MarkdownRenderer>
+                  </div>
+
                   {item.options && (
-                    <div className="mb-10 space-y-3">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block mb-4 ml-1 tracking-[0.2em]">Варианты:</span>
+                    <div className="mb-8 space-y-2">
+                      <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block mb-3">Варианты</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {(Array.isArray(item.options) ? item.options : item.options.split(';')).map(opt => opt.trim()).filter(opt => opt.length > 0).map((opt, i) => {
                           const isUserChoice = item.user_answer === opt;
                           const isCorrectChoice = item.correct_answer === opt;
-                          let cardStyle = "border-slate-50 bg-slate-50/30 text-slate-500";
-                          if (isCorrectChoice) cardStyle = "border-emerald-500 bg-emerald-50/50 text-emerald-700 ring-2 ring-emerald-500/10";
-                          else if (isUserChoice && !item.is_correct) cardStyle = "border-red-500 bg-red-50/50 text-red-700 ring-2 ring-red-500/10";
-                          return <div key={i} className={`p-5 rounded-2xl border-2 text-sm font-bold flex gap-4 ${cardStyle}`}><span className="opacity-30 tabular-nums">{i + 1}.</span><div className="flex-1"><MarkdownRenderer>{opt}</MarkdownRenderer></div></div>;
+                          let cardStyle = 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-zinc-600 dark:text-zinc-400';
+                          if (isCorrectChoice) cardStyle = 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300';
+                          else if (isUserChoice && !item.is_correct) cardStyle = 'border-red-300 dark:border-red-500/30 bg-red-50/60 dark:bg-red-500/10 text-red-700 dark:text-red-300';
+                          return (
+                            <div key={i} className={`p-4 rounded-2xl border text-sm font-medium flex gap-3 ${cardStyle}`}>
+                              <span className="opacity-40 tabular-nums">{i + 1}.</span>
+                              <div className="flex-1"><MarkdownRenderer>{opt}</MarkdownRenderer></div>
+                            </div>
+                          );
                         })}
                       </div>
                     </div>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-                    <div className={`p-6 rounded-[2rem] border ${hasNoAnswer ? 'bg-slate-50 border-slate-100' : item.is_correct ? 'bg-emerald-50/30 border-emerald-100' : 'bg-red-50/30 border-red-100'}`}>
-                      <span className="text-[9px] font-black uppercase text-slate-400 block mb-3 tracking-widest">Ответ ученика</span>
-                      <div className={`text-base font-bold ${hasNoAnswer ? 'text-slate-400 italic' : item.is_correct ? 'text-emerald-700' : 'text-red-700'}`}><MarkdownRenderer>{item.user_answer || "—"}</MarkdownRenderer></div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className={`p-5 rounded-2xl border ${
+                      hasNoAnswer
+                        ? 'bg-zinc-50 dark:bg-zinc-900/40 border-zinc-100 dark:border-zinc-800'
+                        : item.is_correct
+                          ? 'bg-emerald-50/40 dark:bg-emerald-500/5 border-emerald-100 dark:border-emerald-500/20'
+                          : 'bg-red-50/40 dark:bg-red-500/5 border-red-100 dark:border-red-500/20'
+                    }`}>
+                      <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block mb-2">Ответ ученика</span>
+                      <div className={`text-sm font-medium ${
+                        hasNoAnswer
+                          ? 'text-zinc-400'
+                          : item.is_correct
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-red-700 dark:text-red-400'
+                      }`}>
+                        <MarkdownRenderer>{item.user_answer || '—'}</MarkdownRenderer>
+                      </div>
                     </div>
-                    <div className="p-6 rounded-[2rem] bg-blue-50/30 border border-blue-100">
-                      <span className="text-[9px] font-black uppercase text-blue-400 block mb-3 tracking-widest">Эталонный ответ</span>
-                      <div className="text-base font-bold text-blue-700"><MarkdownRenderer>{item.correct_answer}</MarkdownRenderer></div>
+                    <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800">
+                      <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 block mb-2">Эталонный ответ</span>
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <MarkdownRenderer>{item.correct_answer}</MarkdownRenderer>
+                      </div>
                     </div>
                   </div>
-                  {item.solution && <div className="space-y-4">
-                    <button onClick={() => toggleSolution(item.task_id)} className={`w-full py-5 rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.25em] transition-all ${isSolutionOpen ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'border-slate-100 text-slate-400 hover:border-emerald-200 hover:text-emerald-600'}`}>
-                      {isSolutionOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />} {isSolutionOpen ? 'Скрыть разбор' : 'Показать решение'}
-                    </button>
-                    {isSolutionOpen && <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 animate-in slide-in-from-top-4 duration-500">
-                      <div className="text-[9px] font-black text-emerald-600 uppercase mb-6 tracking-[0.3em] flex items-center gap-3"><div className="w-8 h-px bg-emerald-600"></div> Решение</div>
-                      <div className="text-sm leading-relaxed text-slate-600"><MarkdownRenderer>{item.solution}</MarkdownRenderer></div>
-                    </div>}
-                  </div>}
+
+                  {item.solution && (
+                    <div className="space-y-4">
+                      <button
+                        type="button"
+                        onClick={() => toggleSolution(item.task_id)}
+                        className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-medium transition-colors ${
+                          isSolutionOpen
+                            ? 'bg-zinc-900 dark:bg-white border-zinc-900 dark:border-white text-white dark:text-zinc-950'
+                            : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
+                        }`}
+                      >
+                        {isSolutionOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        {isSolutionOpen ? 'Скрыть разбор' : 'Показать решение'}
+                      </button>
+                      {isSolutionOpen && (
+                        <div className="p-6 bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                          <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-4">Решение</div>
+                          <div className="text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
+                            <MarkdownRenderer>{item.solution}</MarkdownRenderer>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-      <QuestionMap details={sortedDetails} onScroll={(taskId) => { const el = document.querySelector(`[data-task-id="${taskId}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} />
+      <QuestionMap
+        details={sortedDetails}
+        onScroll={(taskId) => {
+          const el = document.querySelector(`[data-task-id="${taskId}"]`);
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
+      />
     </div>
   );
 }

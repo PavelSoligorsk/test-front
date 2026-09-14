@@ -178,17 +178,17 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
   return (
     <>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        <div className="bg-white rounded-3xl shadow-sm max-w-2xl w-full max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="p-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-t-[2rem]">
+          <div className="p-6 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-t-[2rem]">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
                   <Repeat size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black uppercase">Расписания</h3>
-                  <p className="text-emerald-200 text-[10px] font-bold uppercase mt-1">
+                  <h3 className="text-xl font-semibold">Расписания</h3>
+                  <p className="text-zinc-400 text-[10px] font-medium mt-1">
                     Управление повторяющимися занятиями
                   </p>
                 </div>
@@ -208,21 +208,21 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                 </div>
               )}
               {success && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <p className="text-xs font-bold text-emerald-600">{success}</p>
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
+                  <p className="text-xs font-bold text-zinc-600">{success}</p>
                 </div>
               )}
             </div>
           )}
 
           {/* Toolbar */}
-          <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase">
+          <div className="px-6 py-3 border-b border-zinc-100 flex items-center justify-between">
+            <span className="text-sm font-medium text-zinc-500">
               {schedules.length} расписаний
             </span>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase transition-all shadow-lg shadow-emerald-200"
+              className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 rounded-xl text-[10px] font-semibold transition-all shadow-sm"
             >
               <PlusCircle size={14} />
               Создать
@@ -233,17 +233,17 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
           <div className="flex-1 overflow-y-auto p-6 space-y-3">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 size={24} className="animate-spin text-emerald-500" />
-                <span className="ml-2 text-sm font-bold text-slate-500">Загрузка...</span>
+                <Loader2 size={24} className="animate-spin text-zinc-500" />
+                <span className="ml-2 text-sm font-bold text-zinc-500">Загрузка...</span>
               </div>
             ) : schedules.length === 0 ? (
               <div className="text-center py-12">
-                <Repeat size={48} className="mx-auto text-slate-200 mb-4" />
-                <p className="text-sm font-bold text-slate-400">Нет расписаний</p>
-                <p className="text-xs text-slate-400 mt-1">Создайте первое расписание, чтобы занятия генерировались автоматически</p>
+                <Repeat size={48} className="mx-auto text-zinc-200 mb-4" />
+                <p className="text-sm font-bold text-zinc-400">Нет расписаний</p>
+                <p className="text-xs text-zinc-400 mt-1">Создайте первое расписание, чтобы занятия генерировались автоматически</p>
                 <button
                   onClick={() => setShowCreate(true)}
-                  className="mt-4 px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase hover:bg-emerald-600 inline-flex items-center gap-1.5"
+                  className="mt-4 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-[10px] font-semibold hover:bg-zinc-800 dark:hover:bg-zinc-200 inline-flex items-center gap-1.5"
                 >
                   <PlusCircle size={14} /> Создать расписание
                 </button>
@@ -256,48 +256,42 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                 return (
                   <div
                     key={s.id}
-                    className={`bg-slate-50 rounded-2xl border transition-all ${
-                      s.is_active ? 'border-emerald-200' : 'border-gray-200 opacity-70'
-                    }`}
+                    className={`bg-zinc-50 rounded-2xl border transition-all ${ s.is_active ? 'border-zinc-200' : 'border-gray-200 opacity-70' }`}
                   >
                     {isEditing ? (
                       /* ── Edit form ── */
                       <div className="p-4 space-y-2">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase">Название</label>
+                            <label className="text-xs font-medium text-zinc-500">Название</label>
                             <input
                               type="text"
                               value={editForm.title || ''}
                               onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-200"
+                              className="w-full p-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                             />
                           </div>
                           <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase">Описание</label>
+                            <label className="text-xs font-medium text-zinc-500">Описание</label>
                             <input
                               type="text"
                               value={editForm.description || ''}
                               onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none"
+                              className="w-full p-2 bg-white border border-zinc-200 rounded-xl text-xs outline-none"
                             />
                           </div>
                         </div>
 
                         {/* Days */}
                         <div>
-                          <label className="text-[8px] font-black text-slate-400 uppercase block mb-1">Дни недели</label>
+                          <label className="text-xs font-medium text-zinc-500 block mb-1">Дни недели</label>
                           <div className="flex flex-wrap gap-1">
                             {DAY_CODES.map((day) => (
                               <button
                                 key={day.code}
                                 type="button"
                                 onClick={() => toggleEditDay(day.code)}
-                                className={`w-8 h-8 rounded-lg text-[9px] font-black uppercase transition-all ${
-                                  editDays.includes(day.code)
-                                    ? 'bg-emerald-500 text-white'
-                                    : 'bg-white border border-slate-200 text-slate-500'
-                                }`}
+                                className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${ editDays.includes(day.code) ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950' : 'bg-white border border-zinc-200 text-zinc-500' }`}
                               >
                                 {day.label}
                               </button>
@@ -307,39 +301,39 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
 
                         <div className="grid grid-cols-4 gap-2">
                           <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase">Время</label>
+                            <label className="text-xs font-medium text-zinc-500">Время</label>
                             <input
                               type="time"
                               value={editForm.time_start || ''}
                               onChange={(e) => setEditForm((f) => ({ ...f, time_start: e.target.value }))}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                              className="w-full p-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold outline-none"
                             />
                           </div>
                           <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase">Мин</label>
+                            <label className="text-xs font-medium text-zinc-500">Мин</label>
                             <input
                               type="number"
                               value={editForm.duration_minutes || 60}
                               onChange={(e) => setEditForm((f) => ({ ...f, duration_minutes: Number(e.target.value) }))}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                              className="w-full p-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold outline-none"
                             />
                           </div>
                           <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase">Цена ₽</label>
+                            <label className="text-xs font-medium text-zinc-500">Цена ₽</label>
                             <input
                               type="number"
                               value={editForm.price_per_lesson != null ? editForm.price_per_lesson : ''}
                               onChange={(e) => setEditForm((f) => ({ ...f, price_per_lesson: e.target.value }))}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                              className="w-full p-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold outline-none"
                             />
                           </div>
                           <div>
-                            <label className="text-[8px] font-black text-slate-400 uppercase">Повтор до</label>
+                            <label className="text-xs font-medium text-zinc-500">Повтор до</label>
                             <input
                               type="datetime-local"
                               value={editForm.recur_until || ''}
                               onChange={(e) => setEditForm((f) => ({ ...f, recur_until: e.target.value }))}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-[10px] outline-none"
+                              className="w-full p-2 bg-white border border-zinc-200 rounded-xl text-[10px] outline-none"
                             />
                           </div>
                         </div>
@@ -348,14 +342,14 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                           <button
                             onClick={cancelEdit}
                             disabled={isBusy}
-                            className="flex-1 p-2 bg-slate-100 rounded-xl text-xs font-black text-slate-500 hover:bg-slate-200 disabled:opacity-50"
+                            className="flex-1 p-2 bg-zinc-100 rounded-xl text-xs font-semibold text-zinc-500 hover:bg-zinc-200 disabled:opacity-50"
                           >
                             Отмена
                           </button>
                           <button
                             onClick={() => handleSaveEdit(s.id)}
                             disabled={isBusy}
-                            className="flex-1 p-2 bg-emerald-500 text-white rounded-xl text-xs font-black hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-1"
+                            className="flex-1 p-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-xs font-semibold hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 flex items-center justify-center gap-1"
                           >
                             {isBusy ? <Loader2 size={12} className="animate-spin" /> : null}
                             Сохранить
@@ -369,34 +363,30 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                           <div className="min-w-0 flex-1">
                             {/* Title + status badge */}
                             <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <h4 className="text-sm font-black text-slate-800 truncate">{s.title}</h4>
+                              <h4 className="text-sm font-semibold text-zinc-800 truncate">{s.title}</h4>
                               <span
-                                className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${
-                                  s.is_active
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : 'bg-gray-200 text-gray-500'
-                                }`}
+                                className={`px-2 py-0.5 rounded-full text-[8px] font-semibold ${ s.is_active ? 'bg-zinc-100 text-zinc-700' : 'bg-gray-200 text-gray-500' }`}
                               >
                                 {s.is_active ? 'Активно' : 'Остановлено'}
                               </span>
-                              <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-200 text-slate-600">
+                              <span className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-zinc-200 text-zinc-600">
                                 {s.schedule_type === 'group' ? 'Группа' : 'Индивид.'}
                               </span>
                             </div>
 
                             {/* Description */}
                             {s.description && (
-                              <p className="text-[10px] text-slate-500 italic mb-1.5">{s.description}</p>
+                              <p className="text-[10px] text-zinc-500 mb-1.5">{s.description}</p>
                             )}
 
                             {/* Student / Group */}
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mb-1">
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mb-1">
                               {s.schedule_type === 'individual' ? (
-                                <User size={12} className="text-slate-400 shrink-0" />
+                                <User size={12} className="text-zinc-400 shrink-0" />
                               ) : (
-                                <Users size={12} className="text-slate-400 shrink-0" />
+                                <Users size={12} className="text-zinc-400 shrink-0" />
                               )}
-                              <span className="font-bold text-slate-700">
+                              <span className="font-bold text-zinc-700">
                                 {s.schedule_type === 'individual'
                                   ? getStudentName(s.student_id)
                                   : getGroupName(s.group_id)}
@@ -405,11 +395,11 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
 
                             {/* Days pills */}
                             <div className="flex items-center gap-1 mb-1.5 flex-wrap">
-                              <span className="text-[8px] text-slate-400 font-bold uppercase mr-1">Дни:</span>
+                              <span className="text-[8px] text-zinc-400 font-bold mr-1">Дни:</span>
                               {s.days_of_week?.map((d) => (
                                 <span
                                   key={d}
-                                  className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[8px] font-black uppercase text-slate-600"
+                                  className="px-1.5 py-0.5 bg-white border border-zinc-200 rounded text-[8px] font-semibold text-zinc-600"
                                 >
                                   {DAY_CODES.find((x) => x.code === d)?.label || d}
                                 </span>
@@ -417,7 +407,7 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                             </div>
 
                             {/* Time / duration / price */}
-                            <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+                            <div className="flex items-center gap-3 text-[10px] text-zinc-500 flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Clock size={10} /> {s.time_start}
                               </span>
@@ -429,8 +419,8 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
 
                             {/* Recur until */}
                             {s.recur_until && (
-                              <div className="text-[9px] text-slate-400 mt-1">
-                                Повторять до: <span className="font-bold text-slate-600">
+                              <div className="text-[9px] text-zinc-400 mt-1">
+                                Повторять до: <span className="font-bold text-zinc-600">
                                   {dayjs.utc(s.recur_until).format('DD.MM.YYYY')}
                                 </span>
                               </div>
@@ -442,7 +432,7 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                             <button
                               onClick={() => startEdit(s)}
                               disabled={isBusy}
-                              className="p-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-slate-600 disabled:opacity-50"
+                              className="p-2 bg-zinc-200 hover:bg-zinc-300 rounded-xl text-zinc-600 disabled:opacity-50"
                               title="Редактировать"
                             >
                               <Pencil size={14} />
@@ -450,11 +440,7 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
                             <button
                               onClick={() => handleToggle(s.id, s.is_active)}
                               disabled={actionLoading === `toggle-${s.id}`}
-                              className={`p-2 rounded-xl disabled:opacity-50 ${
-                                s.is_active
-                                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-700'
-                                  : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700'
-                              }`}
+                              className={`p-2 rounded-xl disabled:opacity-50 ${ s.is_active ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700' : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700' }`}
                               title={s.is_active ? 'Остановить' : 'Включить'}
                             >
                               {actionLoading === `toggle-${s.id}` ? (
@@ -488,10 +474,10 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-slate-100">
+          <div className="p-6 border-t border-zinc-100">
             <button
               onClick={onClose}
-              className="w-full p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+              className="w-full p-4 bg-zinc-100 text-zinc-600 rounded-2xl font-semibold text-sm hover:bg-zinc-200 transition-all"
             >
               ЗАКРЫТЬ
             </button>

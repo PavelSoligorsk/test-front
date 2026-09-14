@@ -142,17 +142,17 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2rem] shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-3xl shadow-sm max-w-xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="p-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-t-[2rem]">
+        <div className="p-6 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-t-[2rem]">
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
                 <PlusCircle size={24} />
               </div>
               <div>
-                <h3 className="text-xl font-black uppercase">Новое занятие</h3>
-                <p className="text-emerald-200 text-[10px] font-bold uppercase mt-1">
+                <h3 className="text-xl font-semibold">Новое занятие</h3>
+                <p className="text-zinc-400 text-[10px] font-medium mt-1">
                   Создать расписание или разовое занятие
                 </p>
               </div>
@@ -165,18 +165,14 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           {/* Mode toggle */}
-          <div className="p-4 bg-slate-50 border-b border-slate-100">
+          <div className="p-4 bg-zinc-50 border-b border-zinc-100">
             <div className="flex gap-2">
               {MODE_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
                   onClick={() => setMode(opt.id)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${
-                    mode === opt.id
-                      ? 'bg-emerald-500 text-white shadow-lg'
-                      : 'bg-white text-slate-500 hover:bg-slate-100'
-                  }`}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-semibold transition-all ${ mode === opt.id ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-lg' : 'bg-white text-zinc-500 hover:bg-zinc-100' }`}
                 >
                   <opt.icon size={14} />
                   {opt.label}
@@ -195,29 +191,25 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
 
             {/* Title */}
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Название *</label>
+              <label className="text-sm font-medium text-zinc-500 block mb-1">Название *</label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Например: Математика 11 класс"
-                className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
               />
             </div>
 
             {/* Type: individual / group */}
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Тип занятия</label>
+              <label className="text-sm font-medium text-zinc-500 block mb-2">Тип занятия</label>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => { setLessonType('individual'); setGroupId(''); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${
-                    lessonType === 'individual'
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-semibold transition-all ${ lessonType === 'individual' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200' }`}
                 >
                   <User size={14} />
                   Индивидуальное
@@ -225,11 +217,7 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
                 <button
                   type="button"
                   onClick={() => { setLessonType('group'); setStudentId(''); }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${
-                    lessonType === 'group'
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-semibold transition-all ${ lessonType === 'group' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200' }`}
                 >
                   <Users size={14} />
                   Групповое
@@ -240,15 +228,15 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
             {/* Student selection (individual) */}
             {lessonType === 'individual' && (
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Ученик *</label>
+                <label className="text-sm font-medium text-zinc-500 block mb-1">Ученик *</label>
                 <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
                   <input
                     type="text"
                     placeholder="Поиск ученика..."
                     value={studentSearch}
                     onChange={(e) => setStudentSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-100"
+                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-100"
                   />
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1">
@@ -257,25 +245,21 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
                       key={s.id}
                       type="button"
                       onClick={() => setStudentId(s.id === studentId ? '' : s.id)}
-                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
-                        studentId === s.id
-                          ? 'bg-emerald-50 border border-emerald-200'
-                          : 'bg-slate-50 hover:bg-slate-100 border border-transparent'
-                      }`}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${ studentId === s.id ? 'bg-zinc-50 border border-zinc-200' : 'bg-zinc-50 hover:bg-zinc-100 border border-transparent' }`}
                     >
                       {studentId === s.id ? (
-                        <CheckSquare size={16} className="text-emerald-600 shrink-0" />
+                        <CheckSquare size={16} className="text-zinc-600 shrink-0" />
                       ) : (
-                        <Square size={16} className="text-slate-300 shrink-0" />
+                        <Square size={16} className="text-zinc-300 shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-800">{s.first_name} {s.last_name}</div>
-                        <div className="text-[10px] text-slate-400">@{s.username}</div>
+                        <div className="text-sm font-bold text-zinc-800">{s.first_name} {s.last_name}</div>
+                        <div className="text-[10px] text-zinc-400">@{s.username}</div>
                       </div>
                     </button>
                   ))}
                   {filteredStudents.length === 0 && (
-                    <p className="text-xs text-slate-400 italic text-center py-3">Ничего не найдено</p>
+                    <p className="text-xs text-zinc-400 text-center py-3">Ничего не найдено</p>
                   )}
                 </div>
               </div>
@@ -284,15 +268,15 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
             {/* Group selection (group) */}
             {lessonType === 'group' && (
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Группа *</label>
+                <label className="text-sm font-medium text-zinc-500 block mb-1">Группа *</label>
                 <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
                   <input
                     type="text"
                     placeholder="Поиск группы..."
                     value={groupSearch}
                     onChange={(e) => setGroupSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-100"
+                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-100"
                   />
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1">
@@ -301,24 +285,20 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
                       key={g.id}
                       type="button"
                       onClick={() => setGroupId(g.id === groupId ? '' : g.id)}
-                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
-                        groupId === g.id
-                          ? 'bg-emerald-50 border border-emerald-200'
-                          : 'bg-slate-50 hover:bg-slate-100 border border-transparent'
-                      }`}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${ groupId === g.id ? 'bg-zinc-50 border border-zinc-200' : 'bg-zinc-50 hover:bg-zinc-100 border border-transparent' }`}
                     >
                       {groupId === g.id ? (
-                        <CheckSquare size={16} className="text-emerald-600 shrink-0" />
+                        <CheckSquare size={16} className="text-zinc-600 shrink-0" />
                       ) : (
-                        <Square size={16} className="text-slate-300 shrink-0" />
+                        <Square size={16} className="text-zinc-300 shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-800">{g.name}</div>
+                        <div className="text-sm font-bold text-zinc-800">{g.name}</div>
                       </div>
                     </button>
                   ))}
                   {filteredGroups.length === 0 && (
-                    <p className="text-xs text-slate-400 italic text-center py-3">Ничего не найдено</p>
+                    <p className="text-xs text-zinc-400 text-center py-3">Ничего не найдено</p>
                   )}
                 </div>
               </div>
@@ -329,18 +309,14 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
               <>
                 {/* Days of week */}
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Дни недели *</label>
+                  <label className="text-sm font-medium text-zinc-500 block mb-2">Дни недели *</label>
                   <div className="flex flex-wrap gap-1.5">
                     {DAY_CODES.map((day) => (
                       <button
                         key={day.code}
                         type="button"
                         onClick={() => toggleDay(day.code)}
-                        className={`w-10 h-10 rounded-xl text-[10px] font-black uppercase transition-all ${
-                          daysOfWeek.includes(day.code)
-                            ? 'bg-emerald-500 text-white shadow-lg'
-                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                        }`}
+                        className={`w-10 h-10 rounded-xl text-[10px] font-semibold transition-all ${ daysOfWeek.includes(day.code) ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-lg' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200' }`}
                       >
                         {day.label}
                       </button>
@@ -350,37 +326,37 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
 
                 {/* Time start */}
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Время начала *</label>
+                  <label className="text-sm font-medium text-zinc-500 block mb-1">Время начала *</label>
                   <input
                     type="time"
                     value={timeStart}
                     onChange={(e) => setTimeStart(e.target.value)}
-                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                   />
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Описание</label>
+                  <label className="text-sm font-medium text-zinc-500 block mb-1">Описание</label>
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Например: Подготовка к ЕГЭ"
-                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                   />
                 </div>
 
                 {/* Recur-until */}
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">
-                    Повторять до <span className="text-slate-300 font-medium">(пусто = бессрочно)</span>
+                  <label className="text-sm font-medium text-zinc-500 block mb-1">
+                    Повторять до <span className="text-zinc-300 font-medium">(пусто = бессрочно)</span>
                   </label>
                   <input
                     type="datetime-local"
                     value={recurUntil}
                     onChange={(e) => setRecurUntil(e.target.value)}
-                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                   />
                 </div>
               </>
@@ -390,22 +366,22 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
             {mode === 'lesson' && (
               <>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Дата и время *</label>
+                  <label className="text-sm font-medium text-zinc-500 block mb-1">Дата и время *</label>
                   <input
                     type="datetime-local"
                     value={scheduledDate}
                     onChange={(e) => setScheduledDate(e.target.value)}
-                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Заметка</label>
+                  <label className="text-sm font-medium text-zinc-500 block mb-1">Заметка</label>
                   <textarea
                     value={teacherNote}
                     onChange={(e) => setTeacherNote(e.target.value)}
                     placeholder="О чём занятие..."
                     rows={2}
-                    className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200 resize-none"
+                    className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10 resize-none"
                   />
                 </div>
               </>
@@ -414,44 +390,44 @@ export default function CreateScheduleModal({ students, groups, defaultDate, onC
             {/* Common fields */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Длительность (мин)</label>
+                <label className="text-sm font-medium text-zinc-500 block mb-1">Длительность (мин)</label>
                 <input
                   type="number"
                   min="15"
                   max="300"
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value) || 60)}
-                  className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                  className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Цена (₽)</label>
+                <label className="text-sm font-medium text-zinc-500 block mb-1">Цена (₽)</label>
                 <input
                   type="number"
                   min="0"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="1500"
-                  className="w-full p-3 bg-slate-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                  className="w-full p-3 bg-zinc-50 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10"
                 />
               </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-slate-100 flex gap-3">
+          <div className="p-6 border-t border-zinc-100 flex gap-3">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 disabled:opacity-50"
+              className="flex-1 p-4 bg-zinc-100 text-zinc-600 rounded-2xl font-semibold text-sm hover:bg-zinc-200 disabled:opacity-50"
             >
               ОТМЕНА
             </button>
             <button
               type="submit"
               disabled={loading || !title.trim()}
-              className="flex-1 p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl font-black text-sm hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 p-4 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-2xl font-semibold text-sm hover:shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>

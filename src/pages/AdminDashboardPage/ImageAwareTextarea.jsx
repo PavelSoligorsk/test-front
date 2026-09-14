@@ -90,13 +90,13 @@ export default function ImageAwareTextarea({ value, onChange, placeholder, class
         required={required}
       />
       <div className="absolute bottom-2 right-2 flex gap-1">
-        <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 rounded-lg p-1.5 transition-colors">
-          <Upload size={14} className="text-slate-500" />
+        <label className="cursor-pointer bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl p-1.5 transition-colors">
+          <Upload size={14} className="text-zinc-500" />
           <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
         </label>
       </div>
       {isUploading && (
-        <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-md animate-pulse flex items-center gap-1">
+        <div className="absolute top-2 right-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 text-xs font-medium px-2.5 py-1 rounded-xl flex items-center gap-1.5">
           <Loader2 size={12} className="animate-spin" />
           {uploadProgress ? `${uploadProgress}%` : 'Загрузка...'}
         </div>

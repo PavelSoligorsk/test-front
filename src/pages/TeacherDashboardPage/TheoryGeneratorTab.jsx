@@ -100,17 +100,17 @@ function MermaidBlock({ chart }) {
 
   if (loading) {
     return (
-      <div className="my-4 p-8 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center">
+      <div className="my-4 p-8 bg-zinc-50 rounded-lg border border-zinc-200 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-slate-400">Загрузка диаграммы...</p>
+          <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-zinc-400">Загрузка диаграммы...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="my-6 p-4 bg-white rounded-lg border border-slate-200 overflow-x-auto mermaid-diagram">
+    <div className="my-6 p-4 bg-white rounded-lg border border-zinc-200 overflow-x-auto mermaid-diagram">
       <div 
         className="flex justify-center"
         dangerouslySetInnerHTML={{ __html: svg }} 
@@ -139,13 +139,13 @@ function TableOfContents({ md }) {
   if (headings.length === 0) return null;
 
   return (
-    <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200 print:bg-white print:border print:border-slate-300 no-print">
+    <div className="mb-8 p-4 bg-zinc-50 rounded-lg border border-zinc-200 print:bg-white print:border print:border-zinc-300 no-print">
       <div className="flex items-center gap-2 mb-3">
-        <ListTree size={16} className="text-purple-500" />
-        <span className="text-xs font-bold uppercase text-purple-600 tracking-wider">
+        <ListTree size={16} className="text-zinc-500" />
+        <span className="text-xs font-bold text-zinc-600 tracking-wider">
           Содержание
         </span>
-        <span className="text-[10px] text-slate-400 ml-auto">
+        <span className="text-[10px] text-zinc-400 ml-auto">
           {headings.length} разделов
         </span>
       </div>
@@ -154,10 +154,10 @@ function TableOfContents({ md }) {
           <a
             key={i}
             href={`#${h.id}`}
-            className="block text-xs text-slate-600 hover:text-purple-600 transition-colors py-0.5"
+            className="block text-xs text-zinc-600 hover:text-zinc-600 transition-colors py-0.5"
             style={{ paddingLeft: `${(h.level - 1) * 16 + 4}px` }}
           >
-            <span className="text-[10px] text-slate-400 mr-2">#{i + 1}</span>
+            <span className="text-[10px] text-zinc-400 mr-2">#{i + 1}</span>
             {h.text}
           </a>
         ))}
@@ -172,16 +172,16 @@ const CUSTOM_COMPONENTS = {
     const opts = (options || '').split(';').map(o => o.trim()).filter(Boolean);
     
     return (
-      <div className="my-6 p-6 bg-emerald-50 rounded-lg border border-emerald-200 print:border-2 quiz-widget">
+      <div className="my-6 p-6 bg-zinc-50 rounded-lg border border-zinc-200 print:border-2 quiz-widget">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          <div className="w-6 h-6 bg-zinc-900 rounded-full flex items-center justify-center text-white text-xs font-bold">
             Q
           </div>
-          <span className="text-xs font-bold uppercase text-emerald-600 tracking-wider">
+          <span className="text-xs font-bold text-zinc-600 tracking-wider">
             Проверь себя
           </span>
         </div>
-        <p className="text-sm font-bold text-slate-800 mb-4">{question}</p>
+        <p className="text-sm font-bold text-zinc-800 mb-4">{question}</p>
         <div className="space-y-2">
           {opts.map((opt, i) => {
             const isCorrect = opt === answer;
@@ -190,27 +190,23 @@ const CUSTOM_COMPONENTS = {
             return (
               <div 
                 key={i}
-                className={`px-4 py-2 rounded-lg border text-sm ${
-                  isCorrect 
-                    ? 'bg-emerald-100 border-emerald-400 text-emerald-700' 
-                    : 'bg-white border-slate-200 text-slate-700'
-                }`}
+                className={`px-4 py-2 rounded-lg border text-sm ${ isCorrect ? 'bg-zinc-100 border-zinc-400 text-zinc-700' : 'bg-white border-zinc-200 text-zinc-700' }`}
               >
-                <span className="font-mono text-xs text-slate-400 mr-2">{letter}.</span>
+                <span className="font-mono text-xs text-zinc-400 mr-2">{letter}.</span>
                 {opt}
                 {isCorrect && (
-                  <span className="ml-2 text-emerald-500">✓</span>
+                  <span className="ml-2 text-zinc-500">✓</span>
                 )}
               </div>
             );
           })}
         </div>
         {explanation && (
-          <div className="mt-4 p-3 bg-white rounded-lg border border-slate-200 text-xs text-slate-600">
+          <div className="mt-4 p-3 bg-white rounded-lg border border-zinc-200 text-xs text-zinc-600">
             <span className="font-bold">Пояснение:</span> {explanation}
           </div>
         )}
-        <div className="mt-3 text-xs text-slate-400 border-t border-emerald-200 pt-2">
+        <div className="mt-3 text-xs text-zinc-400 border-t border-zinc-200 pt-2">
           ✓ Правильный ответ: {answer}
         </div>
       </div>
@@ -218,29 +214,29 @@ const CUSTOM_COMPONENTS = {
   },
 
   info: ({ title, children }) => (
-    <div className="my-4 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg print:border-2">
-      <p className="font-bold text-blue-700 text-xs flex items-center gap-1.5 mb-1">
+    <div className="my-4 p-4 bg-zinc-50 border-l-4 border-zinc-400 rounded-r-lg print:border-2">
+      <p className="font-bold text-zinc-700 text-xs flex items-center gap-1.5 mb-1">
         <span className="text-base">ℹ️</span> {title || 'Информация'}
       </p>
-      <div className="text-sm text-blue-800">{children}</div>
+      <div className="text-sm text-zinc-800">{children}</div>
     </div>
   ),
   
   warn: ({ title, children }) => (
-    <div className="my-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg print:border-2">
-      <p className="font-bold text-amber-700 text-xs flex items-center gap-1.5 mb-1">
+    <div className="my-4 p-4 bg-zinc-50 border-l-4 border-zinc-400 rounded-r-lg print:border-2">
+      <p className="font-bold text-zinc-700 text-xs flex items-center gap-1.5 mb-1">
         <span className="text-base">⚠️</span> {title || 'Предупреждение'}
       </p>
-      <div className="text-sm text-amber-800">{children}</div>
+      <div className="text-sm text-zinc-800">{children}</div>
     </div>
   ),
   
   tip: ({ title, children }) => (
-    <div className="my-4 p-4 bg-emerald-50 border-l-4 border-emerald-400 rounded-r-lg print:border-2">
-      <p className="font-bold text-emerald-700 text-xs flex items-center gap-1.5 mb-1">
+    <div className="my-4 p-4 bg-zinc-50 border-l-4 border-zinc-400 rounded-r-lg print:border-2">
+      <p className="font-bold text-zinc-700 text-xs flex items-center gap-1.5 mb-1">
         <span className="text-base">💡</span> {title || 'Совет'}
       </p>
-      <div className="text-sm text-emerald-800">{children}</div>
+      <div className="text-sm text-zinc-800">{children}</div>
     </div>
   ),
 };
@@ -257,14 +253,14 @@ const MARKDOWN_COMPONENTS = {
 
     if (!inline) {
       return (
-        <div className="my-4 rounded-lg overflow-hidden border border-slate-200 print:border-2">
-          <div className="flex items-center justify-between px-4 py-2 bg-slate-800 print:bg-slate-900">
-            <span className="text-[10px] font-mono text-slate-400 uppercase print:text-slate-300">
+        <div className="my-4 rounded-lg overflow-hidden border border-zinc-200 print:border-2">
+          <div className="flex items-center justify-between px-4 py-2 bg-zinc-800 print:bg-zinc-900">
+            <span className="text-[10px] font-mono text-zinc-400 print:text-zinc-300">
               {lang || 'Код'}
             </span>
           </div>
-          <pre className="bg-slate-900 p-4 overflow-x-auto print:bg-black">
-            <code className="text-sm text-slate-200 font-mono leading-relaxed print:text-white">
+          <pre className="bg-zinc-900 p-4 overflow-x-auto print:bg-black">
+            <code className="text-sm text-zinc-200 font-mono leading-relaxed print:text-white">
               {codeStr}
             </code>
           </pre>
@@ -273,7 +269,7 @@ const MARKDOWN_COMPONENTS = {
     }
 
     return (
-      <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded text-sm font-mono print:bg-slate-200" {...props}>
+      <code className="bg-zinc-100 text-rose-600 px-1.5 py-0.5 rounded text-sm font-mono print:bg-zinc-200" {...props}>
         {children}
       </code>
     );
@@ -285,7 +281,7 @@ const MARKDOWN_COMPONENTS = {
     return (
       <h1 
         id={id} 
-        className="text-3xl font-bold text-slate-900 mt-8 mb-4 tracking-tight print:text-2xl print:mt-6" 
+        className="text-3xl font-bold text-zinc-900 mt-8 mb-4 tracking-tight print:text-2xl print:mt-6" 
         {...props}
       >
         {text}
@@ -299,7 +295,7 @@ const MARKDOWN_COMPONENTS = {
     return (
       <h2 
         id={id} 
-        className="text-2xl font-bold text-slate-800 mt-8 mb-3 border-b border-slate-200 pb-2 print:text-xl print:mt-6" 
+        className="text-2xl font-bold text-zinc-800 mt-8 mb-3 border-b border-zinc-200 pb-2 print:text-xl print:mt-6" 
         {...props}
       >
         {text}
@@ -313,7 +309,7 @@ const MARKDOWN_COMPONENTS = {
     return (
       <h3 
         id={id} 
-        className="text-xl font-bold text-slate-800 mt-6 mb-2 print:text-lg print:mt-4" 
+        className="text-xl font-bold text-zinc-800 mt-6 mb-2 print:text-lg print:mt-4" 
         {...props}
       >
         {text}
@@ -327,7 +323,7 @@ const MARKDOWN_COMPONENTS = {
     return (
       <h4 
         id={id} 
-        className="text-lg font-bold text-slate-800 mt-4 mb-2 print:text-base print:mt-3" 
+        className="text-lg font-bold text-zinc-800 mt-4 mb-2 print:text-base print:mt-3" 
         {...props}
       >
         {text}
@@ -336,37 +332,37 @@ const MARKDOWN_COMPONENTS = {
   },
   
   p: ({ children, ...props }) => (
-    <p className="text-sm text-slate-700 leading-relaxed mb-4 print:text-xs print:leading-relaxed" {...props}>
+    <p className="text-sm text-zinc-700 leading-relaxed mb-4 print:text-xs print:leading-relaxed" {...props}>
       {children}
     </p>
   ),
   
   ul: ({ children, ...props }) => (
-    <ul className="space-y-1 mb-4 list-disc list-inside text-sm text-slate-700 print:space-y-0.5" {...props}>
+    <ul className="space-y-1 mb-4 list-disc list-inside text-sm text-zinc-700 print:space-y-0.5" {...props}>
       {children}
     </ul>
   ),
   
   ol: ({ children, ...props }) => (
-    <ol className="space-y-1 mb-4 list-decimal list-inside text-sm text-slate-700 print:space-y-0.5" {...props}>
+    <ol className="space-y-1 mb-4 list-decimal list-inside text-sm text-zinc-700 print:space-y-0.5" {...props}>
       {children}
     </ol>
   ),
   
   li: ({ children, ...props }) => (
-    <li className="text-sm text-slate-700 leading-relaxed print:text-xs" {...props}>
+    <li className="text-sm text-zinc-700 leading-relaxed print:text-xs" {...props}>
       {children}
     </li>
   ),
   
   blockquote: ({ children, ...props }) => (
-    <blockquote className="my-4 pl-4 border-l-4 border-purple-400 text-slate-600 italic print:border-l-2" {...props}>
+    <blockquote className="my-4 pl-4 border-l-4 border-zinc-400 text-zinc-600 italic print:border-l-2" {...props}>
       {children}
     </blockquote>
   ),
   
   img: ({ src, alt, ...props }) => (
-    <div className="my-6 overflow-hidden rounded-lg bg-slate-100 print:bg-white print:border print:border-slate-200">
+    <div className="my-6 overflow-hidden rounded-lg bg-zinc-100 print:bg-white print:border print:border-zinc-200">
       <img
         src={src}
         alt={alt || 'Изображение'}
@@ -375,7 +371,7 @@ const MARKDOWN_COMPONENTS = {
         {...props}
       />
       {alt && (
-        <p className="text-[10px] text-center text-slate-400 py-2 border-t border-slate-200 print:text-[8px]">
+        <p className="text-[10px] text-center text-zinc-400 py-2 border-t border-zinc-200 print:text-[8px]">
           {alt}
         </p>
       )}
@@ -383,19 +379,19 @@ const MARKDOWN_COMPONENTS = {
   ),
   
   table: ({ ...props }) => (
-    <div className="overflow-x-auto my-6 rounded-lg border border-slate-200 print:border-2">
+    <div className="overflow-x-auto my-6 rounded-lg border border-zinc-200 print:border-2">
       <table className="min-w-full border-collapse" {...props} />
     </div>
   ),
   
   th: ({ children, ...props }) => (
-    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-bold uppercase text-slate-600 border-b border-slate-200 print:bg-slate-100" {...props}>
+    <th className="bg-zinc-50 px-4 py-3 text-left text-xs font-bold text-zinc-600 border-b border-zinc-200 print:bg-zinc-100" {...props}>
       {children}
     </th>
   ),
   
   td: ({ children, ...props }) => (
-    <td className="px-4 py-3 text-sm text-slate-700 border-b border-slate-100 print:text-xs" {...props}>
+    <td className="px-4 py-3 text-sm text-zinc-700 border-b border-zinc-100 print:text-xs" {...props}>
       {children}
     </td>
   ),
@@ -403,7 +399,7 @@ const MARKDOWN_COMPONENTS = {
   a: ({ href, children, ...props }) => (
     <a 
       href={href} 
-      className="text-purple-600 hover:text-purple-800 underline underline-offset-2 transition-colors print:text-purple-800" 
+      className="text-zinc-600 hover:text-zinc-800 underline underline-offset-2 transition-colors print:text-zinc-800" 
       target="_blank" 
       rel="noopener noreferrer" 
       {...props}
@@ -412,13 +408,13 @@ const MARKDOWN_COMPONENTS = {
     </a>
   ),
   
-  hr: () => <hr className="my-8 border-0 border-t-2 border-slate-200 print:my-6" />,
+  hr: () => <hr className="my-8 border-0 border-t-2 border-zinc-200 print:my-6" />,
   
-  strong: ({ children }) => <strong className="font-bold text-slate-900 print:text-black">{children}</strong>,
+  strong: ({ children }) => <strong className="font-bold text-zinc-900 print:text-black">{children}</strong>,
   
-  em: ({ children }) => <em className="italic text-slate-600 print:text-slate-700">{children}</em>,
+  em: ({ children }) => <em className="italic text-zinc-600 print:text-zinc-700">{children}</em>,
   
-  del: ({ children }) => <del className="text-slate-400 line-through print:text-slate-500">{children}</del>,
+  del: ({ children }) => <del className="text-zinc-400 line-through print:text-zinc-500">{children}</del>,
 };
 
 // ── Process custom tags ──
@@ -669,46 +665,46 @@ export default function TheoryGeneratorTab() {
       `}</style>
 
       {/* Header */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100 dark:border-slate-700 mb-4 no-print">
+      <div className="bg-white dark:bg-[#09090b] rounded-3xl p-5 md:p-6 shadow-sm border border-zinc-200 dark:border-zinc-800/60 mb-4 no-print">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-zinc-600 to-pink-600 rounded-xl flex items-center justify-center">
               <BookOpen size={20} className="text-white" />
             </div>
             <div>
-              <h2 className="text-lg md:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
+              <h2 className="text-lg md:text-xl font-semibold text-zinc-900 dark:text-white tracking-tight">
                 Генератор теории
               </h2>
-              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">
+              <p className="text-xs font-medium text-zinc-400 tracking-wider">
                 PDF-оптимизированный редактор
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 flex-wrap">
-            <span className="px-2 py-1 bg-slate-100 rounded-lg">
+          <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 flex-wrap">
+            <span className="px-2 py-1 bg-zinc-100 rounded-lg">
               {charCount.toLocaleString()} симв.
             </span>
-            <span className="px-2 py-1 bg-slate-100 rounded-lg">
+            <span className="px-2 py-1 bg-zinc-100 rounded-lg">
               {wordCount.toLocaleString()} слов
             </span>
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors text-slate-600"
+              className="flex items-center gap-1 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors text-zinc-600"
             >
-              {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+              {copied ? <Check size={12} className="text-zinc-500" /> : <Copy size={12} />}
               {copied ? 'Скопировано' : 'Копировать'}
             </button>
             <button
               onClick={handleReset}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors text-slate-500"
+              className="px-3 py-1.5 bg-zinc-100 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors text-zinc-500"
             >
               Сброс
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 mt-4 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl w-fit flex-wrap">
+        <div className="flex items-center gap-1 mt-4 bg-zinc-100 dark:bg-zinc-700/50 p-1 rounded-xl w-fit flex-wrap">
           {[
             { id: 'edit', icon: Edit3, label: 'Редактор' },
             { id: 'split', icon: Maximize2, label: 'Раздельный' },
@@ -717,20 +713,16 @@ export default function TheoryGeneratorTab() {
             <button
               key={id}
               onClick={() => setViewMode(id)}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
-                viewMode === id
-                  ? 'bg-white dark:bg-slate-600 text-purple-600 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${ viewMode === id ? 'bg-white dark:bg-white text-zinc-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600' }`}
             >
               <Icon size={12} />
               {label}
             </button>
           ))}
-          <div className="w-px h-6 bg-slate-200 mx-1" />
+          <div className="w-px h-6 bg-zinc-200 mx-1" />
           <button
             onClick={handleExportPDF}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-semibold bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           >
             <FileDown size={12} />
             Экспорт PDF
@@ -741,16 +733,16 @@ export default function TheoryGeneratorTab() {
       {/* Editor + Preview */}
       <div className={`grid ${viewMode === 'split' ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-4`}>
         {(viewMode === 'split' || viewMode === 'edit') && (
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col min-h-[70vh] no-print">
-            <div className="px-5 py-3 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
-              <Edit3 size={14} className="text-purple-500" />
-              <span className="text-[10px] font-black uppercase text-slate-500">Markdown</span>
-              <span className="text-[9px] text-slate-400 ml-auto">Поддержка LaTeX, таблиц, mermaid</span>
+          <div className="bg-white dark:bg-zinc-800 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden flex flex-col min-h-[70vh] no-print">
+            <div className="px-5 py-3 bg-zinc-50 dark:bg-zinc-700/50 border-b border-zinc-200 dark:border-zinc-800/60 flex items-center gap-2">
+              <Edit3 size={14} className="text-zinc-500" />
+              <span className="text-[10px] font-semibold text-zinc-500">Markdown</span>
+              <span className="text-[9px] text-zinc-400 ml-auto">Поддержка LaTeX, таблиц, mermaid</span>
             </div>
             <textarea
               value={rawMd}
               onChange={(e) => setRawMd(e.target.value)}
-              className="flex-1 w-full p-5 bg-transparent text-sm text-slate-800 dark:text-slate-200 font-mono resize-none outline-none leading-relaxed"
+              className="flex-1 w-full p-5 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 font-mono resize-none outline-none leading-relaxed"
               placeholder="Пишите свой Markdown здесь..."
               spellCheck={false}
             />
@@ -760,12 +752,12 @@ export default function TheoryGeneratorTab() {
         {(viewMode === 'split' || viewMode === 'preview') && (
           <div 
             ref={previewRef}
-            className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden min-h-[70vh]"
+            className="bg-white dark:bg-zinc-800 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden min-h-[70vh]"
           >
-            <div className="px-5 py-3 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2 no-print">
-              <Eye size={14} className="text-purple-500" />
-              <span className="text-[10px] font-black uppercase text-slate-500">Превью</span>
-              <span className="text-[9px] text-slate-400 ml-auto">Оптимизировано для PDF</span>
+            <div className="px-5 py-3 bg-zinc-50 dark:bg-zinc-700/50 border-b border-zinc-200 dark:border-zinc-800/60 flex items-center gap-2 no-print">
+              <Eye size={14} className="text-zinc-500" />
+              <span className="text-[10px] font-semibold text-zinc-500">Превью</span>
+              <span className="text-[9px] text-zinc-400 ml-auto">Оптимизировано для PDF</span>
             </div>
             <div className="p-5 overflow-y-auto preview-content">
               <TableOfContents md={processedMd} />
@@ -786,8 +778,8 @@ export default function TheoryGeneratorTab() {
         )}
       </div>
 
-      <div className="mt-6 bg-white dark:bg-slate-800/50 rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100 dark:border-slate-700 no-print">
-        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">Поддерживаемые возможности</p>
+      <div className="mt-6 bg-white dark:bg-[#09090b] rounded-3xl p-5 md:p-6 shadow-sm border border-zinc-200 dark:border-zinc-800/60 no-print">
+        <p className="text-[10px] font-semibold text-zinc-400 tracking-wider mb-3">Поддерживаемые возможности</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
           {[
             { label: 'Заголовки H1–H6', done: true },
@@ -804,17 +796,17 @@ export default function TheoryGeneratorTab() {
             { label: 'Callout блоки', done: true },
           ].map(({ label, done }) => (
             <div key={label} className="flex items-center gap-1.5 text-[10px] font-bold">
-              <span className={`w-4 h-4 rounded-full flex items-center justify-center ${done ? 'bg-emerald-100 text-emerald-500' : 'bg-slate-100 text-slate-300'}`}>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center ${done ? 'bg-zinc-100 text-zinc-500' : 'bg-zinc-100 text-zinc-300'}`}>
                 {done ? <Check size={10} /> : '·'}
               </span>
-              <span className={done ? 'text-slate-600' : 'text-slate-300'}>{label}</span>
+              <span className={done ? 'text-zinc-600' : 'text-zinc-300'}>{label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="mt-4 text-center text-[10px] text-slate-400 no-print">
-        💡 Нажмите <kbd className="px-2 py-0.5 bg-slate-100 rounded border">Ctrl+P</kbd> или <kbd className="px-2 py-0.5 bg-slate-100 rounded border">Cmd+P</kbd> для сохранения в PDF
+      <div className="mt-4 text-center text-[10px] text-zinc-400 no-print">
+        💡 Нажмите <kbd className="px-2 py-0.5 bg-zinc-100 rounded border">Ctrl+P</kbd> или <kbd className="px-2 py-0.5 bg-zinc-100 rounded border">Cmd+P</kbd> для сохранения в PDF
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, AlertCircle, Trash2, Hash, Loader2, Sparkles } from 'lucide-react';
+import { Eye, AlertCircle, Trash2, Loader2, Sparkles, Inbox } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { fetchTask } from './api';
+import { IconWell, InlineNotice } from '../../shared/ui';
 
-const MetaBadge = ({ label, value, color }) => (
-  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap ${color || 'bg-slate-100 text-slate-600'}`}>
+const MetaBadge = ({ label, value }) => (
+  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium whitespace-nowrap bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
     {label}: {value}
   </span>
 );
@@ -24,7 +25,6 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
   const [fetchedTasks, setFetchedTasks] = useState({});
   const [loadingTasks, setLoadingTasks] = useState(false);
 
-  // Пакетная подгрузка данных заданий по ID через Promise.all(adminApi.getTask)
   useEffect(() => {
     if (!hasText || error || !parsed || mode === 'create') {
       setFetchedTasks({});
@@ -46,16 +46,14 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
     const fetchTasks = async () => {
       try {
         const uniqueIds = [...new Set(idsToFetch)];
-        // Внутри useEffect в BatchPreview.jsx замените adminApi.getTask(id) на fetchTask(id):
-
-const requests = uniqueIds.map(id =>
-  fetchTask(id)
-    .then(data => ({ id, data })) // fetchTask возвращает res.data напрямую
-    .catch(() => ({ id, data: null }))
-);
+        const requests = uniqueIds.map(id =>
+          fetchTask(id)
+            .then(data => ({ id, data }))
+            .catch(() => ({ id, data: null }))
+        );
 
         const results = await Promise.all(requests);
-        
+
         if (!isMounted) return;
 
         const taskMap = {};
@@ -80,48 +78,44 @@ const requests = uniqueIds.map(id =>
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-            <Eye size={18} className="text-white" />
-          </div>
+          <IconWell><Eye size={18} strokeWidth={2} /></IconWell>
           <div>
-            <h3 className="text-sm font-black text-slate-800 uppercase italic tracking-tighter">Предпросмотр</h3>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-              {!hasText || error || !parsed ? 'ожидание данных' : `${parsed.length} ${countLabel}`}
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Предпросмотр</h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {!hasText || error || !parsed ? 'Ожидание данных' : `${parsed.length} ${countLabel}`}
             </p>
           </div>
         </div>
 
         {loadingTasks && (
-          <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 animate-pulse bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+          <div className="flex items-center gap-2 text-sm font-medium text-zinc-500 bg-zinc-50 dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <Loader2 size={14} className="animate-spin" /> Подгрузка...
           </div>
         )}
       </div>
 
-      {/* Empty state */}
       {!hasText && (
-        <div className="bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-10 flex flex-col items-center justify-center text-center min-h-[300px]">
-          <Eye size={32} className="text-slate-200 mb-3" />
-          <p className="text-sm font-black text-slate-400 uppercase tracking-wider">Здесь будет предпросмотр</p>
-          <p className="text-[11px] font-bold text-slate-300 mt-1">Введите JSON в поле слева</p>
+        <div className="rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 p-10 flex flex-col items-center justify-center text-center min-h-[300px]">
+          <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-400 mb-3">
+            <Inbox size={20} />
+          </div>
+          <p className="text-sm font-medium text-zinc-500">Здесь будет предпросмотр</p>
+          <p className="text-sm text-zinc-400 mt-1">Введите YAML в поле слева</p>
         </div>
       )}
 
-      {/* Error state */}
       {hasText && error && (
-        <div className="bg-red-50 border border-red-200 rounded-[2rem] p-6 flex items-start gap-3 min-h-[200px]">
-          <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+        <div className="rounded-3xl border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-6 flex items-start gap-3 min-h-[200px]">
+          <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
           <div className="min-w-0">
-            <h4 className="text-[10px] font-black text-red-700 uppercase tracking-widest mb-2">Предпросмотр недоступен</h4>
-            <pre className="text-[11px] text-red-600 font-mono whitespace-pre-wrap leading-relaxed break-words">{error}</pre>
+            <InlineNotice tone="error">Предпросмотр недоступен</InlineNotice>
+            <pre className="mt-2 text-xs text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap leading-relaxed break-words">{error}</pre>
           </div>
         </div>
       )}
 
-      {/* DELETE PREVIEW */}
       {hasText && !error && parsed && mode === 'delete' && (
         <div className="space-y-4">
           {parsed.map((id) => {
@@ -129,14 +123,14 @@ const requests = uniqueIds.map(id =>
             const isClosed = task?.is_open_answer === false;
 
             return (
-              <div key={id} className="bg-white rounded-[2rem] border-2 border-red-100 shadow-sm p-5 space-y-3 relative overflow-hidden">
-                <div className="flex items-center justify-between border-b border-red-50 pb-2">
+              <div key={id} className="bg-white dark:bg-[#09090b] rounded-3xl border border-red-200 dark:border-red-900/40 shadow-sm p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/60 pb-2">
                   <div className="flex items-center gap-2">
-                    <Trash2 size={16} className="text-red-500" />
-                    <span className="text-xs font-black text-red-700 uppercase">Задание #{id}</span>
+                    <Trash2 size={16} className="text-red-600" />
+                    <span className="text-sm font-medium text-red-700 dark:text-red-400">Задание #{id}</span>
                   </div>
                   {!task && !loadingTasks && (
-                    <span className="px-2.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-[10px] font-black uppercase">
+                    <span className="px-2.5 py-0.5 bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-medium">
                       Не найдено в базе
                     </span>
                   )}
@@ -148,8 +142,8 @@ const requests = uniqueIds.map(id =>
                       {task.task_class && <MetaBadge label="Класс" value={task.task_class} />}
                       {task.topic_number && <MetaBadge label="Тема №" value={task.topic_number} />}
                       {task.difficulty && <MetaBadge label="Сложность" value={task.difficulty} />}
-                      {task.topic && <MetaBadge label="Тема" value={task.topic} color="bg-slate-100 text-slate-600" />}
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${isClosed ? 'bg-blue-100 text-blue-700' : 'bg-emerald-50 text-emerald-600'}`}>
+                      {task.topic && <MetaBadge label="Тема" value={task.topic} />}
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
                         {isClosed ? 'Тест' : 'Открытый'}
                       </span>
                     </div>
@@ -161,13 +155,13 @@ const requests = uniqueIds.map(id =>
                     )}
 
                     {task.answer !== undefined && task.answer !== null && (
-                      <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-2 text-xs font-black text-slate-700">
+                      <div className="rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 tabular-nums">
                         Ответ: {task.answer}
                       </div>
                     )}
                   </>
                 ) : (
-                  <p className="text-xs font-mono text-slate-400">Ожидание загрузки данных задания #{id}...</p>
+                  <p className="text-sm text-zinc-400 font-mono">Ожидание загрузки данных задания #{id}...</p>
                 )}
               </div>
             );
@@ -175,7 +169,6 @@ const requests = uniqueIds.map(id =>
         </div>
       )}
 
-      {/* CREATE & UPDATE PREVIEW */}
       {hasText && !error && parsed && (mode === 'create' || mode === 'update') && (
         <div className="space-y-4">
           {parsed.map((item, i) => {
@@ -184,64 +177,61 @@ const requests = uniqueIds.map(id =>
             const isClosed = task.is_open_answer === false;
 
             return (
-              <div key={i} className={`bg-white rounded-[2rem] border shadow-sm p-5 space-y-3 ${mode === 'update' ? 'border-amber-200' : 'border-slate-200'}`}>
+              <div key={i} className={`bg-white dark:bg-[#09090b] rounded-3xl border shadow-sm p-5 space-y-3 ${
+                mode === 'update' ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800/60'
+              }`}>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <MetaBadge 
-                    label={mode === 'update' ? "ID" : "№"} 
-                    value={mode === 'update' ? `#${task.id}` : i + 1} 
-                    color={mode === 'update' ? "bg-amber-100 text-amber-800" : "bg-blue-50 text-blue-600"} 
+                  <MetaBadge
+                    label={mode === 'update' ? 'ID' : '№'}
+                    value={mode === 'update' ? `#${task.id}` : i + 1}
                   />
                   {task.task_class && <MetaBadge label="Класс" value={task.task_class} />}
                   {task.topic_number && <MetaBadge label="Тема №" value={task.topic_number} />}
                   {task.difficulty && <MetaBadge label="Сложность" value={task.difficulty} />}
-                  {task.topic && <MetaBadge label="Тема" value={task.topic} color="bg-violet-50 text-violet-600" />}
-                  {task.section && <MetaBadge label="Раздел" value={task.section} color="bg-violet-50 text-violet-600" />}
-                  
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${isClosed ? 'bg-blue-100 text-blue-700' : 'bg-emerald-50 text-emerald-600'}`}>
+                  {task.topic && <MetaBadge label="Тема" value={task.topic} />}
+                  {task.section && <MetaBadge label="Раздел" value={task.section} />}
+
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
                     {isClosed ? 'Тест' : 'Открытый'}
                   </span>
 
                   {mode === 'update' && item.id && !fetchedTasks[item.id] && !loadingTasks && (
-                    <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[9px] font-black uppercase">
+                    <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/30 text-red-600 border border-red-200 dark:border-red-900/40 rounded-xl text-xs font-medium">
                       ID #{item.id} не найден
                     </span>
                   )}
                 </div>
 
-                {/* Content / Condition */}
                 {task.content ? (
                   <div className="relative">
                     {mode === 'update' && item.content !== undefined && (
-                      <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[9px] font-black uppercase">
+                      <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 text-xs font-medium">
                         <Sparkles size={10} /> Изменено
                       </span>
                     )}
                     <MarkdownPreview text={task.content} title={`Задание ${task.id ? `#${task.id}` : i + 1}`} />
                   </div>
                 ) : (
-                  <div className="p-3 bg-slate-50 rounded-xl text-xs text-slate-400 font-bold">
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl text-sm text-zinc-400 font-medium">
                     Условие подгружается или отсутствует
                   </div>
                 )}
 
-                {/* Options */}
                 {isClosed && parseOptions(task.options).length > 0 && (
                   <MarkdownPreview title="Варианты ответа" text={optionsToMarkdown(task.options)} />
                 )}
 
-                {/* Hints & Solutions */}
-                {task.hint && <MarkdownPreview text={`> **Подсказка:** ${task.hint}`} title="Hint" type="hint" />}
+                {task.hint && <MarkdownPreview text={`> **Подсказка:** ${task.hint}`} title="Подсказка" type="hint" />}
                 {task.solution && <MarkdownPreview text={task.solution} title="Решение" type="solution" />}
 
-                {/* Answer */}
                 {task.answer !== undefined && task.answer !== null && (
-                  <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 flex items-center justify-between">
+                  <div className="rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center justify-between gap-3">
                     <div>
-                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Ответ: </span>
-                      <span className="text-sm font-black text-emerald-800">{String(task.answer)}</span>
+                      <span className="text-sm font-medium text-zinc-500">Ответ: </span>
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">{String(task.answer)}</span>
                     </div>
                     {mode === 'update' && item.answer !== undefined && (
-                      <span className="text-[9px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md uppercase">
+                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-200/60 dark:bg-zinc-800 px-2 py-0.5 rounded-lg">
                         Новый ответ
                       </span>
                     )}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Layers, Upload, Edit3, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { Layers, Upload, Edit3, Trash2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { parse as parseYaml } from 'yaml';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
 import BatchPromptModal from './BatchPromptModal';
 import BatchPreview from './BatchPreview';
 import BatchYamlTextarea from './BatchYamlTextarea';
+import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
 const EXAMPLE_CREATE = `- task_class: "10"
   topic_number: "1.1"
@@ -72,7 +73,7 @@ const EXAMPLE_DELETE = `- 1
 - 5`;
 
 export default function BatchTab({ onSuccess }) {
-  const [mode, setMode] = useState('create'); // create | update | delete
+  const [mode, setMode] = useState('create');
   const [yamlText, setYamlText] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -109,7 +110,6 @@ export default function BatchTab({ onSuccess }) {
           throw new Error(`Элемент [${i}]: отсутствует или некорректный id`);
         }
       } else {
-        // create
         if (!item.task_class || !String(item.task_class).trim()) throw new Error(`Элемент [${i}]: отсутствует task_class`);
         if (!item.topic_number || !String(item.topic_number).trim()) throw new Error(`Элемент [${i}]: отсутствует topic_number`);
         if (!item.content || !String(item.content).trim()) throw new Error(`Элемент [${i}]: отсутствует content`);
@@ -118,7 +118,6 @@ export default function BatchTab({ onSuccess }) {
         if (item.difficulty !== undefined && item.difficulty !== null && (Number(item.difficulty) < 1 || Number(item.difficulty) > 5)) throw new Error(`Элемент [${i}]: difficulty должно быть 1-5`);
       }
     }
-    // Нормализация перед отправкой
     return parsed.map(item => {
       if (currentMode === 'update') {
         const copy = { ...item };
@@ -135,7 +134,6 @@ export default function BatchTab({ onSuccess }) {
       };
     });
   };
-
 
   const updatePreview = (text, currentMode) => {
     if (!text.trim()) {
@@ -227,42 +225,32 @@ export default function BatchTab({ onSuccess }) {
 
   const modeLabel = mode === 'create' ? 'Создание' : mode === 'update' ? 'Обновление' : 'Удаление';
   const ModeIcon = mode === 'create' ? Upload : mode === 'update' ? Edit3 : Trash2;
-  const modeColor = mode === 'create'
-    ? 'from-emerald-600 to-teal-600'
-    : mode === 'update'
-      ? 'from-amber-600 to-orange-600'
-      : 'from-red-600 to-rose-600';
-
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-200">
+      <Sheet className="p-5 md:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 bg-gradient-to-br ${modeColor} rounded-xl flex items-center justify-center`}>
-              <Layers size={20} className="text-white" />
-            </div>
+            <IconWell><Layers size={18} strokeWidth={2} /></IconWell>
             <div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-800 uppercase italic tracking-tighter">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
                 Пакетные операции
               </h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
                 {modeLabel} до 500 заданий за раз
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Справка по формату */}
             <button
+              type="button"
               onClick={() => setPromptModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl text-[10px] font-black uppercase transition-all"
+              className={secondaryBtnClass}
               title="Показать справку по формату"
             >
-              <MessageSquare size={12} /> Справка
+              <MessageSquare size={14} /> Справка
             </button>
-            {/* Mode switcher */}
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+            <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl">
               {[
                 { id: 'create', label: 'Создать', icon: Upload },
                 { id: 'update', label: 'Обновить', icon: Edit3 },
@@ -270,11 +258,12 @@ export default function BatchTab({ onSuccess }) {
               ].map(m => (
                 <button
                   key={m.id}
+                  type="button"
                   onClick={() => handleModeChange(m.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                     mode === m.id
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                   }`}
                 >
                   <m.icon size={14} />
@@ -284,50 +273,46 @@ export default function BatchTab({ onSuccess }) {
             </div>
           </div>
         </div>
-      </div>
+      </Sheet>
 
-      {/* YAML Input + Preview (каждая панель скроллится отдельно) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-4 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
-          <div className="flex items-center justify-between">
+        <Sheet className="p-6 space-y-4 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 YAML {mode === 'delete' ? '(список ID)' : '(список заданий)'}
               </span>
               {yamlText && (
-                <span className="text-[9px] font-bold text-slate-400">
+                <span className="text-xs text-zinc-400 tabular-nums">
                   {yamlText.split('\n').length} строк
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setShowExample(!showExample)}
-                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+                className={secondaryBtnClass + ' !py-1.5 text-xs'}
               >
                 Пример
                 {showExample ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               <button
+                type="button"
                 onClick={handleLoadExample}
-                className="px-3 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all"
+                className={secondaryBtnClass + ' !py-1.5 text-xs'}
               >
                 Загрузить пример
               </button>
             </div>
           </div>
 
-
-          {/* Справка по формату */}
           {promptModalOpen && (
-            <BatchPromptModal
-              onClose={() => setPromptModalOpen(false)}
-            />
+            <BatchPromptModal onClose={() => setPromptModalOpen(false)} />
           )}
 
-          {/* Example panel */}
           {showExample && (
-            <div className="rounded-2xl bg-slate-900 p-5 font-mono text-xs text-slate-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
+            <div className="rounded-xl bg-zinc-900 p-5 font-mono text-xs text-zinc-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
               {getExample().trim()}
             </div>
           )}
@@ -338,87 +323,72 @@ export default function BatchTab({ onSuccess }) {
             placeholder={mode === 'delete'
               ? 'Введите ID заданий, каждый с новой строки:\n- 1\n- 2\n- 3'
               : 'Введите задания через YAML. Ctrl+V / перетащите картинку — вставится как ![имя](url) без кавычек'}
-            className="w-full h-[500px] p-4 font-mono text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold focus:outline-none resize-y transition-colors"
+            className={`${fieldClass} h-[500px] font-mono text-xs resize-y`}
             rows={20}
           />
 
-          {/* Submit */}
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={loading || !yamlText.trim()}
-            className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm uppercase transition-all ${
-              loading
-                ? 'bg-slate-200 text-slate-400 cursor-wait'
-                : `bg-gradient-to-r ${modeColor} text-white hover:shadow-lg active:scale-[0.98]`
-            }`}
+            className={`${primaryBtnClass} w-full ${mode === 'delete' ? 'hover:bg-red-700 dark:hover:bg-red-200' : ''}`}
           >
             {loading ? (
-              <><Loader2 size={18} className="animate-spin" /> Обработка...</>
+              <><Loader2 size={16} className="animate-spin" /> Обработка...</>
             ) : (
-              <><ModeIcon size={18} /> {modeLabel} задания</>
+              <><ModeIcon size={16} /> {modeLabel} задания</>
             )}
           </button>
-        </div>
+        </Sheet>
 
-        {/* Preview panel */}
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
+        <Sheet className="p-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
           <BatchPreview
             mode={previewMode}
             parsed={previewData}
             error={previewError}
             hasText={!!yamlText.trim()}
           />
-        </div>
+        </Sheet>
       </div>
 
-      {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-[2rem] p-6 flex items-start gap-3">
-          <AlertCircle size={20} className="text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <h4 className="text-sm font-black text-red-700 uppercase mb-1">Ошибка</h4>
-            <pre className="text-xs text-red-600 font-mono whitespace-pre-wrap leading-relaxed">{error}</pre>
-          </div>
-        </div>
+        <Sheet className="p-5">
+          <InlineNotice tone="error">{error}</InlineNotice>
+        </Sheet>
       )}
 
-      {/* Result */}
       {result && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-[2rem] p-6 flex items-start gap-3">
-          <CheckCircle2 size={20} className="text-emerald-500 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-black text-emerald-700 uppercase mb-2">Готово</h4>
-            {result.type === 'create' && (
-              <p className="text-xs font-bold text-emerald-600">
-                Создано: <span className="text-emerald-800 text-lg font-black">{result.data.total}</span> заданий
-              </p>
-            )}
-            {result.type === 'update' && (
-              <div className="space-y-1 text-xs font-bold text-emerald-600">
-                <p>Обновлено: <span className="text-emerald-800 font-black">{result.data.total_updated}</span></p>
-                {result.data.not_found?.length > 0 && (
-                  <p className="text-amber-600">
-                    Не найдено: <span className="text-amber-800 font-black">{result.data.not_found.length}</span>
-                    <span className="text-[10px] ml-2">({result.data.not_found.join(', ')})</span>
-                  </p>
-                )}
-              </div>
-            )}
-            {result.type === 'delete' && (
-              <div className="space-y-1 text-xs font-bold text-emerald-600">
-                <p>Удалено: <span className="text-emerald-800 font-black">{result.data.total_deleted}</span></p>
-                {result.data.not_found?.length > 0 && (
-                  <p className="text-amber-600">
-                    Не найдено: <span className="text-amber-800 font-black">{result.data.not_found.length}</span>
-                    <span className="text-[10px] ml-2">({result.data.not_found.join(', ')})</span>
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <Sheet className="p-5 space-y-1">
+          <InlineNotice tone="success">Готово</InlineNotice>
+          {result.type === 'create' && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Создано: <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{result.data.total}</span> заданий
+            </p>
+          )}
+          {result.type === 'update' && (
+            <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <p>Обновлено: <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{result.data.total_updated}</span></p>
+              {result.data.not_found?.length > 0 && (
+                <p>
+                  Не найдено: <span className="font-semibold tabular-nums">{result.data.not_found.length}</span>
+                  <span className="text-xs ml-2">({result.data.not_found.join(', ')})</span>
+                </p>
+              )}
+            </div>
+          )}
+          {result.type === 'delete' && (
+            <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <p>Удалено: <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{result.data.total_deleted}</span></p>
+              {result.data.not_found?.length > 0 && (
+                <p>
+                  Не найдено: <span className="font-semibold tabular-nums">{result.data.not_found.length}</span>
+                  <span className="text-xs ml-2">({result.data.not_found.join(', ')})</span>
+                </p>
+              )}
+            </div>
+          )}
+        </Sheet>
       )}
     </div>
   );
 }
-

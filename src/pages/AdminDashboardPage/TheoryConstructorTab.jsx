@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Send, Sparkles, Copy, CheckCircle2, X } from 'lucide-react';
+import { Send, Sparkles, Copy, Check, X } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
 import { TheoryViewer } from '../../components/Theory';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
+import { Sheet, IconWell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
 // ========== ПРОМПТ ДЛЯ AI-ГЕНЕРАЦИИ ТЕОРИИ ==========
 
@@ -118,89 +119,94 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-2xl font-black text-slate-800 uppercase italic">
-            {theoryData.id ? `Редактор теории #${theoryData.id}` : 'Конструктор теории'}
-          </h2>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <Sheet className="p-6 md:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <IconWell><Send size={18} strokeWidth={2} /></IconWell>
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                {theoryData.id ? `Редактор теории #${theoryData.id}` : 'Конструктор теории'}
+              </h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Markdown и MDX-компоненты</p>
+            </div>
+          </div>
           <button
+            type="button"
             onClick={() => setShowPrompt(true)}
-            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-violet-600 to-purple-700 text-white rounded-2xl font-black text-[10px] uppercase hover:shadow-lg hover:shadow-violet-200 transition-all active:scale-95"
+            className={secondaryBtnClass}
             title="Показать AI-промпт генерации теории"
           >
             <Sparkles size={14} /> AI-промпт
           </button>
         </div>
         <form onSubmit={onSubmit} className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block space-y-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Тема</span>
-              <select className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block space-y-1.5">
+              <span className={labelClass}>Тема</span>
+              <select className={fieldClass}
                 value={theoryData.topic} onChange={e => setTheoryData({ ...theoryData, topic: e.target.value, section: '' })} required>
                 <option value="">— Выберите тему —</option>
                 {Object.entries(MAIN_TOPICS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
               </select>
             </label>
-            <label className="block space-y-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Раздел</span>
-              <select className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm"
+            <label className="block space-y-1.5">
+              <span className={labelClass}>Раздел</span>
+              <select className={`${fieldClass} disabled:opacity-50`}
                 value={theoryData.section} onChange={e => setTheoryData({ ...theoryData, section: e.target.value })} disabled={!theoryData.topic} required>
                 <option value="">— Выберите раздел —</option>
                 {theoryData.topic && SECTIONS_BY_TOPIC[theoryData.topic]?.map(section => (<option key={section} value={section}>{section}</option>))}
               </select>
             </label>
           </div>
-          <label className="block space-y-1">
-            <span className="text-[10px] font-black text-slate-400 uppercase ml-2">Содержание (Markdown + MDX компоненты)</span>
+          <label className="block space-y-1.5">
+            <span className={labelClass}>Содержание (Markdown + MDX компоненты)</span>
             <ImageAwareTextarea value={theoryData.content}
               onChange={(value) => setTheoryData({ ...theoryData, content: value })}
               placeholder={`# Заголовок\n\n<Section id="sec1" title="Основные понятия">\n  <Def>Здесь будет определение...</Def>\n  <Important title="Обратите внимание">Ключевой нюанс...</Important>\n  <Formula title="Основное тождество">$\\sin^2 x + \\cos^2 x = 1$</Formula>\n  <Ex>Пример...</Ex>\n  <Explanation>Пояснение...</Explanation>\n  <Grid cols="2">\n    <Card title="Свойство 1">...</Card>\n    <Card title="Свойство 2">...</Card>\n  </Grid>\n  <Steps>\n    <div>Шаг 1...</div>\n    <div>Шаг 2...</div>\n  </Steps>\n  <Collapsible title="Доказательство">...</Collapsible>\n</Section>`}
-              className="w-full p-6 bg-slate-50 border-none rounded-[2rem] min-h-[400px] font-mono text-sm resize-y" rows={15} />
+              className={`${fieldClass} min-h-[400px] font-mono resize-y`} rows={15} />
           </label>
-          <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3">
-            <Send size={20} /> {theoryData.id ? 'ОБНОВИТЬ ТЕОРИЮ' : 'СОЗДАТЬ ТЕОРИЮ'}
+          <button type="submit" className={`${primaryBtnClass} w-full py-3`}>
+            <Send size={16} /> {theoryData.id ? 'Обновить теорию' : 'Создать теорию'}
           </button>
         </form>
-      </div>
-      <div className="space-y-6 sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">ПРЕДПРОСМОТР ТЕОРИИ</h3>
+      </Sheet>
+      <div className="sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
+        <Sheet className="p-6 md:p-8">
+          <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">Предпросмотр теории</h3>
           <TheoryViewer content={theoryData.content} />
-        </div>
+        </Sheet>
       </div>
 
-      {/* ========== МОДАЛЬНОЕ ОКНО AI-ПРОМПТА ========== */}
       {showPrompt && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between p-6 pb-4 shrink-0">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPrompt(false)}>
+          <div
+            className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-6 border-b border-zinc-100 dark:border-zinc-800/60 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl text-white shadow-lg shadow-violet-200">
-                  <Sparkles size={18} />
-                </div>
+                <IconWell><Sparkles size={18} strokeWidth={2} /></IconWell>
                 <div>
-                  <h3 className="text-lg font-black text-slate-800 uppercase italic">AI-промпт генерации теории</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">AI-промпт генерации теории</h3>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Вставьте в ChatGPT / Claude / YandexGPT
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCopyPrompt}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase hover:bg-black transition-all"
-                >
-                  {copied ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                <button type="button" onClick={handleCopyPrompt} className={primaryBtnClass}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
                   {copied ? 'Скопировано' : 'Копировать'}
                 </button>
-                <button onClick={() => setShowPrompt(false)} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors">
-                  <X size={18} className="text-slate-400" />
+                <button type="button" onClick={() => setShowPrompt(false)}
+                  className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors">
+                  <X size={18} className="text-zinc-400" />
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 pb-6">
-              <pre className="bg-slate-900 text-slate-100 p-6 rounded-2xl font-mono text-xs leading-relaxed whitespace-pre-wrap max-h-[60vh] overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-6">
+              <pre className="bg-zinc-900 text-zinc-100 p-5 rounded-xl font-mono text-xs leading-relaxed whitespace-pre-wrap max-h-[60vh] overflow-y-auto">
 {THEORY_GENERATION_PROMPT}
               </pre>
             </div>

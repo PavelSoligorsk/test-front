@@ -68,9 +68,7 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
         });
       }
       fetchGroupAssignedTests();
-    } catch (e) { 
-      alert('Ошибка при отмене назначения'); 
-    }
+    } catch (e) { console.error(e); throw e; }
   };
 
   const getStudentName = (studentId) => {
@@ -84,15 +82,15 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
-        <div className="p-6 border-b border-slate-100">
+      <div className="bg-white rounded-3xl shadow-sm max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="p-6 border-b border-zinc-100">
           <div className="flex justify-between items-start">
             <div>
-              <h3 className="text-xl font-black text-slate-800">Управление тестами</h3>
-              <p className="text-sm text-slate-500 mt-1">Группа: {group.name} ({group.students?.length || 0} студентов)</p>
+              <h3 className="text-xl font-semibold text-zinc-800">Управление тестами</h3>
+              <p className="text-sm text-zinc-500 mt-1">Группа: {group.name} ({group.students?.length || 0} студентов)</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl">
-              <XCircle size={20} className="text-slate-400" />
+            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-xl">
+              <XCircle size={20} className="text-zinc-400" />
             </button>
           </div>
         </div>
@@ -100,8 +98,8 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {assignedTests.length > 0 && (
             <div>
-              <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-emerald-500" /> 
+              <h4 className="text-xs font-semibold text-zinc-400 mb-3 flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-zinc-500" /> 
                 Назначенные ({assignedTests.length})
               </h4>
               <div className="space-y-2">
@@ -110,27 +108,27 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
                   const c = a.filter(x => x.is_completed).length;
                   const t = a.length;
                   return (
-                    <div key={test.id} className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100">
+                    <div key={test.id} className="bg-zinc-50/50 rounded-2xl p-4 border border-zinc-100">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex-1 min-w-0 mr-2">
-                          <h5 className="font-bold text-sm text-slate-800 truncate">{test.title}</h5>
+                          <h5 className="font-bold text-sm text-zinc-800 truncate">{test.title}</h5>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-[10px] text-slate-400">{test.tasks?.length || 0} зад.</span>
-                            <span className={'text-[10px] font-bold ' + (c === t ? 'text-emerald-600' : 'text-amber-600')}>
+                            <span className="text-[10px] text-zinc-400">{test.tasks?.length || 0} зад.</span>
+                            <span className={'text-[10px] font-bold ' + (c === t ? 'text-zinc-600' : 'text-zinc-600')}>
                               {c}/{t}
                             </span>
                           </div>
                         </div>
                         <button 
                           onClick={() => handleUnassignFromAll(test.id)} 
-                          className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-[10px] font-black hover:bg-red-100 shrink-0"
+                          className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-[10px] font-semibold hover:bg-red-100 shrink-0"
                         >
                           Отменить
                         </button>
                       </div>
-                      <div className="w-full h-1.5 bg-emerald-100 rounded-full overflow-hidden mb-2">
+                      <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden mb-2">
                         <div 
-                          className="h-full bg-emerald-500 rounded-full transition-all" 
+                          className="h-full bg-zinc-900 rounded-full transition-all" 
                           style={{ width: ((c / t) * 100) + '%' }} 
                         />
                       </div>
@@ -139,10 +137,10 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
                           <div key={assignment.id} className="flex items-center justify-between py-1.5 px-2 bg-white/70 rounded-lg">
                             <div className="flex items-center gap-1.5 flex-1 min-w-0">
                               {assignment.is_completed
-                                ? <CheckCircle2 size={10} className="text-emerald-500 shrink-0" />
-                                : <Clock size={10} className="text-amber-500 shrink-0" />
+                                ? <CheckCircle2 size={10} className="text-zinc-500 shrink-0" />
+                                : <Clock size={10} className="text-zinc-500 shrink-0" />
                               }
-                              <span className="text-[10px] font-bold text-slate-600 truncate">
+                              <span className="text-[10px] font-bold text-zinc-600 truncate">
                                 {getStudentName(assignment._studentId || assignment.user_id)}
                               </span>
                             </div>
@@ -150,20 +148,20 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
                               {assignment.is_completed
                                 ? (
                                   <>
-                                    <span className="text-[9px] font-bold text-emerald-600">
+                                    <span className="text-[9px] font-bold text-zinc-600">
                                       {assignment.total_points || 0}/{assignment.max_points || 0}
                                     </span>
                                     {assignment.result_id && 
                                       <button 
                                         onClick={() => navigateToResult(assignment.result_id)} 
-                                        className="p-0.5 bg-emerald-50 text-emerald-600 rounded-md hover:bg-emerald-100"
+                                        className="p-0.5 bg-zinc-50 text-zinc-600 rounded-md hover:bg-zinc-100"
                                       >
                                         <FileText size={9} />
                                       </button>
                                     }
                                   </>
                                 )
-                                : <span className="text-[9px] text-amber-600 font-bold">Ждёт</span>
+                                : <span className="text-[9px] text-zinc-600 font-bold">Ждёт</span>
                               }
                             </div>
                           </div>
@@ -177,22 +175,22 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
           )}
           
           <div>
-            <h4 className="text-xs font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
-              <BookOpen size={14} className="text-slate-400" /> 
+            <h4 className="text-xs font-semibold text-zinc-400 mb-3 flex items-center gap-2">
+              <BookOpen size={14} className="text-zinc-400" /> 
               Доступные ({availableTests.length})
             </h4>
             <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
               <input 
                 type="text" 
                 placeholder="Поиск теста..." 
                 value={searchTerm} 
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-100" 
+                className="w-full pl-10 pr-4 py-2 bg-zinc-50 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-100" 
               />
             </div>
             {filteredAvailable.length === 0 ? (
-              <p className="text-xs text-slate-400 italic text-center py-4">
+              <p className="text-xs text-zinc-400 text-center py-4">
                 {searchTerm ? 'Ничего не найдено' : 'Все тесты назначены'}
               </p>
             ) : (
@@ -201,10 +199,10 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
                   <button 
                     key={test.id} 
                     onClick={() => handleAssign(test.id)} 
-                    className="w-full p-3 bg-slate-50 hover:bg-emerald-50 rounded-xl text-left transition-all border border-transparent hover:border-emerald-200"
+                    className="w-full p-3 bg-zinc-50 hover:bg-zinc-50 rounded-xl text-left transition-all border border-transparent hover:border-zinc-200"
                   >
-                    <div className="font-bold text-sm text-slate-700">{test.title}</div>
-                    <div className="text-[10px] text-slate-400 mt-1">
+                    <div className="font-bold text-sm text-zinc-700">{test.title}</div>
+                    <div className="text-[10px] text-zinc-400 mt-1">
                       {test.tasks?.length || 0} заданий
                       {test.target_class && ` • ${test.target_class} класс`}
                     </div>
@@ -215,10 +213,10 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
           </div>
         </div>
         
-        <div className="p-6 border-t border-slate-100">
+        <div className="p-6 border-t border-zinc-100">
           <button 
             onClick={onClose} 
-            className="w-full p-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200"
+            className="w-full p-4 bg-zinc-100 text-zinc-600 rounded-2xl font-semibold text-sm hover:bg-zinc-200"
           >
             ЗАКРЫТЬ
           </button>

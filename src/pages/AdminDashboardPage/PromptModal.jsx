@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Clipboard, Check } from 'lucide-react';
+import { IconWell, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
 const SYSTEM_PROMPT = `You are a strict classifier of math problems. Output valid JSON only, no markdown.`;
 
@@ -23,7 +24,6 @@ Problem:
 - Do NOT invent topics or sections that are not in the list above.`;
 
 export default function PromptModal({ tasks, topicsMeta, onClose, copied, onCopy }) {
-  // Build available topics string from meta
   const availableTopicsStr = Object.keys(topicsMeta).length > 0
     ? Object.entries(topicsMeta)
         .sort(([a], [b]) => a.localeCompare(b))
@@ -35,7 +35,6 @@ export default function PromptModal({ tasks, topicsMeta, onClose, copied, onCopy
         .join('\n')
     : '  - (база тем пуста — AI классифицирует свободно)';
 
-  // Generate example with first task
   const firstTask = tasks[0];
   const example = firstTask
     ? USER_PROMPT_TEMPLATE
@@ -71,95 +70,80 @@ export default function PromptModal({ tasks, topicsMeta, onClose, copied, onCopy
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="w-full max-w-3xl max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl border border-violet-200 overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-violet-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <Clipboard size={20} className="text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-black text-slate-800 uppercase italic">AI-промпт классификации</h3>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+      <div onClick={e => e.stopPropagation()}
+        className="w-full max-w-3xl max-h-[90vh] bg-white dark:bg-[#09090b] rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between shrink-0 gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <IconWell><Clipboard size={18} strokeWidth={2} /></IconWell>
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">AI-промпт классификации</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
                 Копируй и вставляй в ChatGPT / DeepSeek API / консоль
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={() => copyText(SYSTEM_PROMPT + '\n\n---\n\n' + example)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
-                copied
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg'
-              }`}
+              className={primaryBtnClass}
             >
               {copied ? <Check size={14} /> : <Clipboard size={14} />}
               {copied ? 'Скопировано' : 'Копировать пример'}
             </button>
-            <button onClick={onClose}
-              className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-600">
+            <button type="button" onClick={onClose}
+              className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-xl transition-colors text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
               <X size={20} />
             </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* System Prompt */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">System Prompt</h4>
-              <button
-                onClick={() => copyText(SYSTEM_PROMPT)}
-                className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[9px] font-bold text-slate-500 transition-all">
+              <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">System Prompt</h4>
+              <button type="button" onClick={() => copyText(SYSTEM_PROMPT)} className={secondaryBtnClass + ' !px-2 !py-1 text-xs'}>
                 <Clipboard size={10} /> Копировать
               </button>
             </div>
-            <div className="rounded-2xl bg-slate-900 p-4 font-mono text-xs text-emerald-300 leading-relaxed whitespace-pre-wrap">
+            <div className="rounded-xl bg-zinc-900 p-4 font-mono text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
               {SYSTEM_PROMPT}
             </div>
           </div>
 
-          {/* User Prompt Template */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">User Prompt (шаблон)</h4>
-              <button
-                onClick={() => copyText(template)}
-                className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[9px] font-bold text-slate-500 transition-all">
+              <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">User Prompt (шаблон)</h4>
+              <button type="button" onClick={() => copyText(template)} className={secondaryBtnClass + ' !px-2 !py-1 text-xs'}>
                 <Clipboard size={10} /> Копировать
               </button>
             </div>
-            <div className="rounded-2xl bg-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+            <div className="rounded-xl bg-zinc-900 p-4 font-mono text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
               {template}
             </div>
           </div>
 
-          {/* Example with first task */}
           {firstTask && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                   Пример (задача #{firstTask.id})
                 </h4>
-                <button
-                  onClick={() => copyText(example)}
-                  className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[9px] font-bold text-slate-500 transition-all">
+                <button type="button" onClick={() => copyText(example)} className={secondaryBtnClass + ' !px-2 !py-1 text-xs'}>
                   <Clipboard size={10} /> Копировать
                 </button>
               </div>
-              <div className="rounded-2xl bg-slate-900 p-4 font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto">
+              <div className="rounded-xl bg-zinc-900 p-4 font-mono text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto">
                 {example}
               </div>
             </div>
           )}
 
-          {/* Available Topics Summary */}
           <div>
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-2">
               Тем в базе: {Object.keys(topicsMeta).length}
             </h4>
-            <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 font-mono text-xs text-slate-600 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 p-4 font-mono text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
               {availableTopicsStr}
             </div>
           </div>
