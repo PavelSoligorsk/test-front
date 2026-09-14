@@ -33,6 +33,87 @@ function studentName(row) {
   return n || `ID ${row.user_id || row.id}`;
 }
 
+function GroupTestCard({ test, groupId, navigate, onUnassign, solversOnly = false }) {
+  const students = test.students || [];
+  const done = students.filter((s) => s.is_completed).length;
+  const total = students.length;
+  const solved = done > 0;
+  const rows = solversOnly ? students.filter((s) => s.is_completed) : students;
+
+  return (
+    <li className="px-6 md:px-8 py-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{test.test_title}</p>
+            {solved ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-950">
+                <CheckCircle2 size={11} /> Решённый
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
+            {done}/{total} · {formatDate(test.assigned_at)}
+            {test.due_date ? ` · до ${formatDate(test.due_date)}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {solved ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/teacher/groups/${groupId}/tests/${test.test_id}`)}
+              className="px-3 py-1.5 text-xs font-medium rounded-xl bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 flex items-center gap-1"
+            >
+              <FileText size={12} /> Разбор группой
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => onUnassign(test.test_id)}
+            className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+            title="Снять со всей группы"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-zinc-900 dark:bg-white rounded-full"
+          style={{ width: `${total ? (done / total) * 100 : 0}%` }}
+        />
+      </div>
+      <div className="space-y-1">
+        {rows.map((s) => (
+          <div key={s.user_id} className="flex items-center justify-between gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => navigate(`/teacher/students/${s.user_id}`)}
+              className="font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 truncate"
+            >
+              {studentName(s)}
+            </button>
+            {s.is_completed ? (
+              <button
+                type="button"
+                onClick={() => s.result_id && navigate(`/teacher/results/${s.result_id}`)}
+                className="tabular-nums text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-1"
+              >
+                {s.total_points ?? 0}/{test.max_points ?? 0}
+                <ArrowRight size={12} />
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-zinc-400">
+                <Clock size={12} /> Ждёт
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </li>
+  );
+}
+
 export default function TeacherGroupPageContent() {
   const { groupId } = useParams();
   const navigate = useNavigate();
@@ -90,30 +171,11 @@ export default function TeacherGroupPageContent() {
 
   const testsList = assignments?.tests || [];
   const assignedCount = testsList.length;
-  const completedCount = useMemo(
-    () => testsList.reduce((n, t) => n + (t.students || []).filter((s) => s.is_completed).length, 0),
+  const solvedTests = useMemo(
+    () => testsList.filter((t) => (t.students || []).some((s) => s.is_completed)),
     [testsList]
   );
-  const solvedRows = useMemo(() => {
-    const rows = [];
-    for (const test of testsList) {
-      for (const s of test.students || []) {
-        if (!s.is_completed || !s.result_id) continue;
-        rows.push({
-          key: `${test.test_id}-${s.user_id}`,
-          testTitle: test.test_title,
-          student: studentName(s),
-          userId: s.user_id,
-          resultId: s.result_id,
-          score: s.total_points,
-          max: test.max_points,
-          percentage: s.percentage,
-          date: test.assigned_at,
-        });
-      }
-    }
-    return rows;
-  }, [testsList]);
+  const completedCount = solvedTests.length;
 
   const handleRemoveStudent = async (gid, studentId) => {
     try {
@@ -215,7 +277,7 @@ export default function TeacherGroupPageContent() {
             </div>
             <div className="hidden sm:block w-px bg-zinc-200 dark:bg-zinc-800 h-12 self-center" />
             <div className="text-right">
-              <div className="text-xs font-medium text-zinc-400 mb-1">Сдано</div>
+              <div className="text-xs font-medium text-zinc-400 mb-1">Решённые</div>
               <div className="text-4xl font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums tracking-tight">{completedCount}</div>
             </div>
             <button
@@ -330,124 +392,41 @@ export default function TeacherGroupPageContent() {
                   </div>
                 ) : (
                   <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                    {testsList.map((test) => {
-                      const students = test.students || [];
-                      const done = students.filter((s) => s.is_completed).length;
-                      const total = students.length;
-                      return (
-                        <li key={test.test_id} className="px-6 md:px-8 py-5 space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{test.test_title}</p>
-                              <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-                                {done}/{total} · {formatDate(test.assigned_at)}
-                                {test.due_date ? ` · до ${formatDate(test.due_date)}` : ''}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {done > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/teacher/groups/${groupId}/tests/${test.test_id}`)}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-xl bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 flex items-center gap-1"
-                                >
-                                  <FileText size={12} /> Разбор группой
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => handleUnassign(test.test_id)}
-                                className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                                title="Снять со всей группы"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-zinc-900 dark:bg-white rounded-full"
-                              style={{ width: `${total ? (done / total) * 100 : 0}%` }}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            {students.map((s) => (
-                              <div key={s.user_id} className="flex items-center justify-between gap-2 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/teacher/students/${s.user_id}`)}
-                                  className="font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 truncate"
-                                >
-                                  {studentName(s)}
-                                </button>
-                                {s.is_completed ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => s.result_id && navigate(`/teacher/results/${s.result_id}`)}
-                                    className="tabular-nums text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-1"
-                                  >
-                                    {s.total_points ?? 0}/{test.max_points ?? 0}
-                                    <ArrowRight size={12} />
-                                  </button>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-zinc-400">
-                                    <Clock size={12} /> Ждёт
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </li>
-                      );
-                    })}
+                    {testsList.map((test) => (
+                      <GroupTestCard
+                        key={test.test_id}
+                        test={test}
+                        groupId={groupId}
+                        navigate={navigate}
+                        onUnassign={handleUnassign}
+                      />
+                    ))}
                   </ul>
                 )
               )}
 
               {tab === 'solved' && (
-                solvedRows.length === 0 ? (
+                solvedTests.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center py-16 text-center gap-2 px-6">
                     <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
                       <CheckCircle2 size={20} />
                     </div>
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Пока никто не сдал</p>
-                    <p className="text-sm text-zinc-500">Результаты появятся после завершения попыток</p>
+                    <p className="text-sm text-zinc-500">Тест появится здесь, как только его сдаст хотя бы один ученик</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-zinc-50/80 dark:bg-zinc-900/40">
-                          <th className="px-6 md:px-8 py-4 text-xs font-medium text-zinc-500">Тест</th>
-                          <th className="px-6 md:px-8 py-4 text-xs font-medium text-zinc-500">Ученик</th>
-                          <th className="px-6 md:px-8 py-4 text-xs font-medium text-zinc-500 text-center">Балл</th>
-                          <th className="px-6 md:px-8 py-4 text-xs font-medium text-zinc-500">Дата</th>
-                          <th className="px-6 md:px-8 py-4" />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                        {solvedRows.map((row) => (
-                          <tr
-                            key={row.key}
-                            onClick={() => navigate(`/teacher/results/${row.resultId}`)}
-                            className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 cursor-pointer group"
-                          >
-                            <td className="px-6 md:px-8 py-5 text-sm font-medium text-zinc-800 dark:text-zinc-200">{row.testTitle}</td>
-                            <td className="px-6 md:px-8 py-5 text-sm text-zinc-600 dark:text-zinc-300">{row.student}</td>
-                            <td className="px-6 md:px-8 py-5 text-center tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">
-                              {row.score ?? '—'}{row.max != null ? `/${row.max}` : ''}
-                            </td>
-                            <td className="px-6 md:px-8 py-5 text-xs text-zinc-500">{formatDate(row.date)}</td>
-                            <td className="px-6 md:px-8 py-5 text-right">
-                              <div className="inline-flex w-10 h-10 items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-zinc-950">
-                                <ArrowRight size={16} />
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                    {solvedTests.map((test) => (
+                      <GroupTestCard
+                        key={test.test_id}
+                        test={test}
+                        groupId={groupId}
+                        navigate={navigate}
+                        onUnassign={handleUnassign}
+                        solversOnly
+                      />
+                    ))}
+                  </ul>
                 )
               )}
             </div>
