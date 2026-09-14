@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { ChevronLeft, FileText, Users } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
-import { InlineNotice, MarkdownRenderer, ThemeToggle, formatApiDetail } from '../../shared/ui';
+import { InlineNotice, MarkdownRenderer, QuestionMap, ThemeToggle, formatApiDetail } from '../../shared/ui';
 
 function authHeaders() {
   try {
@@ -37,8 +37,12 @@ function clusterAnswers(answers, taskId) {
 }
 
 function TaskBlock({ index, total, task, clusters, navigate }) {
+  const id = taskKey(task);
   return (
-    <article className="rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] overflow-hidden">
+    <article
+      data-task-id={id}
+      className="rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] overflow-hidden"
+    >
       <div className="px-6 md:px-8 py-4 border-b border-zinc-100 dark:border-zinc-800/60">
         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 tabular-nums">
           Задание {index + 1} из {total}
@@ -50,9 +54,9 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
         </div>
 
         {task.correct_answer != null && String(task.correct_answer).length > 0 ? (
-          <div>
-            <p className="text-xs font-medium text-zinc-400 mb-2">Эталон</p>
-            <div className="text-sm text-zinc-800 dark:text-zinc-200">
+          <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Эталонный ответ</p>
+            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
               <MarkdownRenderer>{String(task.correct_answer)}</MarkdownRenderer>
             </div>
           </div>
@@ -74,17 +78,21 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
           ) : (
             <div className="space-y-3">
               {clusters.map(([answer, people]) => {
-                const correct = people.some((p) => p.is_correct);
+                const isCorrectCluster = people.some((p) => p.is_correct);
                 return (
                   <div
                     key={answer}
                     className={`rounded-2xl border p-4 ${
-                      correct
-                        ? 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40'
-                        : 'border-zinc-200 dark:border-zinc-800'
+                      isCorrectCluster
+                        ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10'
+                        : 'border-red-300 dark:border-red-500/30 bg-red-50/60 dark:bg-red-500/10'
                     }`}
                   >
-                    <div className="text-sm text-zinc-800 dark:text-zinc-200 mb-3">
+                    <div className={`text-sm font-medium mb-3 ${
+                      isCorrectCluster
+                        ? 'text-emerald-800 dark:text-emerald-300'
+                        : 'text-red-700 dark:text-red-300'
+                    }`}>
                       <MarkdownRenderer>{answer || '—'}</MarkdownRenderer>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -93,7 +101,11 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
                           key={`${p.student_id}-${p.result_id}`}
                           type="button"
                           onClick={() => p.result_id && navigate(`/teacher/results/${p.result_id}`)}
-                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600"
+                          className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
+                            p.is_correct
+                              ? 'bg-white/80 dark:bg-zinc-950/40 border-emerald-200 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-white/80 dark:bg-zinc-950/40 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300'
+                          }`}
                         >
                           {displayName(p)}
                           {p.points_earned != null ? ` · ${p.points_earned}` : ''}
@@ -149,6 +161,17 @@ export default function TeacherGroupTestReviewContent() {
     }
     return map;
   }, [tasks, data?.answers]);
+  const groupStats = useMemo(
+    () => tasks.map((task) => {
+      const rows = (data?.answers || []).filter((a) => (a.task_id ?? a.id) === taskKey(task));
+      return {
+        task_id: taskKey(task),
+        correct: rows.filter((r) => r.is_correct).length,
+        wrong: rows.filter((r) => !r.is_correct).length,
+      };
+    }),
+    [tasks, data?.answers]
+  );
   const notSubmitted = data?.not_submitted || [];
 
   if (loading) {
@@ -238,6 +261,16 @@ export default function TeacherGroupTestReviewContent() {
           </div>
         )}
       </div>
+      {tasks.length > 0 ? (
+        <QuestionMap
+          mode="group"
+          groupStats={groupStats}
+          onScroll={(taskId) => {
+            const el = document.querySelector(`[data-task-id="${taskId}"]`);
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

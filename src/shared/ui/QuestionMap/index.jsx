@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { MapPin, X } from 'lucide-react';
 
-export default function QuestionMap({ mode = 'result', tasks, details, userAnswers, currentIdx, onNavigate, onScroll }) {
+export default function QuestionMap({ mode = 'result', tasks, details, groupStats, userAnswers, currentIdx, onNavigate, onScroll }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const answeredCount = mode === 'test' && userAnswers
     ? Object.keys(userAnswers).filter(id => userAnswers[id]?.length > 0).length
     : 0;
-  const totalCount = mode === 'test' ? (tasks?.length || 0) : (details?.length || 0);
+  const totalCount = mode === 'test'
+    ? (tasks?.length || 0)
+    : mode === 'group'
+      ? (groupStats?.length || 0)
+      : (details?.length || 0);
 
   const correctCount = details?.filter(d => d.is_correct).length || 0;
   const wrongCount = details?.filter(d => !d.is_correct && d.user_answer !== "Нет ответа").length || 0;
@@ -49,7 +53,49 @@ export default function QuestionMap({ mode = 'result', tasks, details, userAnswe
               </button>
             </div>
             <div className="grid grid-cols-5 gap-2 max-h-[50vh] overflow-y-auto p-1">
-              {mode === 'test'
+              {mode === 'group'
+                ? groupStats?.map((item, idx) => {
+                    const submitted = (item.correct || 0) + (item.wrong || 0);
+                    const correctPct = submitted ? ((item.correct || 0) / submitted) * 100 : 0;
+                    const handleGroupClick = () => {
+                      if (onNavigate) onNavigate(idx);
+                      else if (onScroll && item.task_id != null) onScroll(item.task_id);
+                      setIsExpanded(false);
+                    };
+                    return (
+                      <button
+                        key={item.task_id ?? idx}
+                        type="button"
+                        onClick={handleGroupClick}
+                        className="relative aspect-square rounded-xl overflow-hidden flex items-center justify-center text-xs font-medium tabular-nums border border-zinc-200 dark:border-zinc-800"
+                      >
+                        {submitted === 0 ? (
+                          <span className="absolute inset-0 bg-zinc-100 dark:bg-zinc-900" />
+                        ) : (
+                          <span className="absolute inset-0 flex">
+                            <span
+                              className="h-full bg-emerald-200 dark:bg-emerald-500/35"
+                              style={{ width: `${correctPct}%` }}
+                            />
+                            <span
+                              className="h-full bg-red-200 dark:bg-red-500/35"
+                              style={{ width: `${100 - correctPct}%` }}
+                            />
+                          </span>
+                        )}
+                        <span className={`relative z-10 ${
+                          submitted === 0
+                            ? 'text-zinc-400'
+                            : correctPct >= 50
+                              ? 'text-emerald-900 dark:text-emerald-100'
+                              : 'text-red-900 dark:text-red-100'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                      </button>
+                    );
+                  })
+                : mode === 'test'
                 ? tasks?.map((task, idx) => {
                     const hasAnswer = userAnswers?.[task.id] && (
                       Array.isArray(userAnswers[task.id])
@@ -95,7 +141,21 @@ export default function QuestionMap({ mode = 'result', tasks, details, userAnswe
                   })}
             </div>
             <div className="flex gap-4 mt-4 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 flex-wrap">
-              {mode === 'test' ? (
+              {mode === 'group' ? (
+                <>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-md overflow-hidden flex">
+                      <span className="w-1/2 bg-emerald-200" />
+                      <span className="w-1/2 bg-red-200" />
+                    </span>
+                    Доля верных среди сдавших
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 bg-zinc-100 dark:bg-zinc-900 rounded-md" />
+                    Нет сдач
+                  </span>
+                </>
+              ) : mode === 'test' ? (
                 <>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 bg-zinc-200 dark:bg-zinc-800 rounded-md"></span> Отвечено ({answeredCount})</span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 bg-zinc-100 dark:bg-zinc-900 rounded-md"></span> Без ответа ({totalCount - answeredCount})</span>
