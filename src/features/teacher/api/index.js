@@ -30,8 +30,16 @@ export const teacherApi = {
     return apiClient.get(ENDPOINTS.TEACHER_GROUPS);
   },
 
-  getGroup(groupId) {
-    return apiClient.get(ENDPOINTS.TEACHER_GROUP(groupId));
+  async getGroup(groupId) {
+    const res = await apiClient.get(ENDPOINTS.TEACHER_GROUPS);
+    const list = Array.isArray(res.data) ? res.data : [];
+    const found = list.find((g) => String(g.id) === String(groupId));
+    if (!found) {
+      const err = new Error('Group not found');
+      err.response = { status: 404, data: { detail: 'Группа не найдена' } };
+      throw err;
+    }
+    return { ...res, data: found };
   },
 
   getGroupStudents(groupId) {
@@ -58,9 +66,20 @@ export const teacherApi = {
     return apiClient.post(ENDPOINTS.TEACHER_ASSIGN_TEST_TO_GROUP, data);
   },
 
-  // Teacher results
+  getGroupAssignments(groupId) {
+    return apiClient.get(ENDPOINTS.TEACHER_GROUP_ASSIGNMENTS(groupId));
+  },
+
+  unassignTestFromGroup(groupId, testId) {
+    return apiClient.delete(ENDPOINTS.TEACHER_GROUP_TEST_ASSIGNMENT(groupId, testId));
+  },
+
+  getGroupTestReview(groupId, testId) {
+    return apiClient.get(ENDPOINTS.TEACHER_GROUP_TEST_REVIEW(groupId, testId));
+  },
+
   getResult(resultId) {
-    return apiClient.get(ENDPOINTS.TEACHER_RESULT?.(resultId) || `/teacher/results/${resultId}`);
+    return apiClient.get(ENDPOINTS.TEACHER_RESULT(resultId));
   },
 
   // --- Расписание ---

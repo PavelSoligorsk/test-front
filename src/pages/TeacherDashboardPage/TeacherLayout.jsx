@@ -7,7 +7,6 @@ import { TEACHER_PATHS, TEACHER_TABS, teacherTabFromPath } from './teacherPaths'
 import TestManageModal from './TestManageModal';
 import GroupStudentsModal from './GroupStudentsModal';
 import AssignTestToGroupModal from './AssignTestToGroupModal';
-import GroupDetailModal from './GroupDetailModal';
 import CreateGroupModal from './CreateGroupModal';
 import AiTestGeneratorModal from './AiTestGeneratorModal';
 
@@ -76,17 +75,6 @@ function TeacherChrome() {
           tests={ws.tests}
           onClose={() => ws.setAssignGroupModal(null)}
           onAssign={ws.handleAssignTestToGroup}
-          navigate={navigate}
-        />
-      )}
-
-      {ws.groupDetailModal && (
-        <GroupDetailModal
-          group={ws.groupDetailModal}
-          tests={ws.tests}
-          students={ws.students}
-          onClose={() => ws.setGroupDetailModal(null)}
-          onRemoveStudent={ws.handleRemoveStudentFromGroup}
           navigate={navigate}
         />
       )}

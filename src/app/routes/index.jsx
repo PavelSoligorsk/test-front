@@ -43,6 +43,8 @@ const TestResultDetail = React.lazy(() => import('../../pages/TestResultDetailPa
 const AdminResultView = React.lazy(() => import('../../pages/AdminResultViewPage'));
 const TeacherResultView = React.lazy(() => import('../../pages/TeacherResultViewPage'));
 const TeacherStudentProfile = React.lazy(() => import('../../pages/TeacherStudentProfilePage'));
+const TeacherGroupPage = React.lazy(() => import('../../pages/TeacherGroupPage'));
+const TeacherGroupTestReviewPage = React.lazy(() => import('../../pages/TeacherGroupTestReviewPage'));
 const StatsPage = React.lazy(() => import('../../pages/StatsPageDir'));
 const UserProfile = React.lazy(() => import('../../pages/UserProfilePage'));
 const HomePage = React.lazy(() => import('../../pages/HomePage'));
@@ -152,6 +154,8 @@ export default function AppRoutes() {
                 <Route path="profile" element={<TeacherProfilePage />} />
               </Route>
               <Route path="/teacher/students/:userId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherStudentProfile /></PrivateRoute>} />
+              <Route path="/teacher/groups/:groupId/tests/:testId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherGroupTestReviewPage /></PrivateRoute>} />
+              <Route path="/teacher/groups/:groupId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherGroupPage /></PrivateRoute>} />
               <Route path="/teacher/results/:resultId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherResultView /></PrivateRoute>} />
 
               <Route path="/admin" element={<PrivateRoute allowedRoles={['admin']}><AdminLayout /></PrivateRoute>}>

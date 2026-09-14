@@ -15,7 +15,7 @@ export default function GroupsPage() {
         onDelete={ws.handleDeleteGroup}
         onManageStudents={(g) => ws.setGroupStudentsModal(g)}
         onAssignTest={(g) => ws.setAssignGroupModal(g)}
-        onDetail={(g) => ws.setGroupDetailModal(g)}
+        onDetail={(g) => navigate(`/teacher/groups/${g.id}`)}
         navigate={navigate}
       />
     </PageShell>

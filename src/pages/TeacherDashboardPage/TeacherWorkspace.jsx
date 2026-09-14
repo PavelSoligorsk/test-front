@@ -26,7 +26,6 @@ export function TeacherWorkspaceProvider({ children }) {
   const [manageTestModal, setManageTestModal] = useState(null);
   const [groupStudentsModal, setGroupStudentsModal] = useState(null);
   const [assignGroupModal, setAssignGroupModal] = useState(null);
-  const [groupDetailModal, setGroupDetailModal] = useState(null);
   const [groupCreateModal, setGroupCreateModal] = useState(null);
   const [aiGeneratorModal, setAiGeneratorModal] = useState(false);
   const [openSolutions, setOpenSolutions] = useState({});
@@ -142,10 +141,10 @@ export function TeacherWorkspaceProvider({ children }) {
   const handleAssignTestToGroup = async (testId, groupId) => {
     try {
       await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId }, { headers: authHeaders() });
-      setAssignGroupModal(null);
       showSuccess('Тест назначен группе');
     } catch (e) {
       showError(e, 'Ошибка при назначении теста');
+      throw e;
     }
   };
 
@@ -227,8 +226,6 @@ export function TeacherWorkspaceProvider({ children }) {
     setGroupStudentsModal,
     assignGroupModal,
     setAssignGroupModal,
-    groupDetailModal,
-    setGroupDetailModal,
     groupCreateModal,
     setGroupCreateModal,
     aiGeneratorModal,
@@ -254,7 +251,7 @@ export function TeacherWorkspaceProvider({ children }) {
     handleDeleteTest,
   }), [
     notice, loading, tests, students, groups, topicSectionMeta, selectedTasks,
-    manageTestModal, groupStudentsModal, assignGroupModal, groupDetailModal,
+    manageTestModal, groupStudentsModal, assignGroupModal,
     groupCreateModal, aiGeneratorModal, openSolutions, openHints, editingTest,
     clearNotice, showError, showSuccess, fetchTests, fetchStudents, fetchGroups,
     toggleTaskSelection,

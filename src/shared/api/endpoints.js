@@ -61,6 +61,10 @@ export const ENDPOINTS = {
   TEACHER_TEST_ASSIGNMENTS: (testId) => `/teacher/test/${testId}/assignments`,
   TEACHER_ASSIGNMENT: (assignmentId) => `/teacher/assignments/${assignmentId}`,
   TEACHER_ASSIGN_TEST_TO_GROUP: '/teacher/assign-test-to-group',
+  TEACHER_GROUP_ASSIGNMENTS: (groupId) => `/teacher/groups/${groupId}/assignments`,
+  TEACHER_GROUP_TEST_ASSIGNMENT: (groupId, testId) => `/teacher/groups/${groupId}/assignments/${testId}`,
+  TEACHER_GROUP_TEST_REVIEW: (groupId, testId) => `/teacher/groups/${groupId}/tests/${testId}/review`,
+  TEACHER_RESULT: (resultId) => `/teacher/results/${resultId}`,
   TEACHER_GENERATE_TEST: '/teacher/generate-test',
 
   // Учитель — расписание и календарь
