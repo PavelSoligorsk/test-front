@@ -107,7 +107,8 @@ export default function ResultTaskCard({
         {(hintData[item.task_id] || loadingHint[item.task_id] || hintError[item.task_id]) && (
           <div className="mb-6">
             <MathHintPreview
-              text={hintData[item.task_id]}
+              text={typeof hintData[item.task_id] === 'object' ? hintData[item.task_id]?.hint : hintData[item.task_id]}
+              geogebra={typeof hintData[item.task_id] === 'object' ? hintData[item.task_id]?.geogebra : null}
               isLoading={loadingHint[item.task_id]}
               error={hintError[item.task_id]}
               onClose={() => closeHint(item.task_id)}

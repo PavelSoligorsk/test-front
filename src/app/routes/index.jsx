@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { restoreSession, getCurrentUser, SESSION_EVENT } from '../../shared/lib/session';
 import { ErrorBoundary } from '../../shared/ui/ErrorBoundary';
-import Navbar from '../../widgets/Navbar';
 
 const LoginPage = React.lazy(() => import('../../pages/LoginPage'));
 const RegisterPage = React.lazy(() => import('../../pages/RegisterPage'));
@@ -87,29 +86,9 @@ function PrivateRoute({ children, allowedRoles }) {
   return children;
 }
 
-function isAuthSurface(pathname) {
-  return pathname === '/login'
-    || pathname === '/register'
-    || pathname.startsWith('/reset-password');
-}
-
-function isZincSurface(pathname) {
-  return pathname.startsWith('/student')
-    || pathname.startsWith('/test/')
-    || pathname.startsWith('/result/')
-    || pathname.startsWith('/teacher')
-    || pathname.startsWith('/admin')
-    || pathname.startsWith('/stats')
-    || isAuthSurface(pathname);
-}
-
 function AppChrome({ children }) {
-  const { pathname } = useLocation();
-  const zincSurface = isZincSurface(pathname);
-
   return (
-    <div className={`min-h-screen ${zincSurface ? 'bg-[#fafafa] dark:bg-[#09090b]' : 'bg-slate-50 dark:bg-slate-900'}`}>
-      {!zincSurface && <Navbar />}
+    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b]">
       {children}
     </div>
   );

@@ -41,7 +41,7 @@ export default function TestResultDetailContent() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setHintData(prev => ({ ...prev, [taskId]: response.data.hint }));
+      setHintData(prev => ({ ...prev, [taskId]: response.data }));
     } catch (err) {
       setHintError(prev => ({ ...prev, [taskId]: err.response?.data?.detail || "Ошибка получения подсказки" }));
     } finally {

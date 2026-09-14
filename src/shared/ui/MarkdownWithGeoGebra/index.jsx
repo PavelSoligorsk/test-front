@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -13,29 +13,105 @@ function hexToRgb(hex) {
     : [0, 0, 0];
 }
 
+const APP_NAMES = new Set(['geometry', 'graphing', '3d']);
+
+export function toGeoGebraAppName(app) {
+  const name = String(app || 'geometry').toLowerCase();
+  return APP_NAMES.has(name) ? name : 'geometry';
+}
+
+function loadGgbScript(onReady) {
+  const tryStart = () => {
+    if (typeof window.GGBApplet === 'function') {
+      onReady();
+      return true;
+    }
+    return false;
+  };
+  if (tryStart()) return;
+
+  let tries = 0;
+  const poll = setInterval(() => {
+    if (tryStart() || ++tries > 200) clearInterval(poll);
+  }, 50);
+
+  const existing = document.getElementById('ggb-api-script');
+  if (existing) {
+    existing.addEventListener('load', tryStart, { once: true });
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = 'https://www.geogebra.org/apps/deployggb.js';
+  script.id = 'ggb-api-script';
+  script.onload = tryStart;
+  document.head.appendChild(script);
+}
+
+function runEvalCommands(api, commands) {
+  (commands || []).forEach((cmd) => {
+    const line = String(cmd || '').trim();
+    if (!line) return;
+    try {
+      api.evalCommand(line);
+    } catch (err) {
+      console.error(`GeoGebra command error "${line}":`, err);
+    }
+  });
+}
+
 // ==================== GeoGebra Embedded (экспортируемый) ====================
-export const GeoGebraEmbed = ({ id, setup, height = "400" }) => {
+export const GeoGebraEmbed = ({
+  figure,
+  id,
+  setup,
+  height = '400',
+  app,
+  appName,
+  commands,
+}) => {
   const containerRef = useRef(null);
-  const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
+  const uid = useId().replace(/:/g, '');
+  const resolvedApp = toGeoGebraAppName(figure?.app || appName || app);
+  const pxHeight = Number(figure?.height ?? height) || 400;
+  const commandList = (
+    figure?.commands?.length
+      ? figure.commands
+      : (Array.isArray(commands) && commands.length
+        ? commands
+        : String(figure?.setup || setup || '').split('\n'))
+  ).filter((c) => String(c || '').trim());
+  const useRawCommands = Boolean(figure || (Array.isArray(commands) && commands.length));
+  const materialId = typeof id === 'string' && id && !/^\d+$/.test(id) ? id : null;
 
   useEffect(() => {
+    let cancelled = false;
+
     const initApplet = () => {
-      if (!containerRef.current) return;
+      if (cancelled || !containerRef.current || typeof window.GGBApplet !== 'function') return;
+      const box = containerRef.current;
+      box.innerHTML = '';
 
       const parameters = {
-        "id": appletId.current,
-        "width": containerRef.current.clientWidth || 600,
-        "height": parseInt(height, 10),
-        "showToolBar": false,
-        "showMenuBar": false,
-        "showAlgebraInput": false,
-        "enableLabelDrags": false,
-        "enableShiftDragZoom": true,
-        "language": "ru",
-        "errorDialogsActive": false,
-        "useBrowserForJS": false,
-        ...(id ? { "material_id": id } : {}),
-        "appletOnLoad": (api) => {
+        id: `ggb${uid}`,
+        appName: resolvedApp,
+        width: Math.max(box.clientWidth || 640, 320),
+        height: pxHeight,
+        language: 'ru',
+        showMenuBar: false,
+        showAlgebraInput: false,
+        showToolBar: true,
+        showResetIcon: true,
+        enableLabelDrags: false,
+        enableShiftDragZoom: true,
+        enable3d: resolvedApp === '3d',
+        errorDialogsActive: false,
+        ...(materialId ? { material_id: materialId } : {}),
+        appletOnLoad: (api) => {
+          if (useRawCommands) {
+            runEvalCommands(api, commandList);
+            return;
+          }
+
           if (!id) {
             api.evalCommand('ShowAxes(true)');
             api.evalCommand('ShowGrid(true)');
@@ -158,44 +234,32 @@ export const GeoGebraEmbed = ({ id, setup, height = "400" }) => {
       };
 
       const applet = new window.GGBApplet(parameters, true);
-      applet.inject(containerRef.current);
+      applet.inject(box);
     };
 
-    if (!window.GGBApplet) {
-      const script = document.createElement('script');
-      script.src = 'https://www.geogebra.org/apps/deployggb.js';
-      script.id = 'ggb-api-script';
-      script.onload = initApplet;
-      document.head.appendChild(script);
-    } else {
-      initApplet();
-    }
+    loadGgbScript(initApplet);
 
     return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
+      cancelled = true;
+      if (containerRef.current) containerRef.current.innerHTML = '';
     };
-  }, [id, setup, height]);
+  }, [uid, setup, resolvedApp, useRawCommands, pxHeight, commandList.join('\n'), materialId]);
 
   return (
-    <div className="my-6 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative">
-      <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/80 z-10"></div>
-      <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }}></div>
+    <div className="my-6 w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-50 dark:bg-zinc-900/40 relative">
+      <div ref={containerRef} className="w-full" style={{ minHeight: `${pxHeight}px` }} />
     </div>
   );
 };
 
 // ==================== Markdown Renderer с GeoGebra ====================
-const MarkdownWithGeoGebra = ({ children, className = "", markdownComponents = {} }) => {
-  if (!children) return null;
+const MarkdownWithGeoGebra = ({ children, className = "", markdownComponents = {}, figures = null }) => {
+  if (!children && !(Array.isArray(figures) && figures.length)) return null;
 
   const processContent = (content) => {
     if (typeof content !== 'string') return content;
     return content
-      // Убираем ```jsx / ``` вокруг GeoGebra-тегов (сервер их оборачивает)
       .replace(/```(?:jsx)?\s*\n?(<GeoGebra[\s\S]*?\/>)\s*\n?```/g, '$1')
-      // Убираем ``` вокруг GeoGebra-тегов
       .replace(/```\s*\n?(<GeoGebra[\s\S]*?\/>)\s*\n?```/g, '$1')
       .replace(/\\\\\\$\\$/g, '$$')
       .replace(/\\\\\$/g, '$')
@@ -205,6 +269,60 @@ const MarkdownWithGeoGebra = ({ children, className = "", markdownComponents = {
       .replace(/\\\(/g, '$')
       .replace(/\\\)/g, '$');
   };
+
+  const figureList = Array.isArray(figures) ? figures : [];
+  const rawText = typeof children === 'string' ? children : '';
+  const hasPlaceholders = /\{\{geogebra:\d+\}\}/.test(rawText);
+
+  const defaultComponents = {
+    p: ({ children: pChildren, ...props }) => (
+      <p className="mb-3 last:mb-0 text-left whitespace-normal break-words" {...props}>{pChildren}</p>
+    ),
+    strong: ({ children: sChildren, ...props }) => (
+      <strong className="font-bold text-zinc-900 dark:text-zinc-100" {...props}>{sChildren}</strong>
+    ),
+    code: ({ inline, className: codeClass, children: codeChildren, ...props }) => {
+      if (inline) {
+        return <code className="bg-zinc-100 dark:bg-zinc-800 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded-md text-sm font-mono break-words" {...props}>{codeChildren}</code>;
+      }
+      return <code className={`${codeClass || ''} block bg-zinc-800 text-white p-3 rounded-xl overflow-x-auto text-sm my-2 whitespace-pre-wrap break-words font-mono`} {...props}>{codeChildren}</code>;
+    },
+    ...markdownComponents,
+  };
+
+  const renderMarkdown = (text, key) => {
+    if (!text || !String(text).trim()) return null;
+    return (
+      <ReactMarkdown
+        key={key}
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[rehypeKatex]}
+        components={defaultComponents}
+      >
+        {processContent(text)}
+      </ReactMarkdown>
+    );
+  };
+
+  if (hasPlaceholders) {
+    const byId = new Map(figureList.map((f) => [Number(f.id), f]));
+    const parts = rawText.split(/\{\{geogebra:(\d+)\}\}/);
+    return (
+      <div className={className}>
+        {parts.map((part, i) => {
+          if (i % 2 === 0) return renderMarkdown(part, i);
+          const figure = byId.get(Number(part));
+          if (!figure) return null;
+          return (
+            <GeoGebraEmbed
+              key={`ggb-${figure.id}-${i}`}
+              figure={figure}
+            />
+          );
+        })}
+      </div>
+    );
+  }
 
   const processedChildren = typeof children === 'string' ? processContent(children) : children;
 
@@ -262,23 +380,6 @@ const MarkdownWithGeoGebra = ({ children, className = "", markdownComponents = {
   };
 
   const parsedParts = parseContent(processedChildren);
-
-  // Default markdown components
-  const defaultComponents = {
-    p: ({ children: pChildren, ...props }) => (
-      <p className="mb-3 last:mb-0 text-left whitespace-normal break-words" {...props}>{pChildren}</p>
-    ),
-    strong: ({ children: sChildren, ...props }) => (
-      <strong className="font-bold text-slate-900" {...props}>{sChildren}</strong>
-    ),
-    code: ({ inline, className: codeClass, children: codeChildren, ...props }) => {
-      if (inline) {
-        return <code className="bg-slate-100 text-rose-600 px-1.5 py-0.5 rounded-md text-sm font-mono break-words" {...props}>{codeChildren}</code>;
-      }
-      return <code className={`${codeClass || ''} block bg-slate-800 text-white p-3 rounded-xl overflow-x-auto text-sm my-2 whitespace-pre-wrap break-words font-mono`} {...props}>{codeChildren}</code>;
-    },
-    ...markdownComponents,
-  };
 
   // Если нет GeoGebra блоков — рендерим как обычно
   if (typeof parsedParts === 'string' || !Array.isArray(parsedParts)) {

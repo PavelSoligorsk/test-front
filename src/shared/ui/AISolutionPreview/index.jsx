@@ -128,7 +128,7 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
         `}</style>
         <div className="math-solution">
           {hasAnswerSection && solutionBeforeAnswer && (
-            <MarkdownWithGeoGebra>{solutionBeforeAnswer}</MarkdownWithGeoGebra>
+            <MarkdownWithGeoGebra figures={data.geogebra}>{solutionBeforeAnswer}</MarkdownWithGeoGebra>
           )}
           {hasAnswerSection && (
             <div className="my-4 p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 rounded-2xl">
@@ -136,11 +136,11 @@ export default function AISolutionPreview({ data, isLoading = false, error = nul
                 <CheckCircle2 size={14} className="text-zinc-500" />
                 <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Ответ</span>
               </div>
-              <MarkdownWithGeoGebra>{answerSection}</MarkdownWithGeoGebra>
+              <MarkdownWithGeoGebra figures={data.geogebra}>{answerSection}</MarkdownWithGeoGebra>
             </div>
           )}
           {!hasAnswerSection && (
-            <MarkdownWithGeoGebra>{data.ai_solution}</MarkdownWithGeoGebra>
+            <MarkdownWithGeoGebra figures={data.geogebra}>{data.ai_solution}</MarkdownWithGeoGebra>
           )}
         </div>
         {!isExpanded && <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-[#09090b] to-transparent pointer-events-none" />}
