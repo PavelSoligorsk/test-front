@@ -59,6 +59,66 @@ function runEvalCommands(api, commands) {
   });
 }
 
+/** Апплет для AI hint/solve: одна фигура, команды только в appletOnLoad */
+export function GeoGebraFigureApplet({ figure }) {
+  const boxRef = useRef(null);
+  const uid = useId().replace(/:/g, '');
+  const height = Number(figure.height) || 400;
+  const appName = toGeoGebraAppName(figure.app);
+  const commands = (
+    figure.commands?.length
+      ? figure.commands
+      : String(figure.setup || '').split('\n')
+  ).filter((c) => String(c).trim());
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    let cancelled = false;
+
+    const mount = () => {
+      if (cancelled || !boxRef.current || typeof window.GGBApplet !== 'function') return;
+      const box = boxRef.current;
+      box.innerHTML = '';
+      const applet = new window.GGBApplet(
+        {
+          appName,
+          id: `ggb${uid}`,
+          width: Math.max(box.clientWidth || 640, 320),
+          height,
+          language: 'ru',
+          showMenuBar: false,
+          showAlgebraInput: false,
+          showToolBar: true,
+          showResetIcon: true,
+          enable3d: appName === '3d',
+          appletOnLoad(api) {
+            for (const cmd of commands) api.evalCommand(cmd);
+          },
+        },
+        true
+      );
+      applet.inject(box);
+    };
+
+    if (typeof window.GGBApplet === 'function') mount();
+    else loadGgbScript(mount);
+
+    return () => {
+      cancelled = true;
+      el.innerHTML = '';
+    };
+  }, [figure.id, appName, height, commands.join('\n'), uid]);
+
+  return (
+    <div
+      ref={boxRef}
+      className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
+      style={{ width: '100%', height, margin: '12px 0' }}
+    />
+  );
+}
+
 // ==================== GeoGebra Embedded (экспортируемый) ====================
 export const GeoGebraEmbed = ({
   figure,
@@ -311,14 +371,9 @@ const MarkdownWithGeoGebra = ({ children, className = "", markdownComponents = {
       <div className={className}>
         {parts.map((part, i) => {
           if (i % 2 === 0) return renderMarkdown(part, i);
-          const figure = byId.get(Number(part));
+          const figure = byId.get(Number(part)) || figureList[Number(part)];
           if (!figure) return null;
-          return (
-            <GeoGebraEmbed
-              key={`ggb-${figure.id}-${i}`}
-              figure={figure}
-            />
-          );
+          return <GeoGebraFigureApplet key={`ggb-${figure.id}-${i}`} figure={figure} />;
         })}
       </div>
     );
