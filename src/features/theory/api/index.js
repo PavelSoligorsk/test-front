@@ -2,6 +2,10 @@ import apiClient from '../../../shared/api';
 import { ENDPOINTS } from '../../../shared/api/endpoints';
 
 export const theoryApi = {
+  getMeta() {
+    return apiClient.get(ENDPOINTS.STUDENT_THEORY_META);
+  },
+
   getTopics() {
     return apiClient.get(ENDPOINTS.STUDENT_THEORY_TOPICS);
   },

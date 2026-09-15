@@ -27,7 +27,9 @@ export default function TestsPage() {
         setStaticTests(testsRes);
         const customTestsData = (assignmentsRes || []).map(a => ({
           id: a.test_id, title: a.test_title, target_class: a.target_class || '',
-          target_topic: a.target_topic || '', subject: a.subject || '', tasks: a.tasks || [],
+          target_topic: a.target_topic || '', subject: a.subject || '',
+          tasks: a.tasks || [],
+          tasks_count: a.tasks_count ?? a.tasks?.length ?? 0,
           is_assigned: true, due_date: a.due_date, is_completed: a.is_completed,
           assignment_id: a.assignment_id, is_autocompile: a.is_autocompile,
           time_limit_minutes: a.time_limit_minutes ?? null, max_attempts: a.max_attempts ?? null,

@@ -63,6 +63,11 @@ export const fetchUserDetailedStats = async (userId, period = 'all', role = 'adm
 };
 
 // Theory
+export const fetchTheoryMeta = async () => {
+  const res = await axios.get(`${API_BASE}/student/theory/meta`, authConfig());
+  return res.data || {};
+};
+
 export const fetchTheoryTopics = async () => {
   const res = await axios.get(`${API_BASE}/student/theory/topics`, authConfig());
   return res.data;

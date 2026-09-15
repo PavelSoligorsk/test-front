@@ -1,19 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Library } from 'lucide-react';
 import { TheoryViewer } from '../../components/Theory';
 import TheoryAIChat from '../../components/TheoryAIChat';
 import TopicCard from './TopicCard';
 import StudentPageLoading, { ArticleBodySkeleton } from './StudentPageLoading';
-import { fetchTheoryTopics, fetchTheorySections, fetchTheoryByTopicSection } from './api';
+import { fetchTheoryMeta, fetchTheoryByTopicSection } from './api';
 import { theoryArticlePath, theoryTopicPath, STUDENT_PATHS } from './studentPaths';
 import { MAIN_TOPICS } from '../AdminDashboardPage/constants';
 
 export default function TheoryPage() {
   const { topic: topicParam, section: sectionParam } = useParams();
   const navigate = useNavigate();
-  const [topics, setTopics] = useState([]);
-  const [sections, setSections] = useState([]);
+  const [meta, setMeta] = useState(null);
   const [theoryContent, setTheoryContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [warming, setWarming] = useState(false);
@@ -21,30 +20,43 @@ export default function TheoryPage() {
 
   const topicKey = topicParam || null;
   const sectionKey = sectionParam || null;
+  const topics = useMemo(() => (
+    Object.entries(meta || {}).map(([topic, sectionNames]) => ({
+      topic,
+      label: topic,
+      sections_count: (sectionNames || []).length,
+    }))
+  ), [meta]);
+  const sections = useMemo(() => (
+    (meta?.[topicKey] || []).map((section) => ({ section }))
+  ), [meta, topicKey]);
   const selectedTopic = topics.find(t => t.topic === topicKey) || (topicKey ? { topic: topicKey, label: topicKey } : null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setWarming(false);
-    setError(null);
-    setTheoryContent(null);
+    fetchTheoryMeta()
+      .then((data) => { if (!cancelled) setMeta(data || {}); })
+      .catch(() => { if (!cancelled) setMeta({}); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (meta == null) return undefined;
+    let cancelled = false;
 
     const load = async () => {
-      try {
-        const topicList = await fetchTheoryTopics().catch(() => []);
-        if (cancelled) return;
-        setTopics(topicList);
+      setLoading(true);
+      setWarming(false);
+      setError(null);
+      setTheoryContent(null);
 
+      try {
         if (!topicKey) {
-          setSections([]);
           setLoading(false);
           return;
         }
 
-        const sectionList = await fetchTheorySections(topicKey).catch(() => []);
-        if (cancelled) return;
-        setSections(sectionList);
+        const sectionList = (meta[topicKey] || []).map((section) => ({ section }));
 
         if (!sectionKey) {
           if (sectionList.length === 1) {
@@ -72,7 +84,7 @@ export default function TheoryPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [topicKey, sectionKey, navigate]);
+  }, [meta, topicKey, sectionKey, navigate]);
 
   const handleTopicClick = (topic) => {
     navigate(theoryTopicPath(topic.topic));

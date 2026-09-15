@@ -36,7 +36,7 @@ export default function TestCard({ test, type, onStart, disabled }) {
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800/60 px-2.5 py-1.5 rounded-lg">
             <LayoutGrid size={12} className="text-zinc-400" />
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 tabular-nums">{test.tasks?.length || 0} задач</span>
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 tabular-nums">{test.tasks_count ?? test.tasks?.length ?? 0} задач</span>
           </div>
           {(test.time_limit_minutes != null) && (
             <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800/60 px-2.5 py-1.5 rounded-lg">

@@ -6,7 +6,7 @@ export function normalizeTest(test) {
 
   return {
     ...test,
-    taskCount: test.tasks?.length || test.task_count || 0,
+    taskCount: test.tasks_count ?? test.tasks?.length ?? test.task_count ?? 0,
     normalizedTitle: (test.title || '')
       .replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '')
       .trim() || 'Без названия',
