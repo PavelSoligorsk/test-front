@@ -142,9 +142,9 @@ export default function TestTheoryPanel() {
 
       {!loading && !error && !topicKey && (
         topics.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {topics.map((topic) => (
-              <TopicCard key={topic.topic} topic={topic} onClick={(item) => setTopicKey(item.topic)} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {topics.map((topic, index) => (
+              <TopicCard key={topic.topic} topic={topic} onClick={(item) => setTopicKey(item.topic)} index={index} />
             ))}
           </div>
         ) : (

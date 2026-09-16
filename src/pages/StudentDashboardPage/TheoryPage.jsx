@@ -144,9 +144,9 @@ export default function TheoryPage() {
 
       {!error && !topicKey && (
         topics.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {topics.map(topic => (
-              <TopicCard key={topic.topic} topic={topic} onClick={handleTopicClick} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {topics.map((topic, index) => (
+              <TopicCard key={topic.topic} topic={topic} onClick={handleTopicClick} index={index} />
             ))}
           </div>
         ) : (
