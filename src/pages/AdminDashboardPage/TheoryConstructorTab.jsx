@@ -54,6 +54,39 @@ export const THEORY_GENERATION_PROMPT = `Ты — эксперт по подго
     Длинное доказательство или вывод формулы, скрытое для компактности.
   </Collapsible>
 
+  <Html>
+    <table>
+      <thead>
+        <tr>
+          <th>Функция</th>
+          <th>Область определения</th>
+          <th>Нули</th>
+          <th>Чётность</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>y = x²</td>
+          <td>все действительные</td>
+          <td>x = 0</td>
+          <td>чётная</td>
+        </tr>
+        <tr>
+          <td>y = 1/x</td>
+          <td>x ≠ 0</td>
+          <td>нет</td>
+          <td>нечётная</td>
+        </tr>
+        <tr>
+          <td>y = √x</td>
+          <td>x ≥ 0</td>
+          <td>x = 0</td>
+          <td>общего вида</td>
+        </tr>
+      </tbody>
+    </table>
+  </Html>
+
 </Section>
 
 <Section id="sec2" title="Название второго раздела" isHard>
@@ -71,11 +104,36 @@ export const THEORY_GENERATION_PROMPT = `Ты — эксперт по подго
 7. **Collapsible** — для длинных доказательств, выводов формул, скрытых ответов. title="Заголовок".
 8. **Grid** — сетка карточек. Атрибут cols="2" или cols="3".
 9. **Card** — карточка внутри Grid. Атрибут title="Заголовок карточки".
-10. **Steps** — пошаговый алгоритм. Каждый шаг оборачивается в <div>...</div>.
+10. **Steps** — разбор конкретного примера по шагам. Каждый шаг в <div>...</div>.
 11. **GeoGebra** — интерактивный график (используй только при необходимости):
     <GeoGebra setup="view:-10,10,-6,6,grid
       f(x) = x^2 - 4
       color:f,#ff0000" height="400" />
+12. **Html** — сырой HTML, когда нужна своя вёрстка: сравнительная таблица, схема, svg. Внутри только HTML, без Markdown, без $формул$ KaTeX и без Def/Ex. Формулы пиши символами HTML/Unicode (x², √x, ≥). Пример:
+
+    <Html>
+      <table>
+        <thead>
+          <tr>
+            <th>Уравнение</th>
+            <th>Корни</th>
+            <th>ОДЗ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>(x − 2)/(x + 1) = 0</td>
+            <td>x = 2</td>
+            <td>x ≠ −1</td>
+          </tr>
+          <tr>
+            <td>√(x − 1) = 2</td>
+            <td>x = 5</td>
+            <td>x ≥ 1</td>
+          </tr>
+        </tbody>
+      </table>
+    </Html>
 
 ## ПРАВИЛА ФОРМУЛ
 
@@ -97,8 +155,9 @@ export const THEORY_GENERATION_PROMPT = `Ты — эксперт по подго
 - Материал должен быть полным и структурированным: 3–6 разделов.
 - Каждый раздел должен содержать минимум: определение + формулу + пример.
 - Используй Important для частых ошибок и подводных камней.
-- Используй Steps для алгоритмов решения типовых задач.
-- Используй Grid/Card для таблиц свойств, сводок формул, сравнений.
+- Линейный разбор примера — в Steps.
+- Используй Grid/Card для кратких карточек свойств.
+- Используй Html для настоящих HTML-таблиц, схем и svg, когда Grid/Card не хватает.
 - Доказательства и длинные выводы — в Collapsible.
 - Не используй Markdown-заголовки (##, ###) внутри Section — только компоненты.
 - Обычный текст и списки Markdown можно использовать внутри компонентов.
@@ -163,7 +222,7 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
             <span className={labelClass}>Содержание (Markdown + MDX компоненты)</span>
             <ImageAwareTextarea value={theoryData.content}
               onChange={(value) => setTheoryData({ ...theoryData, content: value })}
-              placeholder={`# Заголовок\n\n<Section id="sec1" title="Основные понятия">\n  <Def>Здесь будет определение...</Def>\n  <Important title="Обратите внимание">Ключевой нюанс...</Important>\n  <Formula title="Основное тождество">$\\sin^2 x + \\cos^2 x = 1$</Formula>\n  <Ex>Пример...</Ex>\n  <Explanation>Пояснение...</Explanation>\n  <Grid cols="2">\n    <Card title="Свойство 1">...</Card>\n    <Card title="Свойство 2">...</Card>\n  </Grid>\n  <Steps>\n    <div>Шаг 1...</div>\n    <div>Шаг 2...</div>\n  </Steps>\n  <Collapsible title="Доказательство">...</Collapsible>\n</Section>`}
+              placeholder={`# Заголовок\n\n<Section id="sec1" title="Основные понятия">\n  <Def>Здесь будет определение...</Def>\n  <Important title="Обратите внимание">Ключевой нюанс...</Important>\n  <Formula title="Основное тождество">$\\sin^2 x + \\cos^2 x = 1$</Formula>\n  <Ex>Пример...</Ex>\n  <Explanation>Пояснение...</Explanation>\n  <Grid cols="2">\n    <Card title="Свойство 1">...</Card>\n    <Card title="Свойство 2">...</Card>\n  </Grid>\n  <Steps>\n    <div>Шаг 1...</div>\n    <div>Шаг 2...</div>\n  </Steps>\n  <Collapsible title="Доказательство">...</Collapsible>\n  <Html><p>Произвольный HTML</p></Html>\n</Section>`}
               className={`${fieldClass} min-h-[400px] font-mono resize-y`} rows={15} />
           </label>
           <button type="submit" className={`${primaryBtnClass} w-full py-3`}>

@@ -18,7 +18,8 @@ import {
   Grid,
   Card,
   Steps,
-  GeoGebra
+  GeoGebra,
+  Html,
 } from './TheoryBlocks';
 
 // ========== ЭЛЕМЕНТЫ MARKDOWN ==========
@@ -117,7 +118,7 @@ const convertMarkdownLists = (content) => {
 
 // Функция для поиска следующего парного или самозакрывающегося тега с учетом вложенности
 const findNextTag = (content, startIndex = 0) => {
-  const tagRegex = /<(\/)?(Def|Ex|Explanation|Important|Formula|Collapsible|Grid|Card|Steps|GeoGebra)([\s\S]*?)(\/)?>/g;
+  const tagRegex = /<(\/)?(Def|Ex|Explanation|Important|Formula|Collapsible|Grid|Card|Steps|Algorithm|GeoGebra|Html)([\s\S]*?)(\/)?>/g;
   tagRegex.lastIndex = startIndex;
   
   let match = tagRegex.exec(content);
@@ -173,6 +174,30 @@ const findNextTag = (content, startIndex = 0) => {
 
   return null;
 };
+
+function extractDivSteps(innerContent) {
+  const tagged = /<Step[^>]*>([\s\S]*?)<\/Step>/gi;
+  const fromStep = [];
+  let taggedMatch;
+  while ((taggedMatch = tagged.exec(innerContent)) !== null) {
+    const stepText = taggedMatch[1].trim();
+    if (stepText) fromStep.push(stepText);
+  }
+  if (fromStep.length) return fromStep;
+
+  const stepRegex = /<div[^>]*>([\s\S]*?)<\/div>/g;
+  const stepContents = [];
+  let stepMatch;
+  while ((stepMatch = stepRegex.exec(innerContent)) !== null) {
+    const stepText = stepMatch[1].trim();
+    if (stepText) stepContents.push(stepText);
+  }
+  if (stepContents.length === 0) {
+    const trimmed = innerContent.trim();
+    if (trimmed) stepContents.push(trimmed);
+  }
+  return stepContents;
+}
 
 const parseBlocks = (content) => {
   if (!content) return [];
@@ -256,25 +281,10 @@ const parseBlocks = (content) => {
         title: titleMatch ? titleMatch[1] : null,
         blocks: parseBlocks(innerContent)
       });
-    } else if (tagName === 'Steps') {
-      // Извлекаем отдельные шаги из <div>...</div> блоков
-      const stepRegex = /<div[^>]*>([\s\S]*?)<\/div>/g;
-      const stepContents = [];
-      let stepMatch;
-      while ((stepMatch = stepRegex.exec(innerContent)) !== null) {
-        const stepText = stepMatch[1].trim();
-        if (stepText) {
-          stepContents.push(stepText);
-        }
-      }
-      // Если <div> не найдены — используем весь контент как один шаг
-      if (stepContents.length === 0) {
-        const trimmed = innerContent.trim();
-        if (trimmed) stepContents.push(trimmed);
-      }
+    } else if (tagName === 'Steps' || tagName === 'Algorithm') {
       blocks.push({
         type: 'steps',
-        steps: stepContents
+        steps: extractDivSteps(innerContent)
       });
     } else if (tagName === 'GeoGebra') {
       const idMatch = attrs.match(/id="([^"]+)"/);
@@ -286,6 +296,12 @@ const parseBlocks = (content) => {
         id: idMatch ? idMatch[1] : null,
         height: heightMatch ? heightMatch[1] : "400",
         setup: setupMatch ? setupMatch[1] : null
+      });
+    } else if (tagName === 'Html') {
+      const htmlMatch = attrs.match(/html="([^"]*)"/);
+      blocks.push({
+        type: 'html',
+        html: htmlMatch ? htmlMatch[1] : innerContent,
       });
     }
 
@@ -387,6 +403,9 @@ const renderBlocks = (blocks) => {
           setup={block.setup} 
         />
       );
+    }
+    if (block.type === 'html') {
+      return <Html key={idx} html={block.html} />;
     }
     return null;
   });
@@ -545,6 +564,47 @@ export const TheoryViewer = ({ content, isFullWidth = false, embedded = false })
         }
         .dark .dynamic-markdown ::-webkit-scrollbar-thumb:hover {
           background: #52525b;
+        }
+        .theory-html p {
+          margin-bottom: 1em;
+          line-height: 1.625;
+        }
+        .theory-html img,
+        .theory-html video {
+          display: block;
+          max-width: 100%;
+          height: auto;
+          margin: 1rem auto;
+          border-radius: 12px;
+        }
+        .theory-html iframe {
+          display: block;
+          max-width: 100%;
+          margin: 1rem auto;
+          border: 0;
+        }
+        .theory-html table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.875rem;
+          text-align: left;
+        }
+        .theory-html th,
+        .theory-html td {
+          padding: 0.625rem 1rem;
+          border-bottom: 1px solid rgb(228 228 231);
+          vertical-align: top;
+        }
+        .dark .theory-html th,
+        .dark .theory-html td {
+          border-bottom-color: rgb(39 39 42 / 0.6);
+        }
+        .theory-html th {
+          font-weight: 600;
+          color: rgb(24 24 27);
+        }
+        .dark .theory-html th {
+          color: rgb(244 244 245);
         }
       `}</style>
 

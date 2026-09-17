@@ -1,10 +1,63 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertCircle, Bookmark, ChevronDown, ChevronUp, Lightbulb, Pencil } from 'lucide-react';
 
-const noteBox =
-  'my-6 p-4 sm:p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-left';
-const noteTitle = 'mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100';
-const noteBody = 'text-zinc-800 dark:text-zinc-200 text-sm sm:text-base leading-relaxed space-y-4';
+function IconMark({ children, invert = false }) {
+  return (
+    <span
+      className={`flex size-9 shrink-0 items-center justify-center rounded-xl border ${
+        invert
+          ? 'border-white/20 bg-white/10 text-white dark:border-zinc-950/15 dark:bg-zinc-950/10 dark:text-zinc-950'
+          : 'border-zinc-200 bg-zinc-100 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100'
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Note({
+  title,
+  icon,
+  children,
+  invert = false,
+  dashed = false,
+  fill = false,
+  center = false,
+}) {
+  return (
+    <div
+      className={`my-6 overflow-hidden rounded-2xl border text-left shadow-sm ${
+        invert
+          ? 'border-zinc-900 bg-zinc-900 text-zinc-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950'
+          : dashed
+            ? 'border-dashed border-zinc-300 bg-transparent dark:border-zinc-700'
+            : fill
+              ? 'border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900'
+              : 'border-zinc-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]'
+      }`}
+    >
+      {title ? (
+        <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
+          {icon}
+          <p className={`text-sm font-semibold tracking-tight ${invert ? '' : 'text-zinc-900 dark:text-zinc-100'}`}>
+            {title}
+          </p>
+        </div>
+      ) : null}
+      <div
+        className={`px-4 py-4 sm:px-5 sm:py-5 text-sm sm:text-base leading-relaxed space-y-4 ${
+          center ? 'text-center' : ''
+        } ${
+          invert
+            ? 'text-zinc-200 dark:text-zinc-800'
+            : 'text-zinc-800 dark:text-zinc-200'
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export const SectionBlock = ({ id, title, children, isHard }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -14,14 +67,14 @@ export const SectionBlock = ({ id, title, children, isHard }) => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6 group"
+        className="group mb-8 flex w-full flex-col justify-between gap-3 text-left sm:flex-row sm:items-center"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          <h2 className="text-xl font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             {title}
           </h2>
           {isHard && (
-            <span className="self-start sm:self-auto px-2 py-0.5 text-xs font-medium rounded-md bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
+            <span className="self-start rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 sm:self-auto">
               Повышенная сложность
             </span>
           )}
@@ -34,7 +87,7 @@ export const SectionBlock = ({ id, title, children, isHard }) => {
       </button>
 
       {isOpen && (
-        <div className="space-y-6 text-zinc-700 dark:text-zinc-300 dynamic-markdown text-left">
+        <div className="dynamic-markdown space-y-6 text-left text-zinc-700 dark:text-zinc-300">
           {children}
         </div>
       )}
@@ -43,40 +96,58 @@ export const SectionBlock = ({ id, title, children, isHard }) => {
 };
 
 export const Def = ({ title = 'Определение', children }) => (
-  <div className={noteBox}>
-    <p className={noteTitle}>{title}</p>
-    <div className={noteBody}>{children}</div>
-  </div>
+  <Note
+    fill
+    title={title}
+    icon={<IconMark><Bookmark size={16} strokeWidth={2} /></IconMark>}
+  >
+    {children}
+  </Note>
 );
 
 export const Ex = ({ title, children, isHard }) => {
   const resolvedTitle = title || (isHard ? 'Сложный пример' : 'Пример');
   return (
-    <div className={noteBox}>
-      <p className={noteTitle}>{resolvedTitle}</p>
-      <div className={noteBody}>{children}</div>
-    </div>
+    <Note
+      title={resolvedTitle}
+      icon={<IconMark><Pencil size={16} strokeWidth={2} /></IconMark>}
+    >
+      {children}
+    </Note>
   );
 };
 
 export const Explanation = ({ children }) => (
-  <div className={noteBox}>
-    <p className={noteTitle}>Пояснение</p>
-    <div className={noteBody}>{children}</div>
-  </div>
+  <Note
+    dashed
+    title="Пояснение"
+    icon={<IconMark><Lightbulb size={16} strokeWidth={2} /></IconMark>}
+  >
+    {children}
+  </Note>
 );
 
 export const Important = ({ title = 'Важно', children }) => (
-  <div className={noteBox}>
-    <p className={noteTitle}>{title}</p>
-    <div className={noteBody}>{children}</div>
-  </div>
+  <Note
+    title={title}
+    icon={
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950">
+        <AlertCircle size={16} strokeWidth={2} />
+      </span>
+    }
+  >
+    {children}
+  </Note>
 );
 
 export const Formula = ({ title = 'Формула', children }) => (
-  <div className={`${noteBox} text-center`}>
-    {title ? <p className={noteTitle}>{title}</p> : null}
-    <div className="text-zinc-900 dark:text-zinc-100 text-lg sm:text-xl font-mono overflow-x-auto py-1">
+  <div className="my-6 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    {title ? (
+      <p className="px-5 pt-4 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+        {title}
+      </p>
+    ) : null}
+    <div className="overflow-x-auto px-5 py-6 text-lg font-medium text-zinc-900 sm:text-xl dark:text-zinc-100">
       {children}
     </div>
   </div>
@@ -86,17 +157,17 @@ export const Collapsible = ({ title = 'Доказательство / Вывод
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="my-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 overflow-hidden">
+    <div className="my-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/50"
+        className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-semibold tracking-tight text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900/60 sm:px-5"
       >
         {title}
         {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
       {isOpen && (
-        <div className="p-4 sm:p-5 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] text-sm sm:text-base leading-relaxed text-zinc-800 dark:text-zinc-200 space-y-4">
+        <div className="space-y-4 border-t border-zinc-200 bg-zinc-50 px-4 py-4 text-sm leading-relaxed text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 sm:px-5 sm:py-5 sm:text-base">
           {children}
         </div>
       )}
@@ -107,39 +178,57 @@ export const Collapsible = ({ title = 'Доказательство / Вывод
 export const Grid = ({ cols = 2, children }) => {
   const colClass = cols === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
   return (
-    <div className={`grid grid-cols-1 ${colClass} gap-4 my-6 text-left`}>
+    <div className={`my-6 grid grid-cols-1 ${colClass} gap-4 text-left`}>
       {children}
     </div>
   );
 };
 
 export const Card = ({ title, children }) => (
-  <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40">
+  <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
     {title && (
-      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+      <h4 className="mb-3 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
         {title}
       </h4>
     )}
-    <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 space-y-2">
+    <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
       {children}
     </div>
   </div>
 );
 
 export const Steps = ({ children }) => (
-  <div className="my-6 space-y-4 text-left">
+  <div className="my-6 space-y-3 text-left">
     {React.Children.map(children, (child, index) => (
-      <div className="flex gap-4 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 font-semibold flex items-center justify-center text-sm tabular-nums">
+      <div className="flex gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b] sm:p-5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold tabular-nums text-white dark:bg-zinc-100 dark:text-zinc-950">
           {index + 1}
         </div>
-        <div className="text-zinc-800 dark:text-zinc-200 text-sm sm:text-base leading-relaxed pt-1 space-y-2 flex-1">
+        <div className="flex-1 space-y-2 pt-1 text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 sm:text-base">
           {child}
         </div>
       </div>
     ))}
   </div>
 );
+
+function stripScripts(html) {
+  return String(html || '').replace(/<script\b[\s\S]*?<\/script>/gi, '');
+}
+
+export const Html = ({ html, children }) => {
+  const markup = html
+    ?? (typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : '');
+  const cleaned = stripScripts(markup).trim();
+  if (!cleaned) return null;
+
+  return (
+    <div
+      className="theory-html my-6 overflow-x-auto text-zinc-800 dark:text-zinc-200"
+      dangerouslySetInnerHTML={{ __html: cleaned }}
+    />
+  );
+};
 
 function hexToRgb(hex) {
   hex = hex.replace('#', '');
@@ -328,7 +417,7 @@ export const GeoGebra = ({ id, setup, height = '400' }) => {
   }, [id, setup, height]);
 
   return (
-    <div className="theory-geogebra my-6 w-full">
+    <div className="theory-geogebra my-6 w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60">
       <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }} />
     </div>
   );
