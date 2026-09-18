@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useNavigate } from 'react-router-dom';
 import { INITIAL_TASK_STATE } from './constants';
 import {
-  fetchUsers, fetchTasks, fetchTasksMeta, fetchAllowedEmails, fetchTheoryList,
+  fetchUsers, fetchTasks, fetchTasksMeta, fetchAllowedEmails, fetchTheoryMeta,
   createTask, updateTask, createTheory, updateTheory, deleteTheory,
   addAllowedEmail, deleteAllowedEmail, rebuildStaticTests,
 } from './api';
@@ -27,7 +27,7 @@ export function AdminWorkspaceProvider({ children }) {
   });
   const [bankClass, setBankClass] = useState(null);
   const [bankTopic, setBankTopic] = useState(null);
-  const [theoryList, setTheoryList] = useState([]);
+  const [theoryMeta, setTheoryMeta] = useState({});
   const [theoryData, setTheoryData] = useState({ id: null, topic: '', section: '', content: '' });
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
@@ -42,13 +42,13 @@ export function AdminWorkspaceProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
-        const [usersData, tasksMetaData, emailsData, theoryDataList] = await Promise.all([
-          fetchUsers(), fetchTasksMeta(), fetchAllowedEmails(), fetchTheoryList(),
+        const [usersData, tasksMetaData, emailsData, theoryMetaData] = await Promise.all([
+          fetchUsers(), fetchTasksMeta(), fetchAllowedEmails(), fetchTheoryMeta(),
         ]);
         setUsers(usersData);
         setTasksMeta(tasksMetaData);
         setAllowedEmails(emailsData);
-        setTheoryList(theoryDataList);
+        setTheoryMeta(theoryMetaData || {});
       } catch (e) {
         console.error(e);
       } finally {
@@ -95,23 +95,39 @@ export function AdminWorkspaceProvider({ children }) {
     return match && role;
   });
 
-  const groupedTheory = useMemo(() => theoryList.reduce((acc, theory) => {
-    if (!acc[theory.topic]) acc[theory.topic] = {};
-    if (!acc[theory.topic][theory.section]) acc[theory.topic][theory.section] = [];
-    acc[theory.topic][theory.section].push(theory);
-    return acc;
-  }, {}), [theoryList]);
+  const refreshTheoryMeta = useCallback(async () => {
+    setTheoryMeta((await fetchTheoryMeta()) || {});
+  }, []);
 
-  const filteredTheory = useMemo(() => {
-    if (!selectedTopic) return [];
-    if (!selectedSection) {
-      return Object.keys(groupedTheory[selectedTopic] || {}).map((section) => ({
-        section,
-        theories: groupedTheory[selectedTopic][section],
-      }));
+  const handleTheorySubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (theoryData.id) {
+        await updateTheory(theoryData.id, { topic: theoryData.topic, section: theoryData.section, content: theoryData.content });
+        showSuccess('Теория обновлена');
+      } else {
+        await createTheory({ topic: theoryData.topic, section: theoryData.section, content: theoryData.content });
+        showSuccess('Теория создана');
+      }
+      setTheoryData({ id: null, topic: '', section: '', content: '' });
+      await refreshTheoryMeta();
+    } catch (err) {
+      showError(err, 'Ошибка при сохранении');
     }
-    return groupedTheory[selectedTopic]?.[selectedSection] || [];
-  }, [groupedTheory, selectedTopic, selectedSection]);
+  };
+
+  const handleDeleteTheory = async (id) => {
+    if (!confirm('Удалить теоретический материал?')) return;
+    try {
+      await deleteTheory(id);
+      if (selectedTopic && selectedSection && theoryMeta?.[selectedTopic]?.[selectedSection] === id) {
+        setSelectedSection(null);
+      }
+      await refreshTheoryMeta();
+    } catch (err) {
+      showError(err, 'Ошибка при удалении');
+    }
+  };
 
   const handleTaskSubmit = async (e) => {
     e.preventDefault();
@@ -220,33 +236,6 @@ export function AdminWorkspaceProvider({ children }) {
     }
   };
 
-  const handleTheorySubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (theoryData.id) {
-        await updateTheory(theoryData.id, { topic: theoryData.topic, section: theoryData.section, content: theoryData.content });
-        showSuccess('Теория обновлена');
-      } else {
-        await createTheory({ topic: theoryData.topic, section: theoryData.section, content: theoryData.content });
-        showSuccess('Теория создана');
-      }
-      setTheoryData({ id: null, topic: '', section: '', content: '' });
-      setTheoryList(await fetchTheoryList());
-    } catch (err) {
-      showError(err, 'Ошибка при сохранении');
-    }
-  };
-
-  const handleDeleteTheory = async (id) => {
-    if (!confirm('Удалить теоретический материал?')) return;
-    try {
-      await deleteTheory(id);
-      setTheoryList(await fetchTheoryList());
-    } catch (err) {
-      showError(err, 'Ошибка при удалении');
-    }
-  };
-
   const handleUsersUpdate = async () => {
     setUsers(await fetchUsers());
   };
@@ -260,17 +249,16 @@ export function AdminWorkspaceProvider({ children }) {
     users, tasks, tasksMeta, allowedEmails, newEmail, setNewEmail,
     userSearch, setUserSearch, userRoleFilter, setUserRoleFilter,
     taskData, setTaskData, bankClass, setBankClass, bankTopic, setBankTopic,
-    theoryList, theoryData, setTheoryData, selectedTopic, setSelectedTopic,
+    theoryMeta, theoryData, setTheoryData, selectedTopic, setSelectedTopic,
     selectedSection, setSelectedSection, availableClasses, filteredUsers,
-    groupedTheory, filteredTheory,
     handleTaskSubmit, handleEditTask, handleCancelEdit,
     handleAddEmail, handleDeleteEmail, handleGlobalSync,
-    handleTheorySubmit, handleDeleteTheory, handleUsersUpdate, refreshTasksMeta,
+    handleTheorySubmit, handleDeleteTheory, handleUsersUpdate, refreshTasksMeta, refreshTheoryMeta,
   }), [
     notice, loading, users, tasks, tasksMeta, allowedEmails, newEmail,
-    userSearch, userRoleFilter, taskData, bankClass, bankTopic, theoryList,
+    userSearch, userRoleFilter, taskData, bankClass, bankTopic, theoryMeta,
     theoryData, selectedTopic, selectedSection, availableClasses, filteredUsers,
-    groupedTheory, filteredTheory, clearNotice, showError, showSuccess,
+    clearNotice, showError, showSuccess, refreshTheoryMeta,
   ]);
 
   return (

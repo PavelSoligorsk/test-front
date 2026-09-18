@@ -123,21 +123,29 @@ export const deleteAllowedEmail = async (emailString) => {
 };
 
 // Theory
-export const fetchTheoryList = async () => {
-  const res = await axios.get(`${API_BASE}/admin/theory/getall`, { headers: getAuthHeaders() });
+export const fetchTheoryMeta = async () => {
+  const res = await axios.get(`${API_BASE}/admin/theory-meta`, { headers: getAuthHeaders() });
+  return res.data || {};
+};
+
+export const fetchTheory = async (id) => {
+  const res = await axios.get(`${API_BASE}/admin/theory/${id}`, { headers: getAuthHeaders() });
   return res.data;
 };
 
 export const createTheory = async (data) => {
-  await axios.post(`${API_BASE}/admin/theory`, data, { headers: getAuthHeaders() });
+  const res = await axios.post(`${API_BASE}/admin/theory`, data, { headers: getAuthHeaders() });
+  return res.data;
 };
 
 export const updateTheory = async (id, data) => {
-  await axios.put(`${API_BASE}/admin/theory/${id}`, data, { headers: getAuthHeaders() });
+  const res = await axios.put(`${API_BASE}/admin/theory/${id}`, data, { headers: getAuthHeaders() });
+  return res.data;
 };
 
 export const deleteTheory = async (id) => {
-  await axios.delete(`${API_BASE}/admin/theory/${id}`, { headers: getAuthHeaders() });
+  const res = await axios.delete(`${API_BASE}/admin/theory/${id}`, { headers: getAuthHeaders() });
+  return res.data;
 };
 
 // Classify

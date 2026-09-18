@@ -10,12 +10,11 @@ export default function LibraryPage() {
   return (
     <PageShell>
       <TheoryBankTab
-        groupedTheory={ws.groupedTheory}
+        theoryMeta={ws.theoryMeta}
         selectedTopic={ws.selectedTopic}
         setSelectedTopic={ws.setSelectedTopic}
         selectedSection={ws.selectedSection}
         setSelectedSection={ws.setSelectedSection}
-        filteredTheory={ws.filteredTheory}
         onEditTheory={(theory) => {
           ws.setTheoryData(theory);
           navigate(ADMIN_PATHS.theory);
@@ -25,7 +24,7 @@ export default function LibraryPage() {
           ws.setTheoryData({
             id: null,
             topic: ws.selectedTopic,
-            section: ws.selectedSection,
+            section: ws.selectedSection || '',
             content: '',
           });
           navigate(ADMIN_PATHS.theory);

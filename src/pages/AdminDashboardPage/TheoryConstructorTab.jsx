@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Send, Sparkles, Copy, Check, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Send, Sparkles, Copy, Check, X, Eye } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
 import { TheoryViewer } from '../../components/Theory';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
@@ -166,6 +166,13 @@ export const THEORY_GENERATION_PROMPT = `Ты — эксперт по подго
 export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubmit }) {
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
+
+  const previewStale = previewContent !== (theoryData.content || '');
+
+  useEffect(() => {
+    setPreviewContent('');
+  }, [theoryData.id]);
 
   const handleCopyPrompt = async () => {
     try {
@@ -232,8 +239,27 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
       </Sheet>
       <div className="sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
         <Sheet className="p-6 md:p-8">
-          <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">Предпросмотр теории</h3>
-          <TheoryViewer content={theoryData.content} />
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Предпросмотр теории</h3>
+            <button
+              type="button"
+              onClick={() => setPreviewContent(theoryData.content || '')}
+              className={secondaryBtnClass}
+            >
+              <Eye size={14} />
+              Предпросмотр
+            </button>
+          </div>
+          {previewContent ? (
+            <>
+              {previewStale && (
+                <p className="mb-4 text-xs text-zinc-400">Текст изменился — нажмите «Предпросмотр», чтобы обновить.</p>
+              )}
+              <TheoryViewer content={previewContent} />
+            </>
+          ) : (
+            <p className="text-sm text-zinc-400">Нажмите «Предпросмотр», чтобы собрать материал.</p>
+          )}
         </Sheet>
       </div>
 

@@ -1,10 +1,58 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BookOpen, PlusCircle, Edit3, Trash2, Inbox } from 'lucide-react';
 import { TheoryViewer } from '../../components/Theory';
 import { MAIN_TOPICS } from './constants';
-import { Sheet, IconWell, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { fetchTheory } from './api';
+import { Sheet, IconWell, primaryBtnClass, secondaryBtnClass, formatApiDetail } from '../../shared/ui';
 
-export default function TheoryBankTab({ groupedTheory, selectedTopic, setSelectedTopic, selectedSection, setSelectedSection, filteredTheory, onEditTheory, onDeleteTheory, onAddNew }) {
+export default function TheoryBankTab({
+  theoryMeta = {},
+  selectedTopic,
+  setSelectedTopic,
+  selectedSection,
+  setSelectedSection,
+  onEditTheory,
+  onDeleteTheory,
+  onAddNew,
+}) {
+  const [article, setArticle] = useState(null);
+  const [loadingArticle, setLoadingArticle] = useState(false);
+  const [articleError, setArticleError] = useState(null);
+
+  const topicSections = (selectedTopic && theoryMeta[selectedTopic]) || {};
+  const sectionEntries = Object.entries(topicSections);
+  const theoryId = selectedTopic && selectedSection ? topicSections[selectedSection] : null;
+
+  useEffect(() => {
+    if (!theoryId) {
+      setArticle(null);
+      setArticleError(null);
+      setLoadingArticle(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setLoadingArticle(true);
+    setArticleError(null);
+    fetchTheory(theoryId)
+      .then((data) => {
+        if (!cancelled) setArticle(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setArticle(null);
+          setArticleError(formatApiDetail(err?.response?.data?.detail, 'Не удалось загрузить теорию'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingArticle(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [theoryId]);
+
   return (
     <Sheet className="overflow-hidden min-h-[600px] flex flex-col md:flex-row animate-in fade-in slide-in-from-bottom-4 duration-500">
       <aside className="w-full md:w-80 bg-zinc-50 dark:bg-zinc-900/40 border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800/60 p-4 md:p-6 flex flex-col gap-6">
@@ -23,11 +71,11 @@ export default function TheoryBankTab({ groupedTheory, selectedTopic, setSelecte
             ))}
           </div>
         </div>
-        {selectedTopic && groupedTheory[selectedTopic] && (
+        {selectedTopic && sectionEntries.length > 0 && (
           <div>
             <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Разделы</h3>
             <div className="grid grid-cols-1 gap-2">
-              {Object.keys(groupedTheory[selectedTopic]).map(section => (
+              {sectionEntries.map(([section, id]) => (
                 <button key={section} type="button"
                   onClick={() => setSelectedSection(selectedSection === section ? null : section)}
                   className={`p-3 rounded-xl text-sm font-medium transition-colors text-left ${
@@ -36,7 +84,7 @@ export default function TheoryBankTab({ groupedTheory, selectedTopic, setSelecte
                       : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
                   }`}>
                   {section}{' '}
-                  <span className="text-xs opacity-70">({groupedTheory[selectedTopic][section].length})</span>
+                  <span className="text-xs opacity-70">#{id}</span>
                 </button>
               ))}
             </div>
@@ -54,36 +102,34 @@ export default function TheoryBankTab({ groupedTheory, selectedTopic, setSelecte
           </div>
         ) : !selectedSection ? (
           <div className="space-y-6">
-            {filteredTheory.map(({ section, theories }) => (
-              <div key={section} className="border-b border-zinc-100 dark:border-zinc-800/60 pb-6 last:border-0">
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight mb-4">{section}</h3>
-                <div className="grid gap-4">
-                  {theories.map(theory => (
-                    <div key={theory.id} className="p-5 md:p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]">
-                      <div className="flex justify-between items-start mb-4">
-                        <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded-lg tabular-nums">
-                          ID: {theory.id}
-                        </span>
-                        <div className="flex gap-1">
-                          <button type="button" onClick={() => onEditTheory(theory)}
-                            className="p-2 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors">
-                            <Edit3 size={16} />
-                          </button>
-                          <button type="button" onClick={() => onDeleteTheory(theory.id)}
-                            className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="[&_.max-w-3xl]:max-w-full [&_.max-w-3xl]:w-full [&_.mx-auto]:ml-0 [&_.mx-auto]:mr-0">
-                        <TheoryViewer content={theory.content} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <IconWell><BookOpen size={18} strokeWidth={2} /></IconWell>
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  {MAIN_TOPICS[selectedTopic] || selectedTopic}
+                </h2>
               </div>
+              <button type="button" onClick={onAddNew} className={primaryBtnClass}>
+                <PlusCircle size={16} /> Добавить теорию
+              </button>
+            </div>
+            {sectionEntries.map(([section, id]) => (
+              <button
+                key={section}
+                type="button"
+                onClick={() => setSelectedSection(section)}
+                className="w-full text-left p-5 md:p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+              >
+                <div className="flex justify-between items-start gap-3">
+                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{section}</h3>
+                  <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded-lg tabular-nums">
+                    ID: {id}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-zinc-400">Откройте раздел, чтобы загрузить текст</p>
+              </button>
             ))}
-            {filteredTheory.length === 0 && (
+            {sectionEntries.length === 0 && (
               <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">
                 <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
                   <Inbox size={20} />
@@ -99,31 +145,36 @@ export default function TheoryBankTab({ groupedTheory, selectedTopic, setSelecte
                 <IconWell><BookOpen size={18} strokeWidth={2} /></IconWell>
                 <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{selectedSection}</h2>
               </div>
-              <button type="button" onClick={onAddNew} className={primaryBtnClass}>
-                <PlusCircle size={16} /> Добавить теорию
-              </button>
+              {article && (
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => onEditTheory(article)} className={secondaryBtnClass}>
+                    <Edit3 size={16} />
+                  </button>
+                  <button type="button" onClick={() => onDeleteTheory(article.id)}
+                    className="p-2.5 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
             </div>
-            {filteredTheory.map(theory => (
-              <div key={theory.id} className="p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/30">
+            {loadingArticle && (
+              <p className="text-sm text-zinc-400">Загрузка материала…</p>
+            )}
+            {articleError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{articleError}</p>
+            )}
+            {!loadingArticle && !articleError && article && (
+              <div className="p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/30">
                 <div className="flex justify-between items-start mb-6">
                   <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-3 py-1.5 rounded-xl tabular-nums">
-                    Версия {theory.id}
+                    ID {article.id}
                   </span>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => onEditTheory(theory)} className={secondaryBtnClass}>
-                      <Edit3 size={16} />
-                    </button>
-                    <button type="button" onClick={() => onDeleteTheory(theory.id)}
-                      className="p-2.5 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
                 </div>
                 <div className="[&_.max-w-3xl]:max-w-full [&_.max-w-3xl]:w-full [&_.mx-auto]:ml-0 [&_.mx-auto]:mr-0">
-                  <TheoryViewer content={theory.content} />
+                  <TheoryViewer content={article.content} />
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
       </main>

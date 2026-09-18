@@ -45,6 +45,9 @@ export const ENDPOINTS = {
   ADMIN_RESULT: (resultId) => `/admin/results/${resultId}`,
   ADMIN_UPLOAD_IMAGE: '/admin/upload-image',
   ADMIN_ALLOWED_EMAILS: '/admin/allowed/emails',
+  ADMIN_THEORY_META: '/admin/theory-meta',
+  ADMIN_THEORY: (id) => `/admin/theory/${id}`,
+  ADMIN_THEORY_CREATE: '/admin/theory',
 
   // Учитель
   TEACHER_TASKS_META: '/teacher/tasks-meta',
