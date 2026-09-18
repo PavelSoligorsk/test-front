@@ -99,14 +99,15 @@ export function AdminWorkspaceProvider({ children }) {
     setTheoryMeta((await fetchTheoryMeta()) || {});
   }, []);
 
-  const handleTheorySubmit = async (e) => {
+  const handleTheorySubmit = async (e, draft) => {
     e.preventDefault();
+    const data = draft || theoryData;
     try {
-      if (theoryData.id) {
-        await updateTheory(theoryData.id, { topic: theoryData.topic, section: theoryData.section, content: theoryData.content });
+      if (data.id) {
+        await updateTheory(data.id, { topic: data.topic, section: data.section, content: data.content });
         showSuccess('Теория обновлена');
       } else {
-        await createTheory({ topic: theoryData.topic, section: theoryData.section, content: theoryData.content });
+        await createTheory({ topic: data.topic, section: data.section, content: data.content });
         showSuccess('Теория создана');
       }
       setTheoryData({ id: null, topic: '', section: '', content: '' });

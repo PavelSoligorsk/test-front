@@ -2,10 +2,26 @@ import React, { useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { uploadImage } from './api';
 
-export default function ImageAwareTextarea({ value, onChange, placeholder, className = '', rows = 4, required = false }) {
+export default function ImageAwareTextarea({
+  value,
+  defaultValue,
+  onChange,
+  placeholder,
+  className = '',
+  rows = 4,
+  required = false,
+}) {
   const textareaRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const isControlled = value !== undefined;
+
+  const readValue = () => (isControlled ? value : (textareaRef.current?.value ?? ''));
+
+  const writeValue = (next) => {
+    if (!isControlled && textareaRef.current) textareaRef.current.value = next;
+    onChange?.(next);
+  };
 
   const handleUpload = async (file) => {
     setIsUploading(true);
@@ -25,8 +41,9 @@ export default function ImageAwareTextarea({ value, onChange, placeholder, class
       if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
-        const newValue = value.substring(0, start) + markdown + value.substring(end);
-        onChange(newValue);
+        const current = readValue();
+        const newValue = current.substring(0, start) + markdown + current.substring(end);
+        writeValue(newValue);
         setTimeout(() => {
           textarea.focus();
           const pos = start + markdown.length;
@@ -38,8 +55,8 @@ export default function ImageAwareTextarea({ value, onChange, placeholder, class
       const textarea = textareaRef.current;
       if (textarea) {
         const start = textarea.selectionStart;
-        const newValue = value.substring(0, start) + '❌ Ошибка загрузки изображения' + value.substring(textarea.selectionEnd);
-        onChange(newValue);
+        const current = readValue();
+        writeValue(current.substring(0, start) + '❌ Ошибка загрузки изображения' + current.substring(textarea.selectionEnd));
       }
     } finally {
       setIsUploading(false);
@@ -79,8 +96,8 @@ export default function ImageAwareTextarea({ value, onChange, placeholder, class
     <div className="relative">
       <textarea
         ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        {...(isControlled ? { value } : { defaultValue: defaultValue ?? '' })}
+        onChange={(e) => onChange?.(e.target.value)}
         onPaste={handlePaste}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}

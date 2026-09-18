@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, Sparkles, Copy, Check, X, Eye } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
 import { TheoryViewer } from '../../components/Theory';
@@ -167,12 +167,27 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
-
-  const previewStale = previewContent !== (theoryData.content || '');
+  const [editorKey, setEditorKey] = useState(0);
+  const contentRef = useRef(theoryData.content || '');
 
   useEffect(() => {
+    contentRef.current = theoryData.content || '';
     setPreviewContent('');
-  }, [theoryData.id]);
+    if (!theoryData.id && !theoryData.content) {
+      setEditorKey((key) => key + 1);
+    }
+  }, [theoryData.id, theoryData.content]);
+
+  const handlePreview = useCallback(() => {
+    setPreviewContent(contentRef.current || '');
+  }, []);
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    const next = { ...theoryData, content: contentRef.current };
+    setTheoryData(next);
+    onSubmit(e, next);
+  };
 
   const handleCopyPrompt = async () => {
     try {
@@ -206,7 +221,7 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
             <Sparkles size={14} /> AI-промпт
           </button>
         </div>
-        <form onSubmit={onSubmit} className="space-y-5">
+        <form onSubmit={handleFormSubmit} className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="block space-y-1.5">
               <span className={labelClass}>Тема</span>
@@ -227,10 +242,14 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
           </div>
           <label className="block space-y-1.5">
             <span className={labelClass}>Содержание (Markdown + MDX компоненты)</span>
-            <ImageAwareTextarea value={theoryData.content}
-              onChange={(value) => setTheoryData({ ...theoryData, content: value })}
+            <ImageAwareTextarea
+              key={`${theoryData.id ?? 'new'}-${editorKey}`}
+              defaultValue={theoryData.content || ''}
+              onChange={(value) => { contentRef.current = value; }}
               placeholder={`# Заголовок\n\n<Section id="sec1" title="Основные понятия">\n  <Def>Здесь будет определение...</Def>\n  <Important title="Обратите внимание">Ключевой нюанс...</Important>\n  <Formula title="Основное тождество">$\\sin^2 x + \\cos^2 x = 1$</Formula>\n  <Ex>Пример...</Ex>\n  <Explanation>Пояснение...</Explanation>\n  <Grid cols="2">\n    <Card title="Свойство 1">...</Card>\n    <Card title="Свойство 2">...</Card>\n  </Grid>\n  <Steps>\n    <div>Шаг 1...</div>\n    <div>Шаг 2...</div>\n  </Steps>\n  <Collapsible title="Доказательство">...</Collapsible>\n  <Html><p>Произвольный HTML</p></Html>\n</Section>`}
-              className={`${fieldClass} min-h-[400px] font-mono resize-y`} rows={15} />
+              className={`${fieldClass} min-h-[400px] font-mono resize-y`}
+              rows={15}
+            />
           </label>
           <button type="submit" className={`${primaryBtnClass} w-full py-3`}>
             <Send size={16} /> {theoryData.id ? 'Обновить теорию' : 'Создать теорию'}
@@ -243,7 +262,7 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
             <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Предпросмотр теории</h3>
             <button
               type="button"
-              onClick={() => setPreviewContent(theoryData.content || '')}
+              onClick={handlePreview}
               className={secondaryBtnClass}
             >
               <Eye size={14} />
@@ -251,12 +270,7 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
             </button>
           </div>
           {previewContent ? (
-            <>
-              {previewStale && (
-                <p className="mb-4 text-xs text-zinc-400">Текст изменился — нажмите «Предпросмотр», чтобы обновить.</p>
-              )}
               <TheoryViewer content={previewContent} />
-            </>
           ) : (
             <p className="text-sm text-zinc-400">Нажмите «Предпросмотр», чтобы собрать материал.</p>
           )}

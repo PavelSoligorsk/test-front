@@ -413,7 +413,7 @@ const renderBlocks = (blocks) => {
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
-export const TheoryViewer = ({ content, isFullWidth = false, embedded = false }) => {
+export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded = false }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -689,4 +689,4 @@ export const TheoryViewer = ({ content, isFullWidth = false, embedded = false })
       )}
     </div>
   );
-};
+});
