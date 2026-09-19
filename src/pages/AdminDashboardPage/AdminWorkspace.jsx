@@ -8,7 +8,7 @@ import {
 } from './api';
 import { formatApiDetail } from '../../shared/ui';
 import { ADMIN_PATHS } from './adminPaths';
-import { nextTopicPriority, topicPriority } from '../../shared/lib/theoryMeta';
+import { nextArticlePriority } from '../../shared/lib/theoryMeta';
 
 const AdminWorkspaceContext = createContext(null);
 
@@ -107,15 +107,13 @@ export function AdminWorkspaceProvider({ children }) {
     e.preventDefault();
     const data = draft || theoryData;
     const theoryClass = Number(data.theory_class);
-    const priority = topicPriority(theoryMeta, theoryClass, data.topic)
-      ?? nextTopicPriority(theoryMeta, theoryClass);
     const payload = {
       topic: data.topic,
       section: data.section,
       content: data.content,
       theory_class: theoryClass,
-      priority,
     };
+    if (!data.id) payload.priority = nextArticlePriority(theoryMeta, theoryClass);
     try {
       if (data.id) {
         await updateTheory(data.id, payload);

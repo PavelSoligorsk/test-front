@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageShell } from '../../shared/ui';
 import { useAdminWorkspace } from './AdminWorkspace';
 import { ADMIN_PATHS } from './adminPaths';
+import { nextArticlePriority } from '../../shared/lib/theoryMeta';
 import TheoryBankTab from './TheoryBankTab';
 
 export default function LibraryPage() {
@@ -29,19 +30,13 @@ export default function LibraryPage() {
         onMetaRefresh={ws.refreshTheoryMeta}
         onAddNew={() => {
           const cls = ws.selectedTheoryClass;
-          const topic = ws.selectedTopic || '';
-          const existing = topic
-            ? (ws.theoryMeta?.[String(cls)]?.[topic]?.priority)
-            : null;
-          const used = Object.values(ws.theoryMeta?.[String(cls)] || {})
-            .map((item) => Number(item?.priority) || 0);
           ws.setTheoryData({
             id: null,
-            topic,
-            section: ws.selectedSection || '',
+            topic: ws.selectedTopic || '',
+            section: '',
             content: '',
             theory_class: cls,
-            priority: existing == null ? (used.length ? Math.max(...used) + 1 : 0) : Number(existing),
+            priority: nextArticlePriority(ws.theoryMeta, cls),
           });
           navigate(ADMIN_PATHS.theory);
         }}

@@ -251,7 +251,7 @@ export default function TheoryPage() {
                   className="w-full text-left px-6 md:px-8 py-4 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
                 >
                   {item.section}
-                  {group === 'topics' ? (
+                  {group === 'topics' && new Set(sections.map((row) => row.theoryClass)).size > 1 ? (
                     <span className="ml-2 text-xs font-normal text-zinc-400">{item.theoryClass} класс</span>
                   ) : null}
                 </button>
