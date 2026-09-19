@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, Sparkles, Copy, Check, X, Eye } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
 import { TheoryViewer } from '../../components/Theory';
-import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
+import { MAIN_TOPICS, SECTIONS_BY_TOPIC, THEORY_CLASSES } from './constants';
 import { Sheet, IconWell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
 // ========== ПРОМПТ ДЛЯ AI-ГЕНЕРАЦИИ ТЕОРИИ ==========
@@ -222,7 +222,18 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
           </button>
         </div>
         <form onSubmit={handleFormSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <label className="block space-y-1.5">
+              <span className={labelClass}>Класс</span>
+              <select className={fieldClass}
+                value={theoryData.theory_class ?? ''}
+                onChange={e => setTheoryData({ ...theoryData, theory_class: Number(e.target.value) })} required>
+                <option value="">— Класс —</option>
+                {THEORY_CLASSES.map((cls) => (
+                  <option key={cls} value={cls}>{cls} класс</option>
+                ))}
+              </select>
+            </label>
             <label className="block space-y-1.5">
               <span className={labelClass}>Тема</span>
               <select className={fieldClass}

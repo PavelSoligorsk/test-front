@@ -1,12 +1,62 @@
-import React, { useEffect, useState } from 'react';
-import { BookOpen, PlusCircle, Edit3, Trash2, Inbox } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Reorder, useDragControls } from 'framer-motion';
+import { BookOpen, PlusCircle, Edit3, Trash2, Inbox, GripVertical } from 'lucide-react';
 import { TheoryViewer } from '../../components/Theory';
-import { MAIN_TOPICS } from './constants';
-import { fetchTheory } from './api';
+import { MAIN_TOPICS, THEORY_CLASSES } from './constants';
+import { fetchTheory, updateTheory } from './api';
+import { articleIdsForTopic, topicsInClass } from '../../shared/lib/theoryMeta';
 import { Sheet, IconWell, primaryBtnClass, secondaryBtnClass, formatApiDetail } from '../../shared/ui';
+
+function TopicRow({ topicKey, selected, onSelect, dragControls }) {
+  return (
+    <div className="flex items-stretch gap-1">
+      <button
+        type="button"
+        aria-label="Перетащить тему"
+        className="flex shrink-0 cursor-grab items-center px-1 text-zinc-400 active:cursor-grabbing touch-none"
+        onPointerDown={(event) => dragControls.start(event)}
+      >
+        <GripVertical size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`min-w-0 flex-1 rounded-xl p-3 text-left text-sm font-medium transition-colors ${
+          selected
+            ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950'
+            : 'border border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-[#09090b] dark:text-zinc-400'
+        }`}
+      >
+        {MAIN_TOPICS[topicKey] || topicKey}
+      </button>
+    </div>
+  );
+}
+
+function DraggableTopic({ topicKey, selected, onSelect, onDragEnd }) {
+  const dragControls = useDragControls();
+  return (
+    <Reorder.Item
+      value={topicKey}
+      dragListener={false}
+      dragControls={dragControls}
+      onDragEnd={onDragEnd}
+      className="list-none"
+    >
+      <TopicRow
+        topicKey={topicKey}
+        selected={selected}
+        onSelect={onSelect}
+        dragControls={dragControls}
+      />
+    </Reorder.Item>
+  );
+}
 
 export default function TheoryBankTab({
   theoryMeta = {},
+  selectedTheoryClass,
+  setSelectedTheoryClass,
   selectedTopic,
   setSelectedTopic,
   selectedSection,
@@ -14,14 +64,31 @@ export default function TheoryBankTab({
   onEditTheory,
   onDeleteTheory,
   onAddNew,
+  onMetaRefresh,
 }) {
   const [article, setArticle] = useState(null);
   const [loadingArticle, setLoadingArticle] = useState(false);
   const [articleError, setArticleError] = useState(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
-  const topicSections = (selectedTopic && theoryMeta[selectedTopic]) || {};
-  const sectionEntries = Object.entries(topicSections);
-  const theoryId = selectedTopic && selectedSection ? topicSections[selectedSection] : null;
+  const classTopics = useMemo(
+    () => topicsInClass(theoryMeta, selectedTheoryClass),
+    [theoryMeta, selectedTheoryClass],
+  );
+  const topicSignature = classTopics.map((item) => `${item.topic}:${item.priority}`).join('|');
+  const [topicOrder, setTopicOrder] = useState(classTopics.map((item) => item.topic));
+  const topicOrderRef = React.useRef(topicOrder);
+  topicOrderRef.current = topicOrder;
+
+  useEffect(() => {
+    setTopicOrder(classTopics.map((item) => item.topic));
+  }, [topicSignature]);
+
+  const selectedTopicData = classTopics.find((item) => item.topic === selectedTopic);
+  const sectionEntries = Object.entries(selectedTopicData?.sections || {});
+  const theoryId = selectedTopic && selectedSection
+    ? selectedTopicData?.sections?.[selectedSection]
+    : null;
 
   useEffect(() => {
     if (!theoryId) {
@@ -53,23 +120,76 @@ export default function TheoryBankTab({
     };
   }, [theoryId]);
 
+  const persistOrder = async (nextOrder) => {
+    const current = classTopics.map((item) => item.topic);
+    if (current.join('\0') === nextOrder.join('\0')) return;
+    setSavingOrder(true);
+    try {
+      const updates = [];
+      nextOrder.forEach((topic, priority) => {
+        articleIdsForTopic(theoryMeta, selectedTheoryClass, topic).forEach((id) => {
+          updates.push(updateTheory(id, { priority }));
+        });
+      });
+      await Promise.all(updates);
+      await onMetaRefresh?.();
+    } catch (err) {
+      setTopicOrder(classTopics.map((item) => item.topic));
+      console.error(err);
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  const changeClass = (nextClass) => {
+    setSelectedTheoryClass(Number(nextClass));
+    setSelectedTopic(null);
+    setSelectedSection(null);
+  };
+
   return (
     <Sheet className="overflow-hidden min-h-[600px] flex flex-col md:flex-row animate-in fade-in slide-in-from-bottom-4 duration-500">
       <aside className="w-full md:w-80 bg-zinc-50 dark:bg-zinc-900/40 border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800/60 p-4 md:p-6 flex flex-col gap-6">
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Класс</span>
+          <select
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-[#09090b] dark:text-zinc-100"
+            value={selectedTheoryClass}
+            onChange={(event) => changeClass(event.target.value)}
+          >
+            {THEORY_CLASSES.map((cls) => (
+              <option key={cls} value={cls}>{cls} класс</option>
+            ))}
+          </select>
+        </label>
         <div>
           <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Темы</h3>
-          <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
-            {Object.entries(MAIN_TOPICS).map(([key, label]) => (
-              <button key={key} type="button" onClick={() => { setSelectedTopic(key); setSelectedSection(null); }}
-                className={`shrink-0 md:shrink p-3 rounded-xl text-left text-sm font-medium transition-colors ${
-                  selectedTopic === key
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
-                    : 'bg-white dark:bg-[#09090b] text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          {topicOrder.length > 0 ? (
+            <Reorder.Group
+              axis="y"
+              values={topicOrder}
+              onReorder={setTopicOrder}
+              className="flex flex-col gap-2"
+            >
+              {topicOrder.map((topicKey) => (
+                <DraggableTopic
+                  key={topicKey}
+                  topicKey={topicKey}
+                  selected={selectedTopic === topicKey}
+                  onDragEnd={() => persistOrder(topicOrderRef.current)}
+                  onSelect={() => {
+                    setSelectedTopic(topicKey);
+                    setSelectedSection(null);
+                  }}
+                />
+              ))}
+            </Reorder.Group>
+          ) : (
+            <p className="text-sm text-zinc-400">В этом классе пока нет тем</p>
+          )}
+          {savingOrder && (
+            <p className="mt-3 text-xs text-zinc-400">Сохраняю порядок…</p>
+          )}
         </div>
         {selectedTopic && sectionEntries.length > 0 && (
           <div>
@@ -93,12 +213,29 @@ export default function TheoryBankTab({
       </aside>
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         {!selectedTopic ? (
-          <div className="h-full flex flex-col items-center justify-center gap-3 py-20 text-zinc-400">
-            <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-              <BookOpen size={20} />
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <IconWell><BookOpen size={18} strokeWidth={2} /></IconWell>
+                <div>
+                  <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                    {selectedTheoryClass} класс
+                  </h2>
+                  <p className="text-sm text-zinc-400 mt-0.5">Перетащите темы за ручку — порядок сохранится сам</p>
+                </div>
+              </div>
+              <button type="button" onClick={onAddNew} className={primaryBtnClass}>
+                <PlusCircle size={16} /> Добавить теорию
+              </button>
             </div>
-            <p className="text-sm font-medium text-zinc-500">Выберите тему</p>
-            <p className="text-sm text-zinc-400">Список разделов появится слева</p>
+            {topicOrder.length === 0 && (
+              <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">
+                <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                  <Inbox size={20} />
+                </div>
+                <p className="text-sm font-medium text-zinc-500">Нет материалов</p>
+              </div>
+            )}
           </div>
         ) : !selectedSection ? (
           <div className="space-y-6">
@@ -167,7 +304,7 @@ export default function TheoryBankTab({
               <div className="p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-900/30">
                 <div className="flex justify-between items-start mb-6">
                   <span className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-3 py-1.5 rounded-xl tabular-nums">
-                    ID {article.id}
+                    ID {article.id} · {article.theory_class} класс
                   </span>
                 </div>
                 <div className="[&_.max-w-3xl]:max-w-full [&_.max-w-3xl]:w-full [&_.mx-auto]:ml-0 [&_.mx-auto]:mr-0">

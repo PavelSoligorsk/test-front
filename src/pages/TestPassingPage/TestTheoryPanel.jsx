@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Library } from 'lucide-react';
 import { TheoryViewer } from '../../components/Theory';
 import TheoryAIChat from '../../components/TheoryAIChat';
 import TopicCard from '../StudentDashboardPage/TopicCard';
 import { ArticleBodySkeleton } from '../StudentDashboardPage/StudentPageLoading';
-import { fetchTheoryTopics, fetchTheorySections, fetchTheoryByTopicSection } from '../StudentDashboardPage/api';
-import { MAIN_TOPICS } from '../AdminDashboardPage/constants';
+import { fetchTheoryMeta, fetchTheoryByTopicSection } from '../StudentDashboardPage/api';
+import TheoryGroupToggle from '../StudentDashboardPage/TheoryGroupToggle';
+import { MAIN_TOPICS, THEORY_CLASSES } from '../AdminDashboardPage/constants';
+import { flattenTopicsByPriority, sectionsForTopic, topicsInClass } from '../../shared/lib/theoryMeta';
 
 function Well({ children, as: Tag = 'div', onClick, title }) {
   return (
@@ -21,14 +23,35 @@ function Well({ children, as: Tag = 'div', onClick, title }) {
 }
 
 export default function TestTheoryPanel() {
-  const [topics, setTopics] = useState([]);
-  const [sections, setSections] = useState([]);
-  const [theoryContent, setTheoryContent] = useState(null);
+  const [meta, setMeta] = useState(null);
+  const [group, setGroup] = useState('topics');
+  const [theoryClass, setTheoryClass] = useState(null);
   const [topicKey, setTopicKey] = useState(null);
   const [sectionKey, setSectionKey] = useState(null);
+  const [sectionClass, setSectionClass] = useState(null);
+  const [theoryContent, setTheoryContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [warming, setWarming] = useState(false);
   const [error, setError] = useState(null);
+
+  const topics = useMemo(() => {
+    if (!meta) return [];
+    if (group === 'class') {
+      if (theoryClass == null) return [];
+      return topicsInClass(meta, theoryClass).map((item) => ({
+        topic: item.topic,
+        sections_count: Array.isArray(item.sections) ? item.sections.length : Object.keys(item.sections || {}).length,
+        hint: `${theoryClass} класс`,
+        theoryClass,
+      }));
+    }
+    return flattenTopicsByPriority(meta);
+  }, [meta, group, theoryClass]);
+
+  const sections = useMemo(() => {
+    if (!meta || !topicKey) return [];
+    return sectionsForTopic(meta, topicKey, group === 'class' ? theoryClass : null);
+  }, [meta, topicKey, group, theoryClass]);
 
   const selectedTopic = topics.find((t) => t.topic === topicKey) || (topicKey ? { topic: topicKey, label: topicKey } : null);
   const title = selectedTopic
@@ -37,36 +60,44 @@ export default function TestTheoryPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setWarming(false);
-    setError(null);
-    setTheoryContent(null);
+    fetchTheoryMeta()
+      .then((data) => { if (!cancelled) setMeta(data || {}); })
+      .catch(() => { if (!cancelled) setMeta({}); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (meta == null) return undefined;
+    let cancelled = false;
 
     const load = async () => {
-      try {
-        if (!topicKey) {
-          const topicList = await fetchTheoryTopics().catch(() => []);
-          if (cancelled) return;
-          setTopics(topicList);
-          setSections([]);
-          setLoading(false);
-          return;
-        }
+      setWarming(false);
+      setError(null);
+      setTheoryContent(null);
 
-        const sectionList = await fetchTheorySections(topicKey).catch(() => []);
-        if (cancelled) return;
-        setSections(sectionList);
+      if (!topicKey) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const sectionList = sectionsForTopic(meta, topicKey, group === 'class' ? theoryClass : null);
 
         if (!sectionKey) {
           if (sectionList.length === 1) {
             setSectionKey(sectionList[0].section);
+            setSectionClass(sectionList[0].theoryClass);
             return;
           }
           setLoading(false);
           return;
         }
 
-        const data = await fetchTheoryByTopicSection(topicKey, sectionKey);
+        const row = sectionList.find((item) => item.section === sectionKey && (sectionClass == null || item.theoryClass === sectionClass))
+          || sectionList.find((item) => item.section === sectionKey);
+        const data = await fetchTheoryByTopicSection(topicKey, sectionKey, row?.theoryClass ?? sectionClass ?? theoryClass);
         if (cancelled) return;
         setTheoryContent(data);
         setLoading(false);
@@ -83,43 +114,64 @@ export default function TestTheoryPanel() {
 
     load();
     return () => { cancelled = true; };
-  }, [topicKey, sectionKey]);
+  }, [meta, topicKey, sectionKey, sectionClass, group, theoryClass]);
 
   const handleBack = () => {
     if (sectionKey && sections.length > 1) {
       setSectionKey(null);
+      setSectionClass(null);
       setTheoryContent(null);
       return;
     }
+    if (topicKey) {
+      setTopicKey(null);
+      setSectionKey(null);
+      setSectionClass(null);
+      setTheoryContent(null);
+      return;
+    }
+    setTheoryClass(null);
+  };
+
+  const handleGroup = (next) => {
+    setGroup(next);
+    setTheoryClass(null);
     setTopicKey(null);
     setSectionKey(null);
-    setSections([]);
+    setSectionClass(null);
     setTheoryContent(null);
   };
 
+  const showBack = topicKey || sectionKey || (group === 'class' && theoryClass != null);
+  const catalogHint = group === 'class'
+    ? (theoryClass != null ? `${theoryClass} класс` : 'Выберите класс')
+    : 'Материалы по темам. Тест на паузе не стоит — таймер идёт.';
   const hint = sectionKey
     ? sectionKey
     : topicKey
       ? 'Выберите раздел'
-      : 'Материалы по темам. Тест на паузе не стоит — таймер идёт.';
+      : catalogHint;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm p-6 md:p-8">
-        <div className="flex items-center gap-4">
-          {topicKey || sectionKey ? (
-            <Well as="button" onClick={handleBack} title="Назад">
-              <ArrowLeft size={18} strokeWidth={2} />
-            </Well>
-          ) : (
-            <Well>
-              <Library size={18} strokeWidth={2} />
-            </Well>
-          )}
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{title}</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{hint}</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4 min-w-0">
+            {showBack ? (
+              <Well as="button" onClick={handleBack} title="Назад">
+                <ArrowLeft size={18} strokeWidth={2} />
+              </Well>
+            ) : (
+              <Well>
+                <Library size={18} strokeWidth={2} />
+              </Well>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{title}</h1>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{hint}</p>
+            </div>
           </div>
+          {!topicKey && <TheoryGroupToggle value={group} onChange={handleGroup} />}
         </div>
       </div>
 
@@ -140,11 +192,35 @@ export default function TestTheoryPanel() {
         </div>
       )}
 
-      {!loading && !error && !topicKey && (
+      {!loading && !error && !topicKey && group === 'class' && theoryClass == null && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+          {THEORY_CLASSES.map((cls) => (
+            <button
+              key={cls}
+              type="button"
+              onClick={() => setTheoryClass(cls)}
+              className="rounded-2xl border border-zinc-200 bg-white px-3 py-4 text-sm font-semibold text-zinc-900 shadow-sm hover:border-zinc-300 dark:border-zinc-800/60 dark:bg-[#09090b] dark:text-zinc-100 dark:hover:border-zinc-700"
+            >
+              {cls} класс
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && !topicKey && (group === 'topics' || theoryClass != null) && (
         topics.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {topics.map((topic, index) => (
-              <TopicCard key={topic.topic} topic={topic} onClick={(item) => setTopicKey(item.topic)} index={index} />
+              <TopicCard
+                key={`${topic.topic}-${topic.theoryClass || 'all'}`}
+                topic={topic}
+                onClick={(item) => {
+                  setTopicKey(item.topic);
+                  setSectionKey(null);
+                  setSectionClass(null);
+                }}
+                index={index}
+              />
             ))}
           </div>
         ) : (
@@ -164,13 +240,19 @@ export default function TestTheoryPanel() {
         <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm overflow-hidden">
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
             {sections.map((item) => (
-              <li key={item.section}>
+              <li key={`${item.theoryClass}-${item.section}`}>
                 <button
                   type="button"
-                  onClick={() => setSectionKey(item.section)}
+                  onClick={() => {
+                    setSectionKey(item.section);
+                    setSectionClass(item.theoryClass);
+                  }}
                   className="w-full text-left px-6 md:px-8 py-4 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors focus:outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-900/40"
                 >
                   {item.section}
+                  {group === 'topics' ? (
+                    <span className="ml-2 text-xs font-normal text-zinc-400">{item.theoryClass} класс</span>
+                  ) : null}
                 </button>
               </li>
             ))}

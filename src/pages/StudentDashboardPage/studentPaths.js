@@ -14,10 +14,18 @@ export function studentTabFromPath(pathname) {
   return 'tests';
 }
 
-export function theoryTopicPath(topic) {
-  return `/student/theory/${encodeURIComponent(topic)}`;
+export function theoryTopicPath(topic, opts = {}) {
+  const q = new URLSearchParams();
+  if (opts.theoryClass != null && opts.theoryClass !== '') q.set('class', String(opts.theoryClass));
+  if (opts.group) q.set('group', opts.group);
+  const qs = q.toString();
+  return `/student/theory/${encodeURIComponent(topic)}${qs ? `?${qs}` : ''}`;
 }
 
-export function theoryArticlePath(topic, section) {
-  return `/student/theory/${encodeURIComponent(topic)}/${encodeURIComponent(section)}`;
+export function theoryArticlePath(topic, section, opts = {}) {
+  const q = new URLSearchParams();
+  if (opts.theoryClass != null && opts.theoryClass !== '') q.set('class', String(opts.theoryClass));
+  if (opts.group) q.set('group', opts.group);
+  const qs = q.toString();
+  return `/student/theory/${encodeURIComponent(topic)}/${encodeURIComponent(section)}${qs ? `?${qs}` : ''}`;
 }

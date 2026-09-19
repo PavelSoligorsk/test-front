@@ -58,7 +58,9 @@ export default function TopicCard({ topic, onClick, index = 0 }) {
 
       <div className="min-w-0 flex-1">
         <h3 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{label}</h3>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{sectionsLabel(topic.sections_count)}</p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {topic.hint ? `${topic.hint} · ${sectionsLabel(topic.sections_count)}` : sectionsLabel(topic.sections_count)}
+        </p>
       </div>
 
       <span

@@ -8,6 +8,7 @@ import {
 } from './api';
 import { formatApiDetail } from '../../shared/ui';
 import { ADMIN_PATHS } from './adminPaths';
+import { nextTopicPriority, topicPriority } from '../../shared/lib/theoryMeta';
 
 const AdminWorkspaceContext = createContext(null);
 
@@ -28,9 +29,12 @@ export function AdminWorkspaceProvider({ children }) {
   const [bankClass, setBankClass] = useState(null);
   const [bankTopic, setBankTopic] = useState(null);
   const [theoryMeta, setTheoryMeta] = useState({});
-  const [theoryData, setTheoryData] = useState({ id: null, topic: '', section: '', content: '' });
+  const [theoryData, setTheoryData] = useState({
+    id: null, topic: '', section: '', content: '', theory_class: 5, priority: 0,
+  });
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
+  const [selectedTheoryClass, setSelectedTheoryClass] = useState(5);
   const [loading, setLoading] = useState(true);
 
   const showError = useCallback((err, fallback) => {
@@ -102,15 +106,25 @@ export function AdminWorkspaceProvider({ children }) {
   const handleTheorySubmit = async (e, draft) => {
     e.preventDefault();
     const data = draft || theoryData;
+    const theoryClass = Number(data.theory_class);
+    const priority = topicPriority(theoryMeta, theoryClass, data.topic)
+      ?? nextTopicPriority(theoryMeta, theoryClass);
+    const payload = {
+      topic: data.topic,
+      section: data.section,
+      content: data.content,
+      theory_class: theoryClass,
+      priority,
+    };
     try {
       if (data.id) {
-        await updateTheory(data.id, { topic: data.topic, section: data.section, content: data.content });
+        await updateTheory(data.id, payload);
         showSuccess('Теория обновлена');
       } else {
-        await createTheory({ topic: data.topic, section: data.section, content: data.content });
+        await createTheory(payload);
         showSuccess('Теория создана');
       }
-      setTheoryData({ id: null, topic: '', section: '', content: '' });
+      setTheoryData({ id: null, topic: '', section: '', content: '', theory_class: theoryClass, priority: 0 });
       await refreshTheoryMeta();
     } catch (err) {
       showError(err, 'Ошибка при сохранении');
@@ -121,7 +135,12 @@ export function AdminWorkspaceProvider({ children }) {
     if (!confirm('Удалить теоретический материал?')) return;
     try {
       await deleteTheory(id);
-      if (selectedTopic && selectedSection && theoryMeta?.[selectedTopic]?.[selectedSection] === id) {
+      const classKey = String(selectedTheoryClass);
+      if (
+        selectedTopic
+        && selectedSection
+        && theoryMeta?.[classKey]?.[selectedTopic]?.sections?.[selectedSection] === id
+      ) {
         setSelectedSection(null);
       }
       await refreshTheoryMeta();
@@ -251,14 +270,14 @@ export function AdminWorkspaceProvider({ children }) {
     userSearch, setUserSearch, userRoleFilter, setUserRoleFilter,
     taskData, setTaskData, bankClass, setBankClass, bankTopic, setBankTopic,
     theoryMeta, theoryData, setTheoryData, selectedTopic, setSelectedTopic,
-    selectedSection, setSelectedSection, availableClasses, filteredUsers,
+    selectedSection, setSelectedSection, selectedTheoryClass, setSelectedTheoryClass, availableClasses, filteredUsers,
     handleTaskSubmit, handleEditTask, handleCancelEdit,
     handleAddEmail, handleDeleteEmail, handleGlobalSync,
     handleTheorySubmit, handleDeleteTheory, handleUsersUpdate, refreshTasksMeta, refreshTheoryMeta,
   }), [
     notice, loading, users, tasks, tasksMeta, allowedEmails, newEmail,
     userSearch, userRoleFilter, taskData, bankClass, bankTopic, theoryMeta,
-    theoryData, selectedTopic, selectedSection, availableClasses, filteredUsers,
+    theoryData, selectedTopic, selectedSection, selectedTheoryClass, availableClasses, filteredUsers,
     clearNotice, showError, showSuccess, refreshTheoryMeta,
   ]);
 

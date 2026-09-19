@@ -1,5 +1,6 @@
 import { API_URL } from '../../shared/config';
 export const API_BASE = API_URL;
+export const THEORY_CLASSES = [5, 6, 7, 8, 9, 10, 11];
 export const MAIN_TOPICS = {
   numbers: 'Числа и вычисления',
   expressions: 'Выражения и их преобразования',

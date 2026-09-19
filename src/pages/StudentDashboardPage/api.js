@@ -78,8 +78,14 @@ export const fetchTheorySections = async (topic) => {
   return res.data;
 };
 
-export const fetchTheoryByTopicSection = async (topic, section) => {
-  const res = await axios.get(`${API_BASE}/student/theory/by-topic/${topic}/section/${section}`, authConfig());
+export const fetchTheoryByTopicSection = async (topic, section, theoryClass) => {
+  const res = await axios.get(
+    `${API_BASE}/student/theory/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+    {
+      ...authConfig(),
+      params: theoryClass != null && theoryClass !== '' ? { theory_class: theoryClass } : {},
+    },
+  );
   return res.data;
 };
 
