@@ -1,195 +1,89 @@
-import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { XCircle } from 'lucide-react';
 import MarkdownWithGeoGebra from '../MarkdownWithGeoGebra';
 
-/**
- * Компонент отображения AI-решения
- * Используется в TestResultDetail
- * Поддерживает рендеринг GeoGebra блоков в тексте, формат === ОТВЕТ ===,
- * и отдельный объект geogebra из ответа сервера
- */
+const markdownComponents = {
+  inlineMath: ({ children }) => <span className="inline justify-center text-zinc-900 dark:text-zinc-100">{children}</span>,
+  math: ({ children }) => <div className="my-4 flex justify-center overflow-x-auto">{children}</div>,
+};
+
+function Shell({ children, onClose, title, error = false }) {
+  return (
+    <div className={`relative p-6 rounded-3xl border shadow-sm ${
+      error
+        ? 'border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10'
+        : 'border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]'
+    }`}>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className={`absolute top-4 right-4 p-1 rounded-full z-10 ${
+            error
+              ? 'hover:bg-red-100 dark:hover:bg-red-500/20'
+              : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <XCircle size={18} className={error ? 'text-red-400' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200'} />
+        </button>
+      )}
+      {title && (
+        <h4 className={`text-xs font-medium mb-4 pr-6 ${
+          error ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'
+        }`}>
+          {title}
+        </h4>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export default function AISolutionPreview({ data, isLoading = false, error = null, onClose = null }) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    if (data?.ai_solution) {
-      navigator.clipboard.writeText(data.ai_solution);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   if (isLoading) {
     return (
-      <div className="relative p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] shadow-sm">
-        {onClose && (
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-            <XCircle size={18} className="text-zinc-400" />
-          </button>
-        )}
-        <h4 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-4">AI-решение</h4>
+      <Shell title="AI-решение" onClose={onClose}>
         <div className="flex items-center space-x-3 py-4">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-zinc-100" />
           <p className="text-sm text-zinc-500">Генерирую решение...</p>
         </div>
-      </div>
+      </Shell>
     );
   }
 
   if (error) {
     return (
-      <div className="relative p-6 rounded-3xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 shadow-sm">
-        {onClose && (
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-full transition-colors">
-            <XCircle size={18} className="text-red-400" />
-          </button>
-        )}
-        <h4 className="text-xs font-medium text-red-600 dark:text-red-400 mb-4">AI-решение</h4>
-        <div className="flex items-center gap-2 p-3 bg-red-100 rounded-xl">
-          <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-        <button onClick={() => window.location.reload()} className="mt-4 text-xs text-red-500 hover:text-red-700 underline">
-          Попробовать снова
-        </button>
-      </div>
+      <Shell title="AI-решение" onClose={onClose} error>
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      </Shell>
     );
   }
 
   if (!data) return null;
 
   const hasSolution = data.ai_solution && data.ai_solution.trim().length > 0;
-  const hasAnswer = data.ai_answer && data.ai_answer.trim().length > 0;
   const isSuccess = data.success !== false;
-  const isVerified = data.verified === true;
+  const figures = Array.isArray(data.geogebra) ? data.geogebra : null;
 
   if (!isSuccess || !hasSolution) {
     return (
-      <div className="relative p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 shadow-sm">
-        {onClose && (
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-            <XCircle size={18} className="text-zinc-400" />
-          </button>
-        )}
-        <div className="flex items-center gap-2 mb-3">
-          <AlertCircle size={16} className="text-zinc-500" />
-          <h4 className="text-xs font-medium text-zinc-700 dark:text-zinc-200">AI-решение</h4>
-        </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">{data.message || "Не удалось получить решение от ИИ."}</p>
-      </div>
+      <Shell title="AI-решение" onClose={onClose}>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">{data.message || 'Не удалось получить решение от ИИ.'}</p>
+      </Shell>
     );
   }
 
-  // Парсим секцию === ОТВЕТ === для красивого отображения
-  const answerMarkerRegex = /=== ОТВЕТ ===/i;
-  const solutionParts = data.ai_solution.split(answerMarkerRegex);
-  const solutionBeforeAnswer = solutionParts[0]?.trim() || '';
-  const answerSection = solutionParts.length > 1 ? solutionParts.slice(1).join('=== ОТВЕТ ===').trim() : '';
-  const hasAnswerSection = solutionParts.length > 1;
+  const body = data.ai_solution.replace(/===\s*ОТВЕТ\s*===/gi, '\n\n**Ответ**\n\n');
 
   return (
-    <div className="relative p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm bg-white dark:bg-[#09090b]">
-      {onClose && (
-        <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-slate-100 rounded-full transition-colors z-10">
-          <XCircle size={18} className="text-slate-400 hover:text-slate-600" />
-        </button>
-      )}
-
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-4 pr-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h4 className="text-xs font-medium text-zinc-900 dark:text-zinc-100 tracking-tight">AI-решение</h4>
-          {isVerified ? (
-            <span className="text-[11px] font-medium bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <CheckCircle2 size={10} /> Проверено
-            </span>
-          ) : (
-            <span className="text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <AlertCircle size={10} /> Не проверено
-            </span>
-          )}
-          {data.context?.difficulty && (
-            <span className="text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full">
-              Сложность: {data.context.difficulty}/5
-            </span>
-          )}
-        </div>
-        <button onClick={handleCopy} className="text-[11px] font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors flex items-center gap-1">
-          {copied ? <><CheckCircle2 size={10} /> Скопировано</> : <>Копировать</>}
-        </button>
+    <Shell title="AI-решение" onClose={onClose}>
+      <div className="text-zinc-700 dark:text-zinc-300 text-sm md:text-base leading-relaxed">
+        <MarkdownWithGeoGebra figures={figures} markdownComponents={markdownComponents}>
+          {body}
+        </MarkdownWithGeoGebra>
       </div>
-
-      <div className={`text-slate-700 text-sm md:text-base leading-relaxed ${!isExpanded && 'max-h-48 overflow-hidden relative'}`}>
-        <style>{`
-          .math-solution .katex-display { overflow-x: auto; overflow-y: hidden; padding: 8px 0; margin: 12px 0; }
-          .math-solution .katex-display > .katex { white-space: nowrap; }
-          .math-solution .katex { font-size: 1.05em; }
-          .math-solution pre { white-space: pre-wrap; word-wrap: break-word; }
-        `}</style>
-        <div className="math-solution">
-          {hasAnswerSection && solutionBeforeAnswer && (
-            <MarkdownWithGeoGebra figures={data.geogebra}>{solutionBeforeAnswer}</MarkdownWithGeoGebra>
-          )}
-          {hasAnswerSection && (
-            <div className="my-4 p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 rounded-2xl">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 size={14} className="text-zinc-500" />
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Ответ</span>
-              </div>
-              <MarkdownWithGeoGebra figures={data.geogebra}>{answerSection}</MarkdownWithGeoGebra>
-            </div>
-          )}
-          {!hasAnswerSection && (
-            <MarkdownWithGeoGebra figures={data.geogebra}>{data.ai_solution}</MarkdownWithGeoGebra>
-          )}
-        </div>
-        {!isExpanded && <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-[#09090b] to-transparent pointer-events-none" />}
+      <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 text-left">
+        <p className="text-xs text-zinc-400">Ответ сгенерирован с помощью ИИ. Возможны ошибки</p>
       </div>
-
-      {!isExpanded && (
-        <button onClick={() => setIsExpanded(true)} className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium flex items-center gap-1">
-          <ChevronDown size={14} /> Показать полное решение
-        </button>
-      )}
-      {isExpanded && data.ai_solution?.length > 1500 && (
-        <button onClick={() => setIsExpanded(false)} className="mt-2 text-xs text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1">
-          <ChevronUp size={14} /> Свернуть
-        </button>
-      )}
-
-      {hasAnswer && !hasAnswerSection && (
-        <div className="mt-4 pt-3 border-t border-slate-100">
-          <div className={`p-3 rounded-xl ${isVerified ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Ответ AI</p>
-                <p className="text-sm font-bold text-slate-800 font-mono break-words overflow-x-auto">{data.ai_answer}</p>
-              </div>
-              {data.correct_answer && (
-                <div className="flex-1 min-w-0 text-right">
-                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Правильный ответ</p>
-                  <p className="text-sm font-bold text-green-700 font-mono break-words overflow-x-auto">{data.correct_answer}</p>
-                </div>
-              )}
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100/50">
-              <p className={`text-[10px] font-medium ${isVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {isVerified
-                  ? <span className="flex items-center gap-1"><CheckCircle2 size={10} /> {data.message || "Ответ совпадает с правильным"}</span>
-                  : <span className="flex items-center gap-1"><AlertCircle size={10} /> {data.message || "Ответ не совпадает с правильным"}</span>
-                }
-              </p>
-            </div>
-          </div>
-          {data.context?.topic_mastery_percent !== undefined && (
-            <p className="text-[9px] text-slate-400 mt-2">📊 Ваша успеваемость по теме: {data.context.topic_mastery_percent}%</p>
-          )}
-        </div>
-      )}
-
-      <div className="mt-3">
-        <p className="text-[11px] text-zinc-400">Решение сгенерировано ИИ. Возможны ошибки. Проверяйте самостоятельно.</p>
-      </div>
-    </div>
+    </Shell>
   );
 }
