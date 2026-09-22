@@ -116,59 +116,89 @@ const convertMarkdownLists = (content) => {
   return content;
 };
 
-// Функция для поиска следующего парного или самозакрывающегося тега с учетом вложенности
+const THEORY_TAG_NAMES = ['Explanation', 'Important', 'Formula', 'Collapsible', 'Algorithm', 'GeoGebra', 'Steps', 'Card', 'Grid', 'Html', 'Def', 'Ex'];
+
+function scanTagClose(content, from) {
+  let quote = null;
+  let brace = 0;
+  for (let i = from; i < content.length; i += 1) {
+    const ch = content[i];
+    if (quote) {
+      if (ch === '\\') {
+        i += 1;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '{') {
+      brace += 1;
+      continue;
+    }
+    if (ch === '}') {
+      if (brace > 0) brace -= 1;
+      continue;
+    }
+    if (ch === '>' && brace === 0) {
+      return { end: i + 1, selfClosing: content[i - 1] === '/' };
+    }
+  }
+  return null;
+}
+
 const findNextTag = (content, startIndex = 0) => {
-  const tagRegex = /<(\/)?(Def|Ex|Explanation|Important|Formula|Collapsible|Grid|Card|Steps|Algorithm|GeoGebra|Html)([\s\S]*?)(\/)?>/g;
-  tagRegex.lastIndex = startIndex;
-  
-  let match = tagRegex.exec(content);
+  const startRe = new RegExp(`<(${THEORY_TAG_NAMES.join('|')})(?=[\\s/>])`, 'g');
+  startRe.lastIndex = startIndex;
+  const match = startRe.exec(content);
   if (!match) return null;
 
-  const [fullMatch, isClosing, tagName, attrs, isSelfClosing] = match;
+  const tagName = match[1];
   const index = match.index;
+  const scanned = scanTagClose(content, index + match[0].length);
+  if (!scanned) return null;
 
-  // Если это самозакрывающийся тег (например <GeoGebra ... />)
-  if (isSelfClosing) {
+  const attrs = content.slice(index + match[0].length, scanned.selfClosing ? scanned.end - 2 : scanned.end - 1);
+
+  if (scanned.selfClosing) {
     return {
       tagName,
       attrs,
       isSelfClosing: true,
       startIndex: index,
-      endIndex: index + fullMatch.length,
-      innerContent: ''
+      endIndex: scanned.end,
+      innerContent: '',
     };
   }
 
-  // Если это закрывающий тег без пары
-  if (isClosing) {
-    return findNextTag(content, index + fullMatch.length);
-  }
-
-  // Поиск парного закрывающего тега с балансировкой вложенности
   let depth = 1;
-  const searchRegex = new RegExp(`<(\/)?${tagName}(?:[\\s\\S]*?)(\/)?>`, 'g');
-  searchRegex.lastIndex = index + fullMatch.length;
+  const nestedRe = new RegExp(`<(/)?${tagName}(?=[\\s/>])`, 'g');
+  nestedRe.lastIndex = scanned.end;
 
-  let nestedMatch;
-  while ((nestedMatch = searchRegex.exec(content)) !== null) {
-    const [nFull, nClosing, nSelfClosing] = nestedMatch;
-    if (nSelfClosing) continue; // Игнорируем самозакрывающиеся теги
-    
-    if (nClosing) {
-      depth--;
-    } else {
-      depth++;
-    }
+  let nested;
+  while ((nested = nestedRe.exec(content)) !== null) {
+    const nestedStart = nested.index;
+    const nestedScanned = scanTagClose(content, nestedStart + nested[0].length);
+    if (!nestedScanned) return null;
+    nestedRe.lastIndex = nestedScanned.end;
 
-    if (depth === 0) {
-      return {
-        tagName,
-        attrs,
-        isSelfClosing: false,
-        startIndex: index,
-        endIndex: nestedMatch.index + nFull.length,
-        innerContent: content.substring(index + fullMatch.length, nestedMatch.index)
-      };
+    if (nested[1]) {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          tagName,
+          attrs,
+          isSelfClosing: false,
+          startIndex: index,
+          endIndex: nestedScanned.end,
+          innerContent: content.slice(scanned.end, nestedStart),
+        };
+      }
+    } else if (!nestedScanned.selfClosing) {
+      depth += 1;
     }
   }
 
