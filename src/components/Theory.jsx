@@ -20,7 +20,9 @@ import {
   Steps,
   GeoGebra,
   Html,
+  MathText,
 } from './TheoryBlocks';
+import { normalizeDisplayMath } from './theoryMath';
 
 // ========== ЭЛЕМЕНТЫ MARKDOWN ==========
 
@@ -353,7 +355,7 @@ const renderBlocks = (blocks) => {
           rehypePlugins={[rehypeKatex]} 
           components={markdownComponents}
         >
-          {block.content}
+          {normalizeDisplayMath(block.content)}
         </ReactMarkdown>
       );
     }
@@ -550,6 +552,19 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
           text-align: center !important;
           white-space: nowrap;
         }
+        .theory-attr-math {
+          display: inline;
+        }
+        .theory-attr-math:has(.katex-display) {
+          display: block;
+        }
+        .theory-attr-math .katex-display {
+          overflow-x: auto;
+          overflow-y: hidden;
+          text-align: center;
+          margin: 0.35em 0;
+          padding: 0;
+        }
         .dynamic-markdown p {
           margin-bottom: 1em;
           line-height: 1.625;
@@ -657,7 +672,7 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
           {components.length === 0 && (
             <div className="dynamic-markdown">
               <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {content}
+                {normalizeDisplayMath(content)}
               </ReactMarkdown>
             </div>
           )}
@@ -704,7 +719,7 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
                       } border-zinc-50 dark:border-zinc-800`}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="flex-1 leading-tight line-clamp-2">{section.title}</span>
+                        <span className="flex-1 leading-tight line-clamp-2"><MathText text={section.title} /></span>
                         {activeId === section.id && (
                           <CheckCircle2 size={14} className="text-zinc-900 dark:text-zinc-100 shrink-0" />
                         )}

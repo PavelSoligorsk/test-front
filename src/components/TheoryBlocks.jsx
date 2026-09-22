@@ -1,5 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { AlertCircle, Bookmark, ChevronDown, ChevronUp, Lightbulb, Pencil } from 'lucide-react';
+import { normalizeDisplayMath } from './theoryMath';
+
+export function MathText({ text }) {
+  if (text == null || text === '') return null;
+  const value = String(text);
+  if (!value.includes('$')) return value;
+  return (
+    <span className="theory-attr-math">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{ p: ({ children }) => <>{children}</> }}
+      >
+        {normalizeDisplayMath(value)}
+      </ReactMarkdown>
+    </span>
+  );
+}
 
 function IconMark({ children, invert = false }) {
   return (
@@ -39,8 +60,8 @@ function Note({
       {title ? (
         <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
           {icon}
-          <p className={`text-sm font-semibold tracking-tight ${invert ? '' : 'text-zinc-900 dark:text-zinc-100'}`}>
-            {title}
+          <p className={`min-w-0 flex-1 text-sm font-semibold tracking-tight ${invert ? '' : 'text-zinc-900 dark:text-zinc-100'}`}>
+            <MathText text={title} />
           </p>
         </div>
       ) : null}
@@ -71,7 +92,7 @@ export const SectionBlock = ({ id, title, children, isHard }) => {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            {title}
+            <MathText text={title} />
           </h2>
           {isHard && (
             <span className="self-start rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 sm:self-auto">
@@ -144,7 +165,7 @@ export const Formula = ({ title = 'Формула', children }) => (
   <div className="my-6 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
     {title ? (
       <p className="px-5 pt-4 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-        {title}
+        <MathText text={title} />
       </p>
     ) : null}
     <div className="overflow-x-auto px-5 py-6 text-lg font-medium text-zinc-900 sm:text-xl dark:text-zinc-100">
@@ -163,7 +184,7 @@ export const Collapsible = ({ title = 'Доказательство / Вывод
         onClick={() => setIsOpen(!isOpen)}
         className="flex w-full items-center justify-between px-4 py-3.5 text-left text-sm font-semibold tracking-tight text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900/60 sm:px-5"
       >
-        {title}
+        <span className="min-w-0 flex-1 text-left"><MathText text={title} /></span>
         {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
       {isOpen && (
@@ -188,7 +209,7 @@ export const Card = ({ title, children }) => (
   <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
     {title && (
       <h4 className="mb-3 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-        {title}
+        <MathText text={title} />
       </h4>
     )}
     <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
