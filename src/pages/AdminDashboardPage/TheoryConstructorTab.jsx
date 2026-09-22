@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Send, Sparkles, Copy, Check, X, Eye } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
 import { TheoryViewer } from '../../components/Theory';
@@ -269,17 +270,7 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
       </Sheet>
       <div className="sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
         <Sheet className="p-6 md:p-8">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Предпросмотр теории</h3>
-            <button
-              type="button"
-              onClick={handlePreview}
-              className={secondaryBtnClass}
-            >
-              <Eye size={14} />
-              Предпросмотр
-            </button>
-          </div>
+          <h3 className="mb-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Предпросмотр теории</h3>
           {previewContent ? (
               <TheoryViewer content={previewContent} />
           ) : (
@@ -287,6 +278,18 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
           )}
         </Sheet>
       </div>
+
+      {createPortal(
+        <button
+          type="button"
+          onClick={handlePreview}
+          className={`${primaryBtnClass} fixed bottom-6 right-6 z-40 shadow-lg`}
+        >
+          <Eye size={16} />
+          Предпросмотр
+        </button>,
+        document.body,
+      )}
 
       {showPrompt && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPrompt(false)}>
