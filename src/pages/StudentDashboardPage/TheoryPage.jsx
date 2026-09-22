@@ -273,7 +273,7 @@ export default function TheoryPage() {
             </div>
           )}
           <div
-            className="px-4 md:px-8 py-6 md:py-8"
+            className="min-w-0 px-4 md:px-8 py-6 md:py-8"
             aria-hidden={warming}
             inert={warming || undefined}
           >

@@ -47,7 +47,7 @@ function Note({
 }) {
   return (
     <div
-      className={`my-6 overflow-hidden rounded-2xl border text-left shadow-sm ${
+      className={`my-6 min-w-0 max-w-full overflow-hidden rounded-2xl border text-left shadow-sm ${
         invert
           ? 'border-zinc-900 bg-zinc-900 text-zinc-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950'
           : dashed
@@ -90,8 +90,8 @@ export const SectionBlock = ({ id, title, children, isHard }) => {
         onClick={() => setIsOpen(!isOpen)}
         className="group mb-8 flex w-full flex-col justify-between gap-3 text-left sm:flex-row sm:items-center"
       >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+          <h2 className="min-w-0 max-w-full text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             <MathText text={title} />
           </h2>
           {isHard && (
@@ -108,7 +108,7 @@ export const SectionBlock = ({ id, title, children, isHard }) => {
       </button>
 
       {isOpen && (
-        <div className="dynamic-markdown space-y-6 text-left text-zinc-700 dark:text-zinc-300">
+        <div className="dynamic-markdown min-w-0 max-w-full space-y-6 text-left text-zinc-700 dark:text-zinc-300">
           {children}
         </div>
       )}
@@ -162,13 +162,13 @@ export const Important = ({ title = 'Важно', children }) => (
 );
 
 export const Formula = ({ title = 'Формула', children }) => (
-  <div className="my-6 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+  <div className="my-6 min-w-0 max-w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
     {title ? (
       <p className="px-5 pt-4 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
         <MathText text={title} />
       </p>
     ) : null}
-    <div className="overflow-x-auto px-5 py-6 text-lg font-medium text-zinc-900 sm:text-xl dark:text-zinc-100">
+    <div className="min-w-0 max-w-full overflow-x-auto px-5 py-6 text-base font-medium text-zinc-900 sm:text-lg dark:text-zinc-100">
       {children}
     </div>
   </div>
@@ -178,7 +178,7 @@ export const Collapsible = ({ title = 'Доказательство / Вывод
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="my-6 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
+    <div className="my-6 min-w-0 max-w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -199,14 +199,14 @@ export const Collapsible = ({ title = 'Доказательство / Вывод
 export const Grid = ({ cols = 2, children }) => {
   const colClass = cols === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
   return (
-    <div className={`my-6 grid grid-cols-1 ${colClass} gap-4 text-left`}>
+    <div className={`my-6 grid min-w-0 grid-cols-1 ${colClass} gap-4 text-left [&>*]:min-w-0 [&>*]:max-w-full`}>
       {children}
     </div>
   );
 };
 
 export const Card = ({ title, children }) => (
-  <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
+  <div className="min-w-0 max-w-full rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
     {title && (
       <h4 className="mb-3 text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
         <MathText text={title} />
@@ -225,7 +225,7 @@ export const Steps = ({ children }) => (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold tabular-nums text-white dark:bg-zinc-100 dark:text-zinc-950">
           {index + 1}
         </div>
-        <div className="flex-1 space-y-2 pt-1 text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 sm:text-base">
+        <div className="min-w-0 flex-1 space-y-2 pt-1 text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 sm:text-base">
           {child}
         </div>
       </div>

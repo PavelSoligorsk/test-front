@@ -22,7 +22,7 @@ import {
   Html,
   MathText,
 } from './TheoryBlocks';
-import { normalizeDisplayMath } from './theoryMath';
+import { continueOrderedListNumbers, normalizeDisplayMath } from './theoryMath';
 
 // ========== ЭЛЕМЕНТЫ MARKDOWN ==========
 
@@ -64,8 +64,8 @@ const markdownComponents = {
       {children}
     </ul>
   ),
-  ol: ({ children }) => (
-    <ol className="list-decimal pl-6 my-4 space-y-2 text-zinc-700 dark:text-zinc-300">
+  ol: ({ children, start }) => (
+    <ol start={start} className="list-decimal pl-6 my-4 space-y-2 text-zinc-700 dark:text-zinc-300">
       {children}
     </ol>
   ),
@@ -355,7 +355,7 @@ const renderBlocks = (blocks) => {
           rehypePlugins={[rehypeKatex]} 
           components={markdownComponents}
         >
-          {normalizeDisplayMath(block.content)}
+          {continueOrderedListNumbers(normalizeDisplayMath(block.content))}
         </ReactMarkdown>
       );
     }
@@ -541,28 +541,38 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
   return (
     <div className={`relative ${embedded ? 'bg-transparent' : 'bg-white dark:bg-[#09090b]'} ${isFullWidth || embedded ? '' : 'min-h-screen'}`}>
       <style>{`
-        .dynamic-markdown .katex-display {
+        .dynamic-markdown {
+          min-width: 0;
+          max-width: 100%;
+        }
+        .dynamic-markdown .katex-display,
+        .theory-attr-math .katex-display {
+          display: block;
+          max-width: 100%;
+          margin: 1em 0;
+          padding: 0.75em 0;
           overflow-x: auto;
           overflow-y: hidden;
           text-align: center;
-          padding: 10px 0;
-          margin: 1.2em 0;
         }
-        .dynamic-markdown .katex-display > .katex {
-          text-align: center !important;
+        .dynamic-markdown .katex-display > .katex,
+        .theory-attr-math .katex-display > .katex {
+          display: inline-block;
+          width: max-content;
+          max-width: none;
           white-space: nowrap;
+          text-align: initial;
         }
         .theory-attr-math {
-          display: inline;
+          display: inline-block;
+          max-width: 100%;
+          vertical-align: middle;
+          overflow-x: auto;
+          padding: 0.15em 0;
         }
         .theory-attr-math:has(.katex-display) {
           display: block;
-        }
-        .theory-attr-math .katex-display {
-          overflow-x: auto;
-          overflow-y: hidden;
-          text-align: center;
-          margin: 0.35em 0;
+          overflow-x: visible;
           padding: 0;
         }
         .dynamic-markdown p {
@@ -663,7 +673,7 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
           </div>
         )}
         
-        <div className={`${isFullWidth || embedded ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth || embedded ? 'py-0' : 'py-12'} px-0 ${isLoading && !embedded ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`min-w-0 ${isFullWidth || embedded ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth || embedded ? 'py-0' : 'py-12'} px-0 ${isLoading && !embedded ? 'opacity-50 pointer-events-none' : ''}`}>
           {components.map((section, idx) => (
             <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
               {renderBlocks(section.orderedBlocks)}  
@@ -672,7 +682,7 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
           {components.length === 0 && (
             <div className="dynamic-markdown">
               <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {normalizeDisplayMath(content)}
+                {continueOrderedListNumbers(normalizeDisplayMath(content))}
               </ReactMarkdown>
             </div>
           )}

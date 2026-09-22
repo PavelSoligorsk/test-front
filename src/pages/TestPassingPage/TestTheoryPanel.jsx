@@ -267,7 +267,7 @@ export default function TestTheoryPanel() {
               <ArticleBodySkeleton />
             </div>
           )}
-          <div className="px-4 md:px-8 py-6 md:py-8" aria-hidden={warming} inert={warming || undefined}>
+          <div className="min-w-0 px-4 md:px-8 py-6 md:py-8" aria-hidden={warming} inert={warming || undefined}>
             <TheoryViewer content={theoryContent.content || ''} embedded isFullWidth />
           </div>
           {!warming && (
