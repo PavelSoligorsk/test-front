@@ -36,8 +36,74 @@ function clusterAnswers(answers, taskId) {
   return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 }
 
+function taskOptions(task) {
+  const raw = task?.options;
+  if (!raw) return [];
+  const list = Array.isArray(raw) ? raw : String(raw).split(';');
+  return list.map((opt) => String(opt).trim()).filter(Boolean);
+}
+
+function isClosedTask(task, options) {
+  const flag = task?.is_open_answer;
+  if (flag === false || flag === 0 || flag === 'false') return true;
+  if (flag === true || flag === 1 || flag === 'true') return false;
+  return options.length > 0;
+}
+
+function correctKeys(task) {
+  const raw = task?.correct_answer ?? task?.answer ?? '';
+  return String(raw).split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+function sameAnswer(left, right) {
+  const norm = (value) => String(value ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .sort()
+    .join(',');
+  return norm(left) !== '' && norm(left) === norm(right);
+}
+
+function optionIsCorrect(opt, index, keys) {
+  return keys.includes(String(index + 1)) || keys.includes(opt);
+}
+
+function answerLabel(answer, options) {
+  if (!options.length) return answer || '—';
+  const parts = String(answer ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return '—';
+  return parts.map((part) => {
+    const n = Number(part);
+    if (Number.isInteger(n) && n >= 1 && n <= options.length) return options[n - 1];
+    return part;
+  }).join(', ');
+}
+
+function correctLabel(task, options) {
+  const keys = correctKeys(task);
+  if (!keys.length) return '';
+  if (!options.length) return keys.join(', ');
+  const labels = options.filter((opt, i) => optionIsCorrect(opt, i, keys));
+  return labels.length ? labels.join(', ') : keys.join(', ');
+}
+
+function withCorrectCluster(clusters, task, options) {
+  if (!isClosedTask(task, options)) return clusters;
+  const keys = correctKeys(task);
+  if (!keys.length) return clusters;
+  const correctKey = [...keys].sort().join(',');
+  if (clusters.some(([answer]) => sameAnswer(answer, correctKey))) return clusters;
+  return [[correctKey, []], ...clusters];
+}
+
 function TaskBlock({ index, total, task, clusters, navigate }) {
   const id = taskKey(task);
+  const options = taskOptions(task);
+  const closed = isClosedTask(task, options);
+  const keys = correctKeys(task);
+  const correctText = correctLabel(task, options);
+  const shownClusters = withCorrectCluster(clusters, task, options);
   return (
     <article
       data-task-id={id}
@@ -53,11 +119,35 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
           <MarkdownRenderer>{task.content || task.statement || ''}</MarkdownRenderer>
         </div>
 
-        {task.correct_answer != null && String(task.correct_answer).length > 0 ? (
+        {closed && options.length > 0 ? (
+          <div>
+            <p className="text-xs font-medium text-zinc-400 mb-3">Варианты</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {options.map((opt, i) => {
+                const correct = optionIsCorrect(opt, i, keys);
+                return (
+                  <div
+                    key={`${id}-opt-${i}`}
+                    className={`p-4 rounded-2xl border text-sm font-medium flex gap-3 ${
+                      correct
+                        ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                        : 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    <span className="opacity-40 tabular-nums">{i + 1}.</span>
+                    <div className="flex-1"><MarkdownRenderer>{opt}</MarkdownRenderer></div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {correctText ? (
           <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Эталонный ответ</p>
             <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              <MarkdownRenderer>{String(task.correct_answer)}</MarkdownRenderer>
+              <MarkdownRenderer>{correctText}</MarkdownRenderer>
             </div>
           </div>
         ) : null}
@@ -73,12 +163,12 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
 
         <div>
           <p className="text-xs font-medium text-zinc-400 mb-3">Ответы группы</p>
-          {clusters.length === 0 ? (
+          {shownClusters.length === 0 ? (
             <p className="text-sm text-zinc-500">Нет сданных ответов по этому заданию</p>
           ) : (
             <div className="space-y-3">
-              {clusters.map(([answer, people]) => {
-                const isCorrectCluster = people.some((p) => p.is_correct);
+              {shownClusters.map(([answer, people]) => {
+                const isCorrectCluster = people.some((p) => p.is_correct) || sameAnswer(answer, keys.join(','));
                 return (
                   <div
                     key={answer}
@@ -93,9 +183,12 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
                         ? 'text-emerald-800 dark:text-emerald-300'
                         : 'text-red-700 dark:text-red-300'
                     }`}>
-                      <MarkdownRenderer>{answer || '—'}</MarkdownRenderer>
+                      <MarkdownRenderer>{answerLabel(answer, options)}</MarkdownRenderer>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      {people.length === 0 ? (
+                        <span className="text-xs text-emerald-700/80 dark:text-emerald-300/80">Никто не выбрал</span>
+                      ) : null}
                       {people.map((p) => (
                         <button
                           key={`${p.student_id}-${p.result_id}`}
