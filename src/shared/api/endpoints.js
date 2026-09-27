@@ -29,6 +29,10 @@ export const ENDPOINTS = {
   STUDENT_THEORY_SECTIONS: (topic) => `/student/theory/sections/${topic}`,
   STUDENT_THEORY_BY_TOPIC_SECTION: (topic, section) => `/student/theory/by-topic/${topic}/section/${section}`,
   STUDENT_THEORY_ASK_AI: '/student/theory/ask-ai',
+  STUDENT_BOARDS: '/student/boards',
+  STUDENT_BOARD: (id) => `/student/boards/${id}`,
+  STUDENT_LESSON_BOARD: (lessonId) => `/student/lessons/${lessonId}/board`,
+  STUDENT_BOARD_IMAGES: '/student/boards/images',
 
   // Админ
   ADMIN_TASKS: '/admin/tasks',
@@ -81,6 +85,13 @@ export const ENDPOINTS = {
   TEACHER_LESSON_COMPLETE: (id) => `/teacher/lessons/${id}/complete`,
   TEACHER_LESSON_CANCEL: (id) => `/teacher/lessons/${id}/cancel`,
   TEACHER_LESSON_RESCHEDULE: (id) => `/teacher/lessons/${id}/reschedule`,
+  TEACHER_LESSON_BOARDS: (lessonId) => `/teacher/lessons/${lessonId}/boards`,
+  TEACHER_BOARD: (id) => `/teacher/boards/${id}`,
+  TEACHER_BOARD_IMAGES: '/teacher/boards/images',
+  TEACHER_GEOGEBRA_TEMPLATES: '/teacher/geogebra-templates',
+  TEACHER_GEOGEBRA_TEMPLATE: (id) => `/teacher/geogebra-templates/${id}`,
+  BOARD_GEOGEBRA_TEMPLATES: '/board/geogebra-templates',
+  BOARD_GEOGEBRA_TEMPLATE: (id) => `/board/geogebra-templates/${id}`,
 
   // Учитель — оплаты
   TEACHER_PAYMENTS: '/teacher/payments',

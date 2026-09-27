@@ -1,13 +1,19 @@
 export const STUDENT_PATHS = {
   tests: '/student/tests',
   theory: '/student/theory',
+  board: '/student/board',
   history: '/student/history',
   stats: '/student/stats',
   profile: '/student/profile',
 };
 
+export function boardPath(id) {
+  return `/student/board/${id}`;
+}
+
 export function studentTabFromPath(pathname) {
   if (pathname.startsWith('/student/theory')) return 'theory';
+  if (pathname.startsWith('/student/board')) return 'board';
   if (pathname.startsWith('/student/history')) return 'history';
   if (pathname.startsWith('/student/stats')) return 'stats';
   if (pathname.startsWith('/student/profile')) return 'profile';

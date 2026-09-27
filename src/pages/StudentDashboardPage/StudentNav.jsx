@@ -3,6 +3,7 @@ import RoleNav from '../../shared/ui/RoleNav';
 export const STUDENT_TABS = [
   { key: 'theory', label: 'Теория' },
   { key: 'tests', label: 'Тесты' },
+  { key: 'board', label: 'Доска' },
   { key: 'history', label: 'История' },
   { key: 'stats', label: 'Статистика' },
   { key: 'profile', label: 'Профиль' },

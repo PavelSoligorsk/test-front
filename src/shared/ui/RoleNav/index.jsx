@@ -22,9 +22,11 @@ export default function RoleNav({
   const tabCount = tabs.length;
   const gridClass = tabCount <= 5
     ? 'grid grid-cols-5'
-    : tabCount <= 7
-      ? 'grid grid-cols-4 sm:grid-cols-7'
-      : 'grid grid-cols-4 sm:grid-cols-8';
+    : tabCount === 6
+      ? 'grid grid-cols-3 sm:grid-cols-6'
+      : tabCount <= 7
+        ? 'grid grid-cols-4 sm:grid-cols-7'
+        : 'grid grid-cols-4 sm:grid-cols-8';
 
   const brandInner = (
     <>

@@ -12,6 +12,8 @@ const StudentTestsPage = React.lazy(() => import('../../pages/StudentDashboardPa
 const StudentTheoryPage = React.lazy(() => import('../../pages/StudentDashboardPage/TheoryPage'));
 const StudentHistoryPage = React.lazy(() => import('../../pages/StudentDashboardPage/HistoryPage'));
 const StudentProfilePage = React.lazy(() => import('../../pages/StudentDashboardPage/ProfilePage'));
+const StudentBoardPage = React.lazy(() => import('../../pages/StudentDashboardPage/BoardListPage'));
+const StudentBoardCanvasPage = React.lazy(() => import('../../pages/StudentDashboardPage/BoardCanvasPage'));
 const StudentIndexRedirect = React.lazy(() => import('../../pages/StudentDashboardPage/StudentIndexRedirect'));
 const StudentStatsPage = React.lazy(() => import('../../pages/StudentStatsPage'));
 
@@ -24,7 +26,8 @@ const TeacherConstructorPage = React.lazy(() => import('../../pages/TeacherDashb
 const TeacherStudentsPage = React.lazy(() => import('../../pages/TeacherDashboardPage/StudentsPage.jsx'));
 const TeacherTestsPage = React.lazy(() => import('../../pages/TeacherDashboardPage/TestsPage.jsx'));
 const TeacherGroupsPage = React.lazy(() => import('../../pages/TeacherDashboardPage/GroupsPage.jsx'));
-const TeacherTheoryPage = React.lazy(() => import('../../pages/TeacherDashboardPage/TheoryPage.jsx'));
+const TeacherBoardPage = React.lazy(() => import('../../pages/TeacherDashboardPage/BoardListPage.jsx'));
+const TeacherBoardCanvasPage = React.lazy(() => import('../../pages/TeacherDashboardPage/BoardCanvasPage.jsx'));
 const TeacherProfilePage = React.lazy(() => import('../../pages/TeacherDashboardPage/ProfilePage.jsx'));
 
 const AdminLayout = React.lazy(() => import('../../pages/AdminDashboardPage/AdminLayout.jsx'));
@@ -115,6 +118,8 @@ export default function AppRoutes() {
                 <Route path="theory" element={<StudentTheoryPage />} />
                 <Route path="theory/:topic" element={<StudentTheoryPage />} />
                 <Route path="theory/:topic/:section" element={<StudentTheoryPage />} />
+                <Route path="board/:boardId" element={<StudentBoardCanvasPage />} />
+                <Route path="board" element={<StudentBoardPage />} />
                 <Route path="history" element={<StudentHistoryPage />} />
                 <Route path="stats" element={<StudentStatsPage />} />
                 <Route path="profile" element={<StudentProfilePage />} />
@@ -129,7 +134,9 @@ export default function AppRoutes() {
                 <Route path="students" element={<TeacherStudentsPage />} />
                 <Route path="tests" element={<TeacherTestsPage />} />
                 <Route path="groups" element={<TeacherGroupsPage />} />
-                <Route path="theory" element={<TeacherTheoryPage />} />
+                <Route path="board/:boardId" element={<TeacherBoardCanvasPage />} />
+                <Route path="board" element={<TeacherBoardPage />} />
+                <Route path="theory" element={<Navigate to="/teacher/board" replace />} />
                 <Route path="profile" element={<TeacherProfilePage />} />
               </Route>
               <Route path="/teacher/students/:userId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherStudentProfile /></PrivateRoute>} />

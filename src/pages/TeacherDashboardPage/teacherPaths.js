@@ -6,6 +6,7 @@ export const TEACHER_PATHS = {
   students: '/teacher/students',
   tests: '/teacher/tests',
   groups: '/teacher/groups',
+  board: '/teacher/board',
   theory: '/teacher/theory',
   profile: '/teacher/profile',
 };
@@ -19,7 +20,8 @@ export const TEACHER_TAB_ALIASES = {
   students: 'students',
   tests_list: 'tests',
   groups: 'groups',
-  theory_generator: 'theory',
+  theory: 'board',
+  theory_generator: 'board',
   profile: 'profile',
 };
 
@@ -31,7 +33,7 @@ export const TEACHER_TABS = [
   { key: 'students', label: 'Ученики' },
   { key: 'tests', label: 'Тесты' },
   { key: 'groups', label: 'Группы' },
-  { key: 'theory', label: 'Теория' },
+  { key: 'board', label: 'Доска' },
 ];
 
 export function teacherTabFromPath(pathname) {
@@ -41,7 +43,8 @@ export function teacherTabFromPath(pathname) {
   if (pathname.startsWith('/teacher/constructor')) return 'constructor';
   if (pathname.startsWith('/teacher/tests')) return 'tests';
   if (pathname.startsWith('/teacher/groups')) return 'groups';
-  if (pathname.startsWith('/teacher/theory')) return 'theory';
+  if (pathname.startsWith('/teacher/board')) return 'board';
+  if (pathname.startsWith('/teacher/theory')) return 'board';
   if (pathname.startsWith('/teacher/profile')) return 'profile';
   if (pathname.startsWith('/teacher/students')) return 'students';
   return 'bank';

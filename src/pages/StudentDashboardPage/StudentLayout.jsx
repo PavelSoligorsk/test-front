@@ -20,6 +20,8 @@ export default function StudentLayout() {
 
   const activeKey = studentTabFromPath(location.pathname);
   const isTheory = location.pathname.startsWith('/student/theory');
+  const isBoard = location.pathname.startsWith('/student/board');
+  const isBoardCanvas = /^\/student\/board\/[^/]+/.test(location.pathname);
 
   useEffect(() => {
     fetchStudentMe().then(setProfile).catch(() => {});
@@ -42,16 +44,18 @@ export default function StudentLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800">
+    <div className={`${isBoardCanvas ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
       <StudentNav
         displayName={`${profile?.user?.first_name || ''} ${profile?.user?.last_name || ''}`.trim()}
         activeKey={activeKey}
         onSelect={(key) => navigate(STUDENT_PATHS[key] || STUDENT_PATHS.tests)}
       />
 
-      <Outlet />
+      <div className={isBoardCanvas ? 'min-h-0 flex-1' : undefined}>
+        <Outlet />
+      </div>
 
-      {!isTheory && (
+      {!isTheory && !isBoard && (
         <button
           type="button"
           onClick={() => setShowAiModal(true)}

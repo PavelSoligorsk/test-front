@@ -17,9 +17,11 @@ function TeacherChrome() {
   const displayName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.username || '';
   const activeKey = teacherTabFromPath(location.pathname);
   const ws = useTeacherWorkspace();
+  const isBoard = location.pathname.startsWith('/teacher/board');
+  const isBoardCanvas = /^\/teacher\/board\/[^/]+/.test(location.pathname);
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 pb-24">
+    <div className={`${isBoardCanvas ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'} ${isBoard ? '' : 'pb-24'} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
       <RoleNav
         tabs={TEACHER_TABS}
         activeKey={activeKey === 'profile' ? null : activeKey}
@@ -45,7 +47,9 @@ function TeacherChrome() {
         </PageShell>
       ) : null}
 
-      <Outlet />
+      <div className={isBoardCanvas ? 'min-h-0 flex-1' : undefined}>
+        <Outlet />
+      </div>
 
       {ws.manageTestModal && (
         <TestManageModal
@@ -98,7 +102,7 @@ function TeacherChrome() {
         />
       )}
 
-      {ws.selectedTasks.length > 0 && activeKey !== 'constructor' && (
+      {ws.selectedTasks.length > 0 && activeKey !== 'constructor' && !isBoard && (
         <div className="fixed bottom-6 right-6 z-40">
           <button
             type="button"
