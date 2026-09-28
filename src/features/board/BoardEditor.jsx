@@ -24,6 +24,8 @@ import {
   BoardConflictError,
   boardErrorMessage,
   getGeoGebraTemplate,
+  getStudentBoard,
+  getTeacherBoard,
   listGeoGebraTemplates,
   putStudentBoard,
   putStudentBoardKeepalive,
@@ -31,7 +33,9 @@ import {
   putTeacherBoardKeepalive,
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
+  watchBoardEvents,
 } from './api';
+import { ENDPOINTS } from '../../shared/api/endpoints';
 import { readGeoGebraBase64 } from './geogebraApi';
 import {
   arrowBounds,
@@ -52,7 +56,7 @@ import {
   createObject,
   geogebraTemplate,
 } from './model';
-import { saveBoard } from './storage';
+import { deleteBoard, saveBoard } from './storage';
 
 const TOOLS = [
   { id: 'select', label: 'Выбор', hint: 'V', icon: MousePointer2 },
@@ -100,7 +104,7 @@ export default function BoardEditor({
   readOnly = false,
   audience = 'student',
   backTo = '/student/board',
-  backLabel = 'Уроки',
+  backLabel = 'Доски',
 }) {
   const navigate = useNavigate();
   const viewportRef = useRef(null);
@@ -112,7 +116,7 @@ export default function BoardEditor({
   const wheelRef = useRef(() => {});
   const objectsRef = useRef(initialBoard.objects || []);
   const cameraRef = useRef(initialBoard.camera || { x: 64, y: 72, zoom: 1 });
-  const titleRef = useRef(initialBoard.title || 'Урок');
+  const titleRef = useRef(initialBoard.title || 'Доска');
   const boardRef = useRef(initialBoard);
   const apiMap = useRef(new Map());
   const pastRef = useRef([]);
@@ -128,6 +132,16 @@ export default function BoardEditor({
   const mountedRef = useRef(true);
   const persistSeq = useRef(0);
   const skipSave = useRef(true);
+  const persistBusy = useRef(0);
+  const pullingRef = useRef(false);
+  const seenRevisionRef = useRef(initialBoard.revision ?? 0);
+  const ackedRef = useRef({
+    objects: initialBoard.objects || [],
+    camera: { ...(initialBoard.camera || { x: 0, y: 0, zoom: 1 }) },
+    title: (initialBoard.title || 'Доска').trim() || 'Доска',
+  });
+  const pullRemoteRef = useRef(async () => {});
+  const noteRemoteRef = useRef(() => {});
   const spaceRef = useRef(false);
   const geoTimerRef = useRef(null);
   const readOnlyRef = useRef(readOnly);
@@ -138,7 +152,7 @@ export default function BoardEditor({
 
   const [objects, setObjects] = useState(initialBoard.objects || []);
   const [camera, setCamera] = useState(initialBoard.camera || { x: 64, y: 72, zoom: 1 });
-  const [title, setTitle] = useState(initialBoard.title || 'Урок');
+  const [title, setTitle] = useState(initialBoard.title || 'Доска');
   const [tool, setTool] = useState('select');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -416,22 +430,85 @@ export default function BoardEditor({
     )).join('|');
   }
 
-  function adoptServerBoard(next) {
+  function rememberAck() {
+    ackedRef.current = {
+      objects: objectsRef.current,
+      camera: {
+        x: cameraRef.current.x,
+        y: cameraRef.current.y,
+        zoom: cameraRef.current.zoom,
+      },
+      title: titleRef.current.trim() || 'Доска',
+    };
+  }
+
+  function isDirty() {
+    if (dragRef.current || persistBusy.current > 0) return true;
+    const acked = ackedRef.current;
+    if (objectsRef.current !== acked.objects) return true;
+    if ((titleRef.current.trim() || 'Доска') !== acked.title) return true;
+    const cam = cameraRef.current;
+    return cam.x !== acked.camera.x || cam.y !== acked.camera.y || cam.zoom !== acked.camera.zoom;
+  }
+
+  function adoptServerBoard(next, { resetHistory = false } = {}) {
     const geoChanged = ggbSignature(objectsRef.current) !== ggbSignature(next.objects);
     skipSave.current = true;
     boardRef.current = next;
     objectsRef.current = next.objects || [];
     cameraRef.current = next.camera || cameraRef.current;
     titleRef.current = next.title || titleRef.current;
+    rememberAck();
+    if ((next.revision ?? 0) > (seenRevisionRef.current ?? 0)) seenRevisionRef.current = next.revision;
     setObjects(objectsRef.current);
     setCamera({ ...cameraRef.current });
     setTitle(titleRef.current);
+    if (resetHistory) {
+      pastRef.current = [];
+      futureRef.current = [];
+      setEditingId(null);
+      noteHistory();
+    }
     if (geoChanged) setGeoEpoch((value) => value + 1);
     saveBoard(next).catch(() => {});
   }
 
+  async function pullRemote() {
+    if (pullingRef.current || isDirty()) return;
+    const target = Number(seenRevisionRef.current || 0);
+    if (!(target > Number(boardRef.current.revision ?? 0))) return;
+    pullingRef.current = true;
+    const revisionBefore = Number(boardRef.current.revision ?? 0);
+    try {
+      const remote = audienceRef.current === 'teacher'
+        ? await getTeacherBoard(boardRef.current.id)
+        : await getStudentBoard(boardRef.current.id);
+      if (!mountedRef.current || isDirty()) return;
+      if ((remote?.revision ?? 0) > revisionBefore) {
+        adoptServerBoard(remote, { resetHistory: true });
+        if (mountedRef.current) setSaveState('saved');
+      }
+    } catch {
+      /* следующее update или повтор потока скачает документ ещё раз */
+    } finally {
+      pullingRef.current = false;
+      const advanced = Number(boardRef.current.revision ?? 0) > revisionBefore;
+      if (advanced && !isDirty() && Number(seenRevisionRef.current || 0) > Number(boardRef.current.revision ?? 0)) {
+        pullRemote();
+      }
+    }
+  }
+
+  function noteRemoteRevision(revision) {
+    const next = Number(revision);
+    if (!Number.isFinite(next)) return;
+    if (next > Number(seenRevisionRef.current || 0)) seenRevisionRef.current = next;
+    pullRemote();
+  }
+
   async function persist() {
     if (readOnlyRef.current) return;
+    persistBusy.current += 1;
     const seq = persistSeq.current + 1;
     persistSeq.current = seq;
     if (mountedRef.current) setSaveState('saving');
@@ -444,7 +521,7 @@ export default function BoardEditor({
       }
       const nextBoard = {
         ...boardRef.current,
-        title: titleRef.current.trim() || 'Урок',
+        title: titleRef.current.trim() || 'Доска',
         camera: cameraRef.current,
         objects: objectsRef.current,
         updatedAt: new Date().toISOString(),
@@ -471,7 +548,7 @@ export default function BoardEditor({
       } catch (error) {
         if (persistSeq.current !== seq) return;
         if (error instanceof BoardConflictError) {
-          adoptServerBoard(error.board);
+          adoptServerBoard(error.board, { resetHistory: true });
           if (mountedRef.current) setSaveState('conflict');
           return;
         }
@@ -486,8 +563,63 @@ export default function BoardEditor({
       }
     } catch {
       if (mountedRef.current && persistSeq.current === seq) setSaveState('error');
+    } finally {
+      persistBusy.current -= 1;
+      pullRemoteRef.current();
     }
   }
+
+  useEffect(() => {
+    const boardId = initialBoard?.id;
+    if (!boardId) return undefined;
+    const controller = new AbortController();
+    let stopped = false;
+    let timer = 0;
+    let attempt = 0;
+    const url = audience === 'teacher'
+      ? ENDPOINTS.TEACHER_BOARD_EVENTS(boardId)
+      : ENDPOINTS.STUDENT_BOARD_EVENTS(boardId);
+
+    const wait = (ms) => new Promise((resolve) => {
+      timer = window.setTimeout(resolve, ms);
+    });
+
+    (async () => {
+      while (!stopped) {
+        try {
+          await watchBoardEvents(url, {
+            signal: controller.signal,
+            onUpdate: (data) => {
+              if (data?.id && data.id !== boardId) return;
+              noteRemoteRef.current(data?.revision);
+            },
+            onDelete: () => {
+              if (stopped) return;
+              stopped = true;
+              controller.abort();
+              deleteBoard(boardId).catch(() => {});
+              navigate(backTo);
+            },
+          });
+          if (stopped) return;
+          attempt += 1;
+        } catch (error) {
+          if (stopped || controller.signal.aborted || error?.name === 'AbortError') return;
+          const status = error?.status;
+          if (status === 401 || status === 403 || status === 404) return;
+          attempt += 1;
+        }
+        if (stopped) return;
+        await wait(Math.min(10000, 1000 * attempt));
+      }
+    })();
+
+    return () => {
+      stopped = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [initialBoard.id, audience, backTo, navigate]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -497,7 +629,7 @@ export default function BoardEditor({
     const onPageHide = () => {
       const board = {
         ...boardRef.current,
-        title: titleRef.current.trim() || 'Урок',
+        title: titleRef.current.trim() || 'Доска',
         camera: cameraRef.current,
         objects: objectsRef.current,
       };
@@ -635,6 +767,8 @@ export default function BoardEditor({
     toolRef.current = tool;
     styleRef.current = style;
     persistRef.current = persist;
+    pullRemoteRef.current = pullRemote;
+    noteRemoteRef.current = noteRemoteRevision;
     actionsRef.current = { undo, redo, deleteSelected, commitEdit };
     readOnlyRef.current = readOnly;
     audienceRef.current = audience;
@@ -1080,7 +1214,7 @@ export default function BoardEditor({
     let templateTitle = known?.title || '';
     if (templateId) {
       try {
-        const full = await getGeoGebraTemplate(templateId, boardRef.current.lessonId);
+        const full = await getGeoGebraTemplate(templateId);
         ggbBase64 = full?.ggbBase64 || '';
         appName = full?.appName || appName;
         templateTitle = full?.title || templateTitle;
@@ -1172,7 +1306,7 @@ export default function BoardEditor({
       {objects.length === 0 && (
         <div ref={hintRef} className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
           <p className="max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
-            Пустой холст урока. Стикер, изображение и GeoGebra — на панели инструментов. Колесо двигает доску, Ctrl и колесо — масштаб.
+            Пустой холст. Стикер, изображение и GeoGebra — на панели инструментов. Колесо двигает доску, Ctrl и колесо — масштаб.
           </p>
         </div>
       )}
@@ -1190,8 +1324,11 @@ export default function BoardEditor({
           <input
             value={title}
             readOnly={readOnly}
-            onChange={(event) => setTitle(event.target.value)}
-            aria-label="Название урока"
+            onChange={(event) => {
+              titleRef.current = event.target.value;
+              setTitle(event.target.value);
+            }}
+            aria-label="Название доски"
             className="h-9 min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
           <span className="hidden shrink-0 pr-2 text-[11px] text-zinc-400 lg:inline">

@@ -3,12 +3,6 @@ export function uid() {
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export function lessonTitle(date = new Date()) {
-  const day = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(date);
-  const time = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(date);
-  return `Урок ${day}, ${time}`;
-}
-
 export function formatUpdated(iso) {
   if (!iso) return '';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -19,15 +13,18 @@ export function formatUpdated(iso) {
   }).format(new Date(iso));
 }
 
-export function createBoard(title = lessonTitle()) {
+export function createBoard(title = 'Доска') {
   const now = new Date().toISOString();
   return {
     id: uid(),
     title,
-    lessonId: null,
+    teacherId: null,
+    groupId: null,
+    studentIds: [],
+    revision: null,
     createdAt: now,
     updatedAt: now,
-    camera: { x: 64, y: 72, zoom: 1 },
+    camera: { x: 0, y: 0, zoom: 1 },
     objects: [],
   };
 }

@@ -31,7 +31,7 @@ export const ENDPOINTS = {
   STUDENT_THEORY_ASK_AI: '/student/theory/ask-ai',
   STUDENT_BOARDS: '/student/boards',
   STUDENT_BOARD: (id) => `/student/boards/${id}`,
-  STUDENT_LESSON_BOARD: (lessonId) => `/student/lessons/${lessonId}/board`,
+  STUDENT_BOARD_EVENTS: (id) => `/student/boards/${id}/events`,
   STUDENT_BOARD_IMAGES: '/student/boards/images',
 
   // Админ
@@ -85,8 +85,9 @@ export const ENDPOINTS = {
   TEACHER_LESSON_COMPLETE: (id) => `/teacher/lessons/${id}/complete`,
   TEACHER_LESSON_CANCEL: (id) => `/teacher/lessons/${id}/cancel`,
   TEACHER_LESSON_RESCHEDULE: (id) => `/teacher/lessons/${id}/reschedule`,
-  TEACHER_LESSON_BOARDS: (lessonId) => `/teacher/lessons/${lessonId}/boards`,
+  TEACHER_BOARDS: '/teacher/boards',
   TEACHER_BOARD: (id) => `/teacher/boards/${id}`,
+  TEACHER_BOARD_EVENTS: (id) => `/teacher/boards/${id}/events`,
   TEACHER_BOARD_IMAGES: '/teacher/boards/images',
   TEACHER_GEOGEBRA_TEMPLATES: '/teacher/geogebra-templates',
   TEACHER_GEOGEBRA_TEMPLATE: (id) => `/teacher/geogebra-templates/${id}`,

@@ -48,7 +48,7 @@ export default function BoardCanvasPage() {
         <div>
           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{missingText}</p>
           <Link to={STUDENT_PATHS.board} className="mt-3 inline-block text-sm text-zinc-500 underline">
-            К списку уроков
+            К списку досок
           </Link>
         </div>
       </div>
@@ -63,5 +63,5 @@ export default function BoardCanvasPage() {
     );
   }
 
-  return <BoardEditor key={`${board.id}:${board.revision || 0}`} initialBoard={board} readOnly={board.kind === 'class'} />;
+  return <BoardEditor key={`${board.id}:${board.revision || 0}`} initialBoard={board} />;
 }

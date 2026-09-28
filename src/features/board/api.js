@@ -37,12 +37,14 @@ async function putBoard(url, board) {
   }
 }
 
-export function listStudentBoards() {
-  return apiClient.get(ENDPOINTS.STUDENT_BOARDS).then((response) => response.data || []);
+function asBoardList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.boards)) return data.boards;
+  return [];
 }
 
-export function createStudentBoard(title) {
-  return apiClient.post(ENDPOINTS.STUDENT_BOARDS, { title }).then((response) => response.data);
+export function listStudentBoards() {
+  return apiClient.get(ENDPOINTS.STUDENT_BOARDS).then((response) => asBoardList(response.data));
 }
 
 export function getStudentBoard(id) {
@@ -53,22 +55,18 @@ export function putStudentBoard(board) {
   return putBoard(ENDPOINTS.STUDENT_BOARD(board.id), board);
 }
 
-export function deleteStudentBoard(id) {
-  return apiClient.delete(ENDPOINTS.STUDENT_BOARD(id)).then((response) => response.data);
-}
-
-export function getStudentLessonBoard(lessonId) {
-  return apiClient.get(ENDPOINTS.STUDENT_LESSON_BOARD(lessonId)).then((response) => response.data);
-}
-
 export function uploadStudentBoardImage(file) {
   const body = new FormData();
   body.append('file', file);
   return apiClient.post(ENDPOINTS.STUDENT_BOARD_IMAGES, body).then((response) => response.data);
 }
 
-export function getTeacherLessonBoards(lessonId) {
-  return apiClient.get(ENDPOINTS.TEACHER_LESSON_BOARDS(lessonId)).then((response) => response.data);
+export function listTeacherBoards() {
+  return apiClient.get(ENDPOINTS.TEACHER_BOARDS).then((response) => asBoardList(response.data));
+}
+
+export function createTeacherBoard(body) {
+  return apiClient.post(ENDPOINTS.TEACHER_BOARDS, body).then((response) => response.data);
 }
 
 export function getTeacherBoard(id) {
@@ -77,6 +75,10 @@ export function getTeacherBoard(id) {
 
 export function putTeacherBoard(board) {
   return putBoard(ENDPOINTS.TEACHER_BOARD(board.id), board);
+}
+
+export function deleteTeacherBoard(id) {
+  return apiClient.delete(ENDPOINTS.TEACHER_BOARD(id)).then((response) => response.data);
 }
 
 export function uploadTeacherBoardImage(file) {
@@ -131,6 +133,51 @@ export function putStudentBoardKeepalive(board) {
 
 export function putTeacherBoardKeepalive(board) {
   putBoardKeepalive(ENDPOINTS.TEACHER_BOARD(board.id), board);
+}
+
+export async function watchBoardEvents(url, { signal, onUpdate, onDelete }) {
+  const token = readToken();
+  const response = await fetch(`${API_URL}${url}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'text/event-stream',
+    },
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    const error = new Error('Поток доски не открылся');
+    error.status = response.status;
+    throw error;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() ?? '';
+      for (const chunk of chunks) {
+        const trimmed = chunk.trim();
+        if (!trimmed || trimmed.startsWith(':')) continue;
+        const event = trimmed.match(/^event: (.+)$/m)?.[1]?.trim();
+        const raw = trimmed.match(/^data: (.+)$/m)?.[1];
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : null;
+        } catch {
+          data = null;
+        }
+        if (event === 'update' && data) onUpdate(data);
+        if (event === 'delete') onDelete(data);
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted || error?.name === 'AbortError') return;
+    throw error;
+  }
 }
 
 function putBoardKeepalive(url, board) {
