@@ -49,10 +49,8 @@ import {
   intersects,
   rectFromPoints,
   resizeBox,
-  simplifyPoints,
   smoothPath,
   snapMove,
-  strokeBounds,
   topHit,
 } from './geometry';
 import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
@@ -1610,27 +1608,19 @@ export default function BoardEditor({
       if (drag.id) send({ type: 'delete', ids: [drag.id] });
       return;
     }
-    const points = simplifyPoints(drag.points, 0.2 / cameraRef.current.zoom);
-    const bounds = strokeBounds(points, drag.width);
-    const stroke = createObject('draw', {
-      x: bounds.x,
-      y: bounds.y,
-      w: bounds.w,
-      h: bounds.h,
-      props: { points: bounds.points, color: drag.color, width: drag.width },
-    });
+    appendStroke(drag);
+    const stroke = {
+      id: drag.id || uid(),
+      type: 'draw',
+      x: drag.origin.x,
+      y: drag.origin.y,
+      w: 12,
+      h: 12,
+      rotation: 0,
+      props: { points: strokePoints(drag, 0), color: drag.color, width: drag.width },
+    };
     flushOps();
-    if (drag.id) {
-      stroke.id = drag.id;
-      // Итоговый штрих упрощён и нормализован по рамке, поэтому точки уходят одним patch вместо хвоста append_points.
-      send({
-        type: 'patch',
-        id: stroke.id,
-        set: { x: stroke.x, y: stroke.y, w: stroke.w, h: stroke.h, props: { points: stroke.props.points } },
-      });
-    } else {
-      send({ type: 'upsert', object: stroke });
-    }
+    if (!drag.id) send({ type: 'upsert', object: stroke });
     const upsert = { type: 'upsert', object: stroke };
     const next = applyOp(objectsRef.current, upsert);
     sentRef.current = applyOp(sentRef.current, upsert);
@@ -1693,6 +1683,7 @@ export default function BoardEditor({
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
+    flushHeldLink();
     dragCleanupRef.current?.();
     paintDraft(null);
     paintGuides(null);
@@ -1722,6 +1713,7 @@ export default function BoardEditor({
   function finishDrag(event) {
     const drag = dragRef.current;
     dragRef.current = null;
+    flushHeldLink();
     window.clearTimeout(cameraSyncRef.current);
     paintDraft(null);
     paintGuides(null);
