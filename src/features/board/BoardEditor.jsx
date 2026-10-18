@@ -224,6 +224,8 @@ export default function BoardEditor({
   const pastRef = useRef([]);
   const futureRef = useRef([]);
   const dragRef = useRef(null);
+  const draftRef = useRef(null);
+  const linkHoldRef = useRef(null);
   const dragCleanupRef = useRef(null);
   const touchesRef = useRef(new Map());
   const pointerClientRef = useRef(null);
@@ -739,7 +741,15 @@ export default function BoardEditor({
     });
   }
 
+  function flushHeldLink() {
+    const held = linkHoldRef.current;
+    if (!held) return;
+    linkHoldRef.current = null;
+    setLink((prev) => (prev.state === 'denied' ? prev : held));
+  }
+
   function paintDraft(draft) {
+    draftRef.current = draft;
     const host = draftHostRef.current;
     if (!host) return;
     host.replaceChildren();
@@ -760,6 +770,7 @@ export default function BoardEditor({
     if (draft.kind === 'shape') {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
+      svg.style.position = 'absolute';
       svg.setAttribute('viewBox', '0 0 100 100');
       svg.setAttribute('preserveAspectRatio', 'none');
       svg.style.left = `${draft.x}px`;
@@ -787,8 +798,37 @@ export default function BoardEditor({
       host.appendChild(svg);
       return;
     }
+    if (draft.kind === 'pen' && draft.points.length) {
+      // Та же схема, что у зрителя: рамка в первой точке, точки от неё. Рамка по bbox раздувает холст и сдвигает уже нарисованное.
+      const origin = draft.origin || draft.points[0];
+      const wrap = document.createElement('div');
+      wrap.style.position = 'absolute';
+      wrap.style.left = `${origin.x}px`;
+      wrap.style.top = `${origin.y}px`;
+      wrap.style.width = '12px';
+      wrap.style.height = '12px';
+      wrap.style.overflow = 'visible';
+      wrap.style.pointerEvents = 'none';
+      const pen = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      pen.setAttribute('width', '12');
+      pen.setAttribute('height', '12');
+      pen.style.display = 'block';
+      pen.style.overflow = 'visible';
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }))));
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', draft.color);
+      path.setAttribute('stroke-width', draft.width);
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      pen.appendChild(path);
+      wrap.appendChild(pen);
+      host.appendChild(wrap);
+      return;
+    }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
+    svg.style.position = 'absolute';
     if (draft.kind === 'arrow') {
       const left = Math.min(draft.x1, draft.x2);
       const top = Math.min(draft.y1, draft.y2);
@@ -805,33 +845,6 @@ export default function BoardEditor({
       line.setAttribute('stroke-width', draft.width);
       line.setAttribute('stroke-linecap', 'round');
       svg.appendChild(line);
-    }
-    if (draft.kind === 'pen' && draft.points.length) {
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      draft.points.forEach((point) => {
-        minX = Math.min(minX, point.x);
-        minY = Math.min(minY, point.y);
-        maxX = Math.max(maxX, point.x);
-        maxY = Math.max(maxY, point.y);
-      });
-      const pad = draft.width + 4;
-      const left = minX - pad;
-      const top = minY - pad;
-      svg.style.left = `${left}px`;
-      svg.style.top = `${top}px`;
-      svg.setAttribute('width', Math.max(maxX - minX + pad * 2, 1));
-      svg.setAttribute('height', Math.max(maxY - minY + pad * 2, 1));
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - left, y: point.y - top }))));
-      path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', draft.color);
-      path.setAttribute('stroke-width', draft.width);
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
-      svg.appendChild(path);
     }
     host.appendChild(svg);
   }
@@ -948,7 +961,14 @@ export default function BoardEditor({
       boardId,
       handlers: {
         onStatus: (state, pending) => {
-          if (mountedRef.current) setLink((prev) => (prev.state === 'denied' ? prev : { state, pending }));
+          if (!mountedRef.current) return;
+          const next = { state, pending };
+          if (dragRef.current && (state === 'live' || state === 'syncing')) {
+            linkHoldRef.current = next;
+            return;
+          }
+          linkHoldRef.current = null;
+          setLink((prev) => (prev.state === 'denied' ? prev : next));
         },
         onSnapshot: call('onSnapshot'),
         onAckObject: call('onAckObject'),
@@ -1308,6 +1328,7 @@ export default function BoardEditor({
     toolRef.current = tool;
     paintCamera(cameraRef.current);
     paintCursor();
+    if (draftRef.current) paintDraft(draftRef.current);
     const drag = dragRef.current;
     if (drag?.kind === 'move') {
       objectsRef.current.forEach((obj) => {
@@ -1654,6 +1675,7 @@ export default function BoardEditor({
     paintCursor();
     publishGesture();
     paintSelectionUi();
+    flushHeldLink();
   }
 
   function startPan(event) {
@@ -1693,6 +1715,7 @@ export default function BoardEditor({
     if (hintRef.current) hintRef.current.style.display = '';
     paintCursor();
     paintSelectionUi();
+    flushHeldLink();
     scheduleSend();
   }
 
@@ -1769,6 +1792,7 @@ export default function BoardEditor({
     } finally {
       publishGesture();
       paintSelectionUi();
+      flushHeldLink();
     }
   }
 
@@ -1809,7 +1833,7 @@ export default function BoardEditor({
         added = true;
       });
       if (added) streamStroke(drag);
-      paintDraft({ kind: 'pen', points: drag.points, color: currentStyle.pen, width: currentStyle.penWidth });
+      paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
       return;
     }
 
@@ -2054,7 +2078,7 @@ export default function BoardEditor({
         timer: 0,
       };
       if (hintRef.current) hintRef.current.style.display = 'none';
-      paintDraft({ kind: 'pen', points: [world], color: styleRef.current.pen, width: styleRef.current.penWidth });
+      paintDraft({ kind: 'pen', points: [world], origin: world, color: styleRef.current.pen, width: styleRef.current.penWidth });
       trackPointer(event);
       return;
     }
@@ -2243,8 +2267,6 @@ export default function BoardEditor({
         className="absolute inset-0 touch-none select-none"
         style={{
           backgroundImage: 'radial-gradient(circle, rgba(113,113,122,0.55) 1px, transparent 1px)',
-          backgroundSize: `${22 * camera.zoom}px ${22 * camera.zoom}px`,
-          backgroundPosition: `${camera.x}px ${camera.y}px`,
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onViewportPointerMove}
@@ -2256,8 +2278,7 @@ export default function BoardEditor({
       >
         <div
           ref={worldRef}
-          className="absolute left-0 top-0 origin-top-left"
-          style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}
+          className="absolute left-0 top-0 h-0 w-0 origin-top-left overflow-visible"
         >
           {objects.filter((obj) => !isPagesMeta(obj)).map((obj) => (
             <BoardObject
