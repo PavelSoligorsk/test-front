@@ -144,6 +144,10 @@ export default function BoardEditor({
   const noteRemoteRef = useRef(() => {});
   const spaceRef = useRef(false);
   const geoTimerRef = useRef(null);
+  const geoDirtyRef = useRef(new Set());
+  const templateFilesRef = useRef({});
+  const templateErrorsRef = useRef({});
+  const templatePendingRef = useRef(new Set());
   const readOnlyRef = useRef(readOnly);
   const audienceRef = useRef(audience);
   const fileRef = useRef(null);
@@ -161,6 +165,8 @@ export default function BoardEditor({
   const [geoEpoch, setGeoEpoch] = useState(0);
   const [style, setStyle] = useState(INITIAL_STYLE);
   const [templates, setTemplates] = useState(GEOGEBRA_TEMPLATES);
+  const [templateFiles, setTemplateFiles] = useState({});
+  const [templateErrors, setTemplateErrors] = useState({});
   const [notice, setNotice] = useState('');
 
   function noteHistory() {
@@ -404,29 +410,45 @@ export default function BoardEditor({
     zoomAt(cameraRef.current.zoom * factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
 
+  function rememberTemplateFile(id, file) {
+    if (!id || !file || templateFilesRef.current[id] === file) return;
+    templateFilesRef.current = { ...templateFilesRef.current, [id]: file };
+    setTemplateFiles(templateFilesRef.current);
+  }
+
+  function rememberTemplateError(id) {
+    if (!id || templateErrorsRef.current[id]) return;
+    templateErrorsRef.current = { ...templateErrorsRef.current, [id]: true };
+    setTemplateErrors(templateErrorsRef.current);
+  }
+
   async function attachBase64(list) {
     const next = [];
     let changed = false;
     for (const obj of list) {
-      if (obj.type !== 'geogebra') {
+      if (obj.type !== 'geogebra' || !geoDirtyRef.current.has(obj.id)) {
         next.push(obj);
         continue;
       }
       const api = apiMap.current.get(obj.id);
       const base64 = api ? await readGeoGebraBase64(api) : '';
-      if (base64 && base64 !== obj.props.ggbBase64) {
-        changed = true;
-        next.push({ ...obj, props: { ...obj.props, ggbBase64: base64 } });
-      } else {
+      geoDirtyRef.current.delete(obj.id);
+      const stored = obj.props.ggbBase64 || '';
+      const templateFile = obj.props.templateId ? (templateFilesRef.current[obj.props.templateId] || '') : '';
+      const untouchedTemplate = !stored && templateFile && base64 === templateFile;
+      if (!base64 || base64 === stored || untouchedTemplate) {
         next.push(obj);
+        continue;
       }
+      changed = true;
+      next.push({ ...obj, props: { ...obj.props, ggbBase64: base64 } });
     }
     return changed ? next : list;
   }
 
   function ggbSignature(list) {
     return (list || []).map((obj) => (
-      obj.type === 'geogebra' ? `${obj.id}:${obj.props?.ggbBase64 || ''}` : ''
+      obj.type === 'geogebra' ? `${obj.id}:${obj.props?.templateId || ''}:${obj.props?.ggbBase64 || ''}` : ''
     )).join('|');
   }
 
@@ -669,6 +691,31 @@ export default function BoardEditor({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const ids = new Set();
+    objects.forEach((obj) => {
+      if (obj.type !== 'geogebra' || obj.props?.ggbBase64 || !obj.props?.templateId) return;
+      ids.add(obj.props.templateId);
+    });
+    ids.forEach((id) => {
+      if (templateFilesRef.current[id] || templateErrorsRef.current[id] || templatePendingRef.current.has(id)) return;
+      templatePendingRef.current.add(id);
+      getGeoGebraTemplate(id)
+        .then((full) => {
+          if (!mountedRef.current) return;
+          const file = full?.ggbBase64 || '';
+          if (!file) rememberTemplateError(id);
+          else rememberTemplateFile(id, file);
+        })
+        .catch(() => {
+          if (mountedRef.current) rememberTemplateError(id);
+        })
+        .finally(() => {
+          templatePendingRef.current.delete(id);
+        });
+    });
+  }, [objects]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -1209,16 +1256,18 @@ export default function BoardEditor({
   async function placeGeogebra(world) {
     const templateId = styleRef.current.templateId || '';
     const known = templatesRef.current.find((item) => item.id === templateId) || geogebraTemplate(templateId);
-    let ggbBase64 = '';
     let appName = known?.appName || styleRef.current.appName;
     let templateTitle = known?.title || '';
-    if (templateId) {
+    if (templateId && !templateFilesRef.current[templateId]) {
       try {
         const full = await getGeoGebraTemplate(templateId);
-        ggbBase64 = full?.ggbBase64 || '';
+        const file = full?.ggbBase64 || '';
+        if (file) rememberTemplateFile(templateId, file);
+        else rememberTemplateError(templateId);
         appName = full?.appName || appName;
         templateTitle = full?.title || templateTitle;
       } catch (error) {
+        rememberTemplateError(templateId);
         if (error.response?.status !== 404) {
           setNotice(boardErrorMessage(error, 'Шаблон не загрузился'));
         }
@@ -1229,12 +1278,9 @@ export default function BoardEditor({
       y: world.y,
       w: 440,
       h: 320,
-      props: {
-        appName,
-        ggbBase64,
-        templateId,
-        templateTitle,
-      },
+      props: templateId
+        ? { appName, templateId, templateTitle }
+        : { appName },
     });
     commit([...objectsRef.current, obj]);
     setSelectedId(obj.id);
@@ -1283,6 +1329,8 @@ export default function BoardEditor({
               selected={obj.id === selectedId}
               editing={obj.id === editingId}
               geoEpoch={geoEpoch}
+              templateBase64={obj.props?.templateId ? (templateFiles[obj.props.templateId] || '') : ''}
+              templateFailed={Boolean(obj.props?.templateId && templateErrors[obj.props.templateId])}
               onChangeText={changeText}
               onBlurText={commitEdit}
               onToggleGeo={(id) => {
@@ -1293,7 +1341,9 @@ export default function BoardEditor({
                 if (api) apiMap.current.set(id, api);
                 else apiMap.current.delete(id);
               }}
-              onGeoChange={() => {
+              onGeoChange={(id) => {
+                if (editingIdRef.current !== id) return;
+                geoDirtyRef.current.add(id);
                 clearTimeout(geoTimerRef.current);
                 geoTimerRef.current = setTimeout(() => persistRef.current(), 1200);
               }}
@@ -1396,6 +1446,8 @@ export default function BoardEditor({
           selected={selected}
           editingId={editingId}
           templates={templates}
+          templateFiles={templateFiles}
+          templateErrors={templateErrors}
           notice={notice}
           onStyle={setStyle}
           onPatch={(patch) => selected && patchProps(selected.id, patch)}
@@ -1428,7 +1480,7 @@ function IconButton({ label, onClick, disabled, children }) {
   );
 }
 
-function StyleTray({ context, style, selected, editingId, templates, notice, onStyle, onPatch, onToggleGeo }) {
+function StyleTray({ context, style, selected, editingId, templates, templateFiles, templateErrors, notice, onStyle, onPatch, onToggleGeo }) {
   if (context === 'sticky') {
     return (
       <SwatchCard label="Цвет стикера">
@@ -1569,11 +1621,13 @@ function StyleTray({ context, style, selected, editingId, templates, notice, onS
         title: selected.props.templateTitle || selected.props.templateId,
       })
       : null;
-    if (selected?.type === 'geogebra' && selectedTemplate && !selected.props.ggbBase64) {
+    if (selected?.type === 'geogebra' && selectedTemplate && !selected.props.ggbBase64 && !templateFiles[selected.props.templateId]) {
       return (
         <SwatchCard label="Шаблон" wide>
           <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">{selectedTemplate.title}</p>
-          <p className="mt-1 text-[11px] leading-snug text-zinc-500">Построение придёт с сервера. Пока это пустая рамка.</p>
+          <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+            {templateErrors[selected.props.templateId] ? 'Шаблон не загрузился' : 'Загрузка шаблона…'}
+          </p>
         </SwatchCard>
       );
     }

@@ -79,6 +79,8 @@ function BoardObject({
   onGeoReady,
   onGeoChange,
   geoEpoch,
+  templateBase64 = '',
+  templateFailed = false,
 }) {
   const box = obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape' || obj.type === 'geogebra' || obj.type === 'image';
   const interactiveGeo = obj.type === 'geogebra' && editing;
@@ -88,7 +90,10 @@ function BoardObject({
       title: obj.props.templateTitle || obj.props.templateId,
     })
     : null;
-  const geoStub = Boolean(template && !obj.props.ggbBase64);
+  const savedBase64 = obj.type === 'geogebra' ? (obj.props.ggbBase64 || '') : '';
+  const waitingTemplate = Boolean(template && !savedBase64 && !templateBase64 && !templateFailed);
+  const failedTemplate = Boolean(template && !savedBase64 && !templateBase64 && templateFailed);
+  const appletBase64 = savedBase64 || templateBase64;
 
   return (
     <div
@@ -169,7 +174,7 @@ function BoardObject({
             <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
               {template ? template.title : `GeoGebra · ${obj.props.appName === 'graphing' ? 'Графики' : 'Геометрия'}`}
             </span>
-            {!geoStub && (
+            {!waitingTemplate && !failedTemplate && (
               <button
                 type="button"
                 data-chrome="true"
@@ -185,10 +190,14 @@ function BoardObject({
             )}
           </div>
           <div className="min-h-0 flex-1">
-            {geoStub ? (
-              <div className="flex h-full flex-col items-center justify-center gap-1 bg-sky-50 px-4 text-center">
+            {waitingTemplate ? (
+              <div className="grid h-full place-items-center bg-white px-4 text-center text-xs font-medium text-zinc-400">
+                Загрузка шаблона…
+              </div>
+            ) : failedTemplate ? (
+              <div className="flex h-full flex-col items-center justify-center gap-1 bg-white px-4 text-center">
                 <span className="text-sm font-semibold text-zinc-800">{template.title}</span>
-                <span className="text-[11px] text-zinc-500">Шаблон. Построение придёт с сервера.</span>
+                <span className="text-[11px] text-zinc-500">Шаблон не загрузился</span>
               </div>
             ) : (
               <GeoGebraWidget
@@ -197,7 +206,7 @@ function BoardObject({
                 appName={obj.props.appName}
                 width={Math.max(200, obj.w - 2)}
                 height={Math.max(160, obj.h - 38)}
-                ggbBase64={obj.props.ggbBase64 || ''}
+                ggbBase64={appletBase64}
                 interactive={interactiveGeo}
                 onReady={(api) => onGeoReady(obj.id, api)}
                 onConstructionChange={() => onGeoChange(obj.id)}
@@ -246,6 +255,8 @@ export default memo(BoardObject, (prev, next) => (
   && prev.selected === next.selected
   && prev.editing === next.editing
   && prev.geoEpoch === next.geoEpoch
+  && prev.templateBase64 === next.templateBase64
+  && prev.templateFailed === next.templateFailed
 ));
 
 export function DraftShape({ draft }) {
