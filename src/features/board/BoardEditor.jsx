@@ -26,7 +26,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import BoardObject from './BoardObject';
+import BoardObject, { boardImageSrc } from './BoardObject';
 import SelectionToolbar from './SelectionToolbar';
 import {
   boardErrorMessage,
@@ -1122,7 +1122,7 @@ export default function BoardEditor({
       h,
       props: {
         fileId: uploaded.fileId,
-        src: uploaded.src,
+        src: boardImageSrc({ src: uploaded.src, fileId: uploaded.fileId, name: uploaded.name || file.name }),
         name: uploaded.name || file.name,
       },
     });

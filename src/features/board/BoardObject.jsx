@@ -4,6 +4,22 @@ import GeoGebraWidget from './GeoGebraWidget';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraTemplate } from './model';
 
+const IMAGE_PUBLIC_URL = 'https://pub-2b7cf8fddd9747b69e66cdac8a86c7fd.r2.dev';
+
+export function boardImageSrc(props = {}) {
+  const src = typeof props.src === 'string' ? props.src : '';
+  if (src.startsWith('blob:') || src.startsWith('data:')) return src;
+  if (src) {
+    try {
+      return `${IMAGE_PUBLIC_URL}${new URL(src).pathname}`;
+    } catch {
+      return `${IMAGE_PUBLIC_URL}/${src.replace(/^\/+/, '')}`;
+    }
+  }
+  if (props.fileId) return `${IMAGE_PUBLIC_URL}/boards/${props.fileId}.png`;
+  return '';
+}
+
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
   ne: { right: 0, top: 0, cursor: 'nesw-resize' },
@@ -194,6 +210,7 @@ function BoardObject({
   const waitingTemplate = Boolean(template && !savedBase64 && !templateBase64 && !templateFailed);
   const failedTemplate = Boolean(template && !savedBase64 && !templateBase64 && templateFailed);
   const appletBase64 = savedBase64 || templateBase64;
+  const imageSrc = obj.type === 'image' ? boardImageSrc(obj.props) : '';
   const outlineWidth = handles ? 2 : 1.5;
 
   return (
@@ -253,13 +270,13 @@ function BoardObject({
       )}
 
       {obj.type === 'image' && (
-        <div className="flex h-full flex-col overflow-hidden rounded-sm bg-zinc-50 dark:bg-zinc-900">
-          {obj.props.src ? (
+        <div className="relative h-full w-full overflow-hidden rounded-sm bg-zinc-50 dark:bg-zinc-900">
+          {imageSrc ? (
             <img
-              src={obj.props.src}
+              src={imageSrc}
               alt={obj.props.name || 'Изображение'}
               draggable={false}
-              className="h-full w-full object-contain"
+              className="absolute inset-0 h-full w-full object-contain"
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-1 border border-dashed border-zinc-300 px-3 text-center dark:border-zinc-700">
