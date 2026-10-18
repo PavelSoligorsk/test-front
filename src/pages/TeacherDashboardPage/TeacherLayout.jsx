@@ -21,18 +21,20 @@ function TeacherChrome() {
   const isBoardCanvas = /^\/teacher\/board\/[^/]+/.test(location.pathname);
 
   return (
-    <div className={`${isBoardCanvas ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'} ${isBoard ? '' : 'pb-24'} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
-      <RoleNav
-        tabs={TEACHER_TABS}
-        activeKey={activeKey === 'profile' ? null : activeKey}
-        onSelect={(key) => navigate(TEACHER_PATHS[key] || TEACHER_PATHS.bank)}
-        displayName={displayName || 'Учитель'}
-        subtitle="Учитель"
-        icon={<GraduationCap size={16} strokeWidth={2} />}
-        onBrandClick={() => navigate(TEACHER_PATHS.profile)}
-      />
+    <div className={`${isBoardCanvas ? 'h-dvh overflow-hidden' : `min-h-screen ${isBoard ? '' : 'pb-24'}`} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
+      {!isBoardCanvas && (
+        <RoleNav
+          tabs={TEACHER_TABS}
+          activeKey={activeKey === 'profile' ? null : activeKey}
+          onSelect={(key) => navigate(TEACHER_PATHS[key] || TEACHER_PATHS.bank)}
+          displayName={displayName || 'Учитель'}
+          subtitle="Учитель"
+          icon={<GraduationCap size={16} strokeWidth={2} />}
+          onBrandClick={() => navigate(TEACHER_PATHS.profile)}
+        />
+      )}
 
-      {ws.notice ? (
+      {!isBoardCanvas && ws.notice ? (
         <PageShell className="!pb-0 !pt-4">
           <div className="flex items-start justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] px-4 py-3 shadow-sm">
             <InlineNotice tone={ws.notice.tone}>{ws.notice.text}</InlineNotice>
@@ -47,7 +49,7 @@ function TeacherChrome() {
         </PageShell>
       ) : null}
 
-      <div className={isBoardCanvas ? 'min-h-0 flex-1' : undefined}>
+      <div className={isBoardCanvas ? 'h-full' : undefined}>
         <Outlet />
       </div>
 

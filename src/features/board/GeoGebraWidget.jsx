@@ -14,7 +14,9 @@ export default function GeoGebraWidget({
   const frameRef = useRef(null);
   const hostRef = useRef(null);
   const apiRef = useRef(null);
-  const sizeRef = useRef({ width, height });
+  const fileRef = useRef(ggbBase64 || '');
+  const appliedRef = useRef('');
+  const fitTimerRef = useRef(0);
   const interactiveRef = useRef(interactive);
   const onReadyRef = useRef(onReady);
   const onChangeRef = useRef(onConstructionChange);
@@ -22,15 +24,62 @@ export default function GeoGebraWidget({
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    sizeRef.current = { width, height };
-    const api = apiRef.current;
-    if (!api || typeof api.setSize !== 'function') return;
-    try {
-      api.setSize(Math.max(200, Math.round(width)), Math.max(160, Math.round(height)));
-    } catch {
-      /* апплет ещё не готов к смене размера */
+    fileRef.current = ggbBase64 || '';
+  }, [ggbBase64]);
+
+  function fitToFrame(api) {
+    const frame = frameRef.current;
+    const host = hostRef.current;
+    if (!frame || !host) return;
+    const w = Math.round(frame.clientWidth);
+    const h = Math.round(frame.clientHeight);
+    if (w < 2 || h < 2) return;
+    // Мир доски масштабируется через CSS. GeoGebra измеряет экран и сжимает апплет
+    // до этого размера, поэтому явно возвращаем его к рамке объекта.
+    const appletRoot = host.firstElementChild;
+    if (appletRoot instanceof HTMLElement) {
+      if (appletRoot.offsetWidth !== w) appletRoot.style.width = `${w}px`;
+      if (appletRoot.offsetHeight !== h) appletRoot.style.height = `${h}px`;
+      appletRoot.style.transform = 'none';
+      appletRoot.style.maxWidth = 'none';
+      appletRoot.style.maxHeight = 'none';
     }
-  }, [width, height]);
+    if (api && typeof api.setSize === 'function') {
+      try {
+        api.setSize(w, h);
+      } catch {
+        /* апплет ещё не готов к смене размера */
+      }
+    }
+    window.clearTimeout(fitTimerRef.current);
+    fitTimerRef.current = window.setTimeout(() => {
+      const again = host.firstElementChild;
+      if (!(again instanceof HTMLElement)) return;
+      if (again.offsetWidth === w && again.offsetHeight === h) return;
+      again.style.width = `${w}px`;
+      again.style.height = `${h}px`;
+      again.style.transform = 'none';
+      if (api && typeof api.setSize === 'function') {
+        try { api.setSize(w, h); } catch { /* размер уже выставлен */ }
+      }
+    }, 200);
+  }
+
+  function applyFile(api) {
+    const file = fileRef.current;
+    if (!file || file === appliedRef.current) return;
+    if (interactiveRef.current) {
+      appliedRef.current = file;
+      return;
+    }
+    if (!api || typeof api.setBase64 !== 'function') return;
+    appliedRef.current = file;
+    try {
+      api.setBase64(file, () => fitToFrame(api));
+    } catch {
+      appliedRef.current = '';
+    }
+  }
 
   useEffect(() => {
     onReadyRef.current = onReady;
@@ -63,8 +112,8 @@ export default function GeoGebraWidget({
         const params = {
           id: appletId,
           appName: appName === 'graphing' ? 'graphing' : 'geometry',
-          width: Math.max(200, Math.round(sizeAtStart.width)),
-          height: Math.max(160, Math.round(sizeAtStart.height)),
+          width: Math.max(40, Math.round(sizeAtStart.width)),
+          height: Math.max(40, Math.round(sizeAtStart.height)),
           language: 'ru',
           showMenuBar: false,
           showToolBar: true,
@@ -81,20 +130,15 @@ export default function GeoGebraWidget({
           appletOnLoad(api) {
             if (cancelled) return;
             apiRef.current = api;
+            appliedRef.current = base64AtLoad;
             onReadyRef.current?.(api);
             host.inert = !interactiveRef.current;
             host.style.pointerEvents = interactiveRef.current ? 'auto' : 'none';
             if (typeof api.registerUpdateListener === 'function') {
               api.registerUpdateListener(() => onChangeRef.current?.());
             }
-            if (typeof api.setSize === 'function') {
-              try {
-                const size = sizeRef.current;
-                api.setSize(Math.max(200, Math.round(size.width)), Math.max(160, Math.round(size.height)));
-              } catch {
-                /* размер применится следующим эффектом */
-              }
-            }
+            applyFile(api);
+            fitToFrame(api);
             setStatus('ready');
           },
         };
@@ -112,13 +156,35 @@ export default function GeoGebraWidget({
       onReadyRef.current?.(null);
       if (host) host.innerHTML = '';
     };
-    // Построение подхватывается при монтировании. Повторный base64 при автосохранении не перезагружает апплет.
+    // Апплет создаётся один раз. Чужое построение приходит через setBase64, размер — через ResizeObserver.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appletId, attempt, appName]);
+
+  useEffect(() => {
+    applyFile(apiRef.current);
+    // fileRef обновляется вместе с пропом, поэтому эффект зависит только от ggbBase64.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ggbBase64]);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    const host = hostRef.current;
+    if (!frame || !host) return undefined;
+    const fit = () => fitToFrame(apiRef.current);
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(frame);
+    observer.observe(host);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(fitTimerRef.current);
+    };
+  }, [status]);
 
   return (
     <div
       ref={frameRef}
+      data-geo-frame="true"
       className="relative h-full w-full bg-white"
       data-geo-live={interactive ? 'true' : undefined}
     >

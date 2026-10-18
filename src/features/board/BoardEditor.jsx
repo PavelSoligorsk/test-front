@@ -142,17 +142,6 @@ function roundPoint(point) {
   return { x: Math.round(point.x * 10) / 10, y: Math.round(point.y * 10) / 10 };
 }
 
-function geoBase64Changed(before, after) {
-  const ids = [];
-  const prev = new Map(before.map((obj) => [obj.id, obj]));
-  after.forEach((obj) => {
-    if (obj.type !== 'geogebra') return;
-    const old = prev.get(obj.id);
-    if (old && old !== obj && (old.props?.ggbBase64 || '') !== (obj.props?.ggbBase64 || '')) ids.push(obj.id);
-  });
-  return ids;
-}
-
 function imageFiles(list) {
   return Array.from(list || []).filter((file) => IMAGE_TYPES.test(file.type));
 }
@@ -244,7 +233,6 @@ export default function BoardEditor({
   const [link, setLink] = useState({ state: 'connecting', pending: 0 });
   const [peers, setPeers] = useState([]);
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
-  const [geoVersions, setGeoVersions] = useState({});
   const [style, setStyle] = useState(INITIAL_STYLE);
   const [templates, setTemplates] = useState(GEOGEBRA_TEMPLATES);
   const [templateFiles, setTemplateFiles] = useState({});
@@ -320,19 +308,7 @@ export default function BoardEditor({
     if (next === before) return;
     objectsRef.current = next;
     setObjects(next);
-    remountGeo(geoBase64Changed(before, next).filter((id) => id !== editingIdRef.current));
     pruneSelection();
-  }
-
-  function remountGeo(ids) {
-    if (!ids.length) return;
-    setGeoVersions((prev) => {
-      const next = { ...prev };
-      ids.forEach((id) => {
-        next[id] = (next[id] || 0) + 1;
-      });
-      return next;
-    });
   }
 
   function onSnapshot(message, readPending) {
@@ -342,7 +318,6 @@ export default function BoardEditor({
     pendingOps.forEach((op) => {
       next = applyOp(next, op);
     });
-    const before = objectsRef.current;
     const remoteTitle = boardTitle(message.board?.title);
     const pendingTitle = [...pendingOps].reverse().find((op) => op.type === 'title');
     sentRef.current = next;
@@ -356,7 +331,6 @@ export default function BoardEditor({
     setObjects(next);
     setTitle(titleRef.current);
     setPeers(roster);
-    remountGeo(geoBase64Changed(before, next).filter((id) => id !== editingIdRef.current));
     pruneSelection();
   }
 
@@ -565,11 +539,12 @@ export default function BoardEditor({
     }
     if (obj.type === 'geogebra') {
       const api = apiMap.current.get(obj.id);
-      if (api && typeof api.setSize === 'function') {
-        try {
-          api.setSize(Math.max(200, Math.round(obj.w - 2)), Math.max(160, Math.round(obj.h - 38)));
-        } catch {
-          /* размер догонит кадр после отпускания */
+      const frame = el.querySelector('[data-geo-frame]');
+      if (api && frame && typeof api.setSize === 'function') {
+        const w = Math.round(frame.clientWidth);
+        const h = Math.round(frame.clientHeight);
+        if (w > 1 && h > 1) {
+          try { api.setSize(w, h); } catch { /* апплет ещё не готов */ }
         }
       }
     }
@@ -929,6 +904,17 @@ export default function BoardEditor({
   }, [objects, title]);
 
   useEffect(() => {
+    if (!editingId || readOnly) return undefined;
+    const current = objectsRef.current.find((obj) => obj.id === editingId);
+    if (current?.type !== 'geogebra') return undefined;
+    const timer = window.setInterval(() => {
+      geoDirtyRef.current.add(editingId);
+      liveRef.current.saveGeoChanges?.();
+    }, GEO_SAVE_MS);
+    return () => window.clearInterval(timer);
+  }, [editingId, readOnly]);
+
+  useEffect(() => {
     let cancelled = false;
     listGeoGebraTemplates()
       .then((rows) => {
@@ -1000,7 +986,6 @@ export default function BoardEditor({
     editingIdRef.current = null;
     setEditingId(null);
     live(next);
-    remountGeo(geoBase64Changed(before, next));
     noteHistory();
     pruneSelection();
   }
@@ -1210,7 +1195,14 @@ export default function BoardEditor({
     const obj = objectsRef.current.find((item) => item.id === id);
     if (!obj || !canEdit(obj)) return;
     selectIds([id]);
-    setEditingId((current) => (current === id ? null : id));
+    const turningOff = editingIdRef.current === id;
+    editingIdRef.current = turningOff ? null : id;
+    setEditingId(editingIdRef.current);
+    if (turningOff) {
+      geoDirtyRef.current.add(id);
+      window.clearTimeout(geoTimerRef.current);
+      liveRef.current.saveGeoChanges?.();
+    }
   }
 
   useLayoutEffect(() => {
@@ -2110,7 +2102,7 @@ export default function BoardEditor({
   const geoEditing = selectedObjects.length === 1 && editingId === selectedObjects[0].id && selectedObjects[0].type === 'geogebra';
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100">
+    <div className="fixed inset-0 z-30 overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100">
       <div
         ref={viewportRef}
         className="absolute inset-0 touch-none select-none"
@@ -2140,7 +2132,6 @@ export default function BoardEditor({
               selected={selectedSet.has(obj.id)}
               handles={selectedIds.length === 1 && selectedSet.has(obj.id)}
               editing={obj.id === editingId}
-              geoEpoch={geoVersions[obj.id] || 0}
               templateBase64={obj.props?.templateId ? (templateFiles[obj.props.templateId] || '') : ''}
               templateFailed={Boolean(obj.props?.templateId && templateErrors[obj.props.templateId])}
               onChangeText={changeText}

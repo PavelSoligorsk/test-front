@@ -178,7 +178,6 @@ function BoardObject({
   onToggleGeo,
   onGeoReady,
   onGeoChange,
-  geoEpoch,
   templateBase64 = '',
   templateFailed = false,
 }) {
@@ -305,11 +304,10 @@ function BoardObject({
               </div>
             ) : (
               <GeoGebraWidget
-                key={`${obj.id}-${geoEpoch}`}
                 appletId={`ggb${obj.id.replace(/-/g, '')}`}
                 appName={obj.props.appName}
-                width={Math.max(200, obj.w - 2)}
-                height={Math.max(160, obj.h - 38)}
+                width={Math.max(40, Math.round(obj.w - 2))}
+                height={Math.max(40, Math.round(obj.h - 38))}
                 ggbBase64={appletBase64}
                 interactive={interactiveGeo}
                 onReady={(api) => onGeoReady(obj.id, api)}
@@ -386,7 +384,6 @@ export default memo(BoardObject, (prev, next) => (
   && prev.selected === next.selected
   && prev.handles === next.handles
   && prev.editing === next.editing
-  && prev.geoEpoch === next.geoEpoch
   && prev.templateBase64 === next.templateBase64
   && prev.templateFailed === next.templateFailed
 ));

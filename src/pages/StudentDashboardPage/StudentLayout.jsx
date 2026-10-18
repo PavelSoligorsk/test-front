@@ -44,14 +44,16 @@ export default function StudentLayout() {
   };
 
   return (
-    <div className={`${isBoardCanvas ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
-      <StudentNav
-        displayName={`${profile?.user?.first_name || ''} ${profile?.user?.last_name || ''}`.trim()}
-        activeKey={activeKey}
-        onSelect={(key) => navigate(STUDENT_PATHS[key] || STUDENT_PATHS.tests)}
-      />
+    <div className={`${isBoardCanvas ? 'h-dvh overflow-hidden' : 'min-h-screen'} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
+      {!isBoardCanvas && (
+        <StudentNav
+          displayName={`${profile?.user?.first_name || ''} ${profile?.user?.last_name || ''}`.trim()}
+          activeKey={activeKey}
+          onSelect={(key) => navigate(STUDENT_PATHS[key] || STUDENT_PATHS.tests)}
+        />
+      )}
 
-      <div className={isBoardCanvas ? 'min-h-0 flex-1' : undefined}>
+      <div className={isBoardCanvas ? 'h-full' : undefined}>
         <Outlet />
       </div>
 
