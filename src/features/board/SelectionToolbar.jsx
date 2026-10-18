@@ -1,18 +1,17 @@
 import {
+  ArrowLeftRight,
+  ArrowUpRight,
   BringToFront,
-  Circle,
   Copy,
-  Diamond,
   Lock,
   LockOpen,
+  Minus,
   SendToBack,
-  Square,
   Trash2,
-  Triangle,
 } from 'lucide-react';
-import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, SHAPE_KINDS, STICKY_COLORS, TEXT_SIZES } from './model';
-
-const SHAPE_ICONS = { rect: Square, ellipse: Circle, triangle: Triangle, diamond: Diamond };
+import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TEXT_SIZES } from './model';
+import ShapeGlyph from './ShapeGlyph';
+import { SHAPE_KINDS } from './shapes';
 
 function Divider() {
   return <span className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />;
@@ -103,22 +102,57 @@ export default function SelectionToolbar({
         onClick={() => onPatch('sticky', { color: color.bg })}
       />
     ));
-  } else if (only === 'shape') {
+  } else if (only === 'arrow') {
+    const head = first.props.head !== false;
+    const dashed = Boolean(first.props.dashed);
     specific = (
       <>
-        {SHAPE_KINDS.map((kind) => {
-          const Icon = SHAPE_ICONS[kind.id];
-          return (
+        {objects.length === 1 && (
+          <ToolButton
+            label="Поменять начало и конец"
+            onClick={() => onPatch('arrow', {
+              x1: first.props.x2,
+              y1: first.props.y2,
+              x2: first.props.x1,
+              y2: first.props.y1,
+            })}
+          >
+            <ArrowLeftRight size={15} />
+          </ToolButton>
+        )}
+        <ToolButton
+          label={head ? 'Убрать наконечник' : 'Добавить наконечник'}
+          active={head}
+          onClick={() => onPatch('arrow', { head: !head })}
+        >
+          {head ? <ArrowUpRight size={15} /> : <Minus size={15} />}
+        </ToolButton>
+        <ToolButton
+          label={dashed ? 'Сплошная линия' : 'Пунктир'}
+          active={dashed}
+          onClick={() => onPatch('arrow', { dashed: !dashed })}
+        >
+          <span className="block w-4 border-t-2 border-current" style={{ borderTopStyle: dashed ? 'dashed' : 'solid' }} />
+        </ToolButton>
+        <Divider />
+      </>
+    );
+  }
+  if (only === 'shape') {
+    specific = (
+      <>
+        <div className="flex max-w-56 gap-0.5 overflow-x-auto">
+          {SHAPE_KINDS.map((kind) => (
             <ToolButton
               key={kind.id}
               label={kind.label}
               active={(first.props.shape || 'rect') === kind.id}
               onClick={() => onPatch('shape', { shape: kind.id })}
             >
-              <Icon size={15} />
+              <ShapeGlyph id={kind.id} size={15} />
             </ToolButton>
-          );
-        })}
+          ))}
+        </div>
         <Divider />
         {SHAPE_FILLS.map((fill) => (
           <Swatch
@@ -132,8 +166,10 @@ export default function SelectionToolbar({
       </>
     );
   } else if (only === 'draw' || only === 'arrow') {
+    const arrowFlip = only === 'arrow' ? specific : null;
     specific = (
       <>
+        {arrowFlip}
         {PEN_COLORS.map((color) => (
           <Swatch
             key={color}

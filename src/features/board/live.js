@@ -152,3 +152,36 @@ export function connectBoard({ audience, boardId, handlers }) {
     },
   };
 }
+
+export function setRemoteTitle({ audience, boardId, title }) {
+  return new Promise((resolve, reject) => {
+    let sent = false;
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      connection.close();
+      if (error) reject(error);
+      else resolve();
+    };
+    const connection = connectBoard({
+      audience,
+      boardId,
+      handlers: {
+        onSnapshot: () => {
+          if (sent) return;
+          sent = true;
+          connection.send({ type: 'title', title });
+        },
+        onStatus: (state) => {
+          if (sent && state === 'live') finish();
+        },
+        onOpError: (detail) => finish(new Error(detail || 'Не удалось переименовать страницу')),
+        onClosed: (code) => {
+          if (!sent) finish(new Error(code === 4403 ? 'Нет доступа' : 'Страница не открылась'));
+        },
+      },
+    });
+    window.setTimeout(() => finish(new Error('Страница не ответила')), 8000);
+  });
+}

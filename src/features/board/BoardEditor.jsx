@@ -3,15 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowUpRight,
-  Check,
   ChevronLeft,
-  Circle,
-  Diamond,
+  ChevronRight,
   Eraser,
   Hand,
   Image,
   Loader2,
   Maximize2,
+  Menu,
   Minus,
   MousePointer2,
   Pencil,
@@ -20,23 +19,26 @@ import {
   Redo2,
   Square,
   StickyNote,
-  Triangle,
   Type,
   Undo2,
   WifiOff,
   X,
 } from 'lucide-react';
-import BoardObject, { boardImageSrc } from './BoardObject';
+import BoardObject from './BoardObject';
 import SelectionToolbar from './SelectionToolbar';
 import {
   boardErrorMessage,
+  createTeacherBoard,
+  deleteTeacherBoard,
   getGeoGebraTemplate,
   listGeoGebraTemplates,
+  listStudentBoards,
+  listTeacherBoards,
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
 import { readGeoGebraBase64 } from './geogebraApi';
-import { connectBoard } from './live';
+import { connectBoard, setRemoteTitle } from './live';
 import { applyOp, diffOps, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
 import {
@@ -48,6 +50,7 @@ import {
   rectFromPoints,
   resizeBox,
   simplifyPoints,
+  smoothPath,
   snapMove,
   strokeBounds,
   topHit,
@@ -60,13 +63,16 @@ import {
   PEN_WIDTHS,
   SELECTION_COLOR,
   SHAPE_FILLS,
-  SHAPE_KINDS,
   STICKY_COLORS,
   TEXT_SIZES,
   createObject,
   geogebraTemplate,
   uid,
 } from './model';
+import { boardImageSrc } from './images';
+import ShapeGlyph from './ShapeGlyph';
+import { SHAPE_GROUPS, shapeFigures, shapeToneOpacity } from './shapes';
+import { isPagesMeta } from './pages';
 import { deleteBoard } from './storage';
 
 const TOOLS = [
@@ -82,8 +88,6 @@ const TOOLS = [
   { id: 'geogebra', label: 'GeoGebra', hint: 'G', icon: Pi },
 ];
 
-const SHAPE_ICONS = { rect: Square, ellipse: Circle, triangle: Triangle, diamond: Diamond };
-
 const INITIAL_STYLE = {
   sticky: STICKY_COLORS[0].bg,
   pen: PEN_COLORS[0],
@@ -96,18 +100,18 @@ const INITIAL_STYLE = {
   templateId: '',
 };
 
-const TOOL_KEYS = {
-  v: 'select',
-  h: 'hand',
-  n: 'sticky',
-  t: 'text',
-  r: 'shape',
-  o: 'shape',
-  l: 'arrow',
-  p: 'pen',
-  e: 'eraser',
-  i: 'image',
-  g: 'geogebra',
+const TOOL_CODES = {
+  KeyV: 'select',
+  KeyH: 'hand',
+  KeyN: 'sticky',
+  KeyT: 'text',
+  KeyR: 'shape',
+  KeyO: 'shape',
+  KeyL: 'arrow',
+  KeyP: 'pen',
+  KeyE: 'eraser',
+  KeyI: 'image',
+  KeyG: 'geogebra',
 };
 
 const MAX_OBJECTS = 200;
@@ -156,6 +160,26 @@ async function imageSize(file) {
   } catch {
     return null;
   }
+}
+
+function audienceKey(board) {
+  if (board?.groupId != null) return `g:${board.groupId}`;
+  const ids = [...(board?.studentIds || [])].map(Number).filter((id) => Number.isFinite(id)).sort((a, b) => a - b);
+  return `s:${ids.join(',')}`;
+}
+
+function sameSeries(a, b) {
+  const key = audienceKey(a);
+  return key !== 's:' && key === audienceKey(b);
+}
+
+function freshPageTitle(pages) {
+  const taken = new Set(pages.map((page) => boardTitle(page.title)));
+  const date = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'numeric' }).format(new Date());
+  if (!taken.has(date)) return date;
+  let index = 2;
+  while (taken.has(`${date} (${index})`)) index += 1;
+  return `${date} (${index})`;
 }
 
 function isTypingTarget(target) {
@@ -238,6 +262,18 @@ export default function BoardEditor({
   const [templateFiles, setTemplateFiles] = useState({});
   const [templateErrors, setTemplateErrors] = useState({});
   const [notice, setNotice] = useState('');
+  const [pagesOpen, setPagesOpen] = useState(false);
+  const [series, setSeries] = useState([]);
+  const [editingPageId, setEditingPageId] = useState(null);
+  const [editingPageTitle, setEditingPageTitle] = useState('');
+  const pageClickRef = useRef(0);
+  const boardMetaRef = useRef({
+    id: initialBoard.id,
+    title: boardTitle(initialBoard.title),
+    groupId: initialBoard.groupId ?? null,
+    studentIds: initialBoard.studentIds || [],
+    createdAt: initialBoard.createdAt || '',
+  });
 
   const selectedSet = new Set(selectedIds);
   const selectedObjects = objects.filter((obj) => selectedSet.has(obj.id));
@@ -390,6 +426,10 @@ export default function BoardEditor({
     else if (!cursorTimerRef.current) cursorTimerRef.current = window.setTimeout(push, wait);
   }
 
+  function canvasList() {
+    return objectsRef.current.filter((obj) => !isPagesMeta(obj));
+  }
+
   function addObjects(list) {
     if (!list.length) return false;
     if (objectsRef.current.length + list.length > MAX_OBJECTS) {
@@ -398,6 +438,66 @@ export default function BoardEditor({
     }
     commit([...objectsRef.current, ...list]);
     return true;
+  }
+
+  function boardPath(id) {
+    return audienceRef.current === 'teacher' ? `/teacher/board/${id}` : `/student/board/${id}`;
+  }
+
+  function switchPage(id) {
+    if (!id || id === boardMetaRef.current.id) return;
+    navigate(boardPath(id));
+  }
+
+  async function addPage() {
+    if (audienceRef.current !== 'teacher') return;
+    const meta = boardMetaRef.current;
+    const title = freshPageTitle(series.length ? series : [meta]);
+    const body = meta.groupId != null
+      ? { title, groupId: Number(meta.groupId) }
+      : { title, studentIds: (meta.studentIds || []).map((id) => Number(id)) };
+    try {
+      const created = await createTeacherBoard(body);
+      navigate(boardPath(created.id));
+    } catch (error) {
+      notify(boardErrorMessage(error, 'Не удалось создать страницу'));
+    }
+  }
+
+  function beginPageRename(page) {
+    if (readOnlyRef.current) return;
+    setEditingPageId(page.id);
+    setEditingPageTitle(page.id === boardMetaRef.current.id ? titleRef.current : (page.title || ''));
+  }
+
+  async function commitPageTitle(id) {
+    const next = boardTitle(editingPageTitle);
+    setEditingPageId(null);
+    if (!next) return;
+    if (id === boardMetaRef.current.id) {
+      titleRef.current = next;
+      setTitle(next);
+      setSeries((prev) => prev.map((item) => (item.id === id ? { ...item, title: next } : item)));
+      return;
+    }
+    try {
+      await setRemoteTitle({ audience: audienceRef.current, boardId: id, title: next });
+      setSeries((prev) => prev.map((item) => (item.id === id ? { ...item, title: next } : item)));
+    } catch (error) {
+      notify(error?.message || 'Не удалось переименовать страницу');
+    }
+  }
+
+  async function removePage(id) {
+    if (audienceRef.current !== 'teacher' || series.length < 2) return;
+    try {
+      await deleteTeacherBoard(id);
+      const rest = series.filter((item) => item.id !== id);
+      setSeries(rest);
+      if (id === boardMetaRef.current.id) navigate(boardPath(rest[0].id));
+    } catch (error) {
+      notify(boardErrorMessage(error, 'Не удалось удалить страницу'));
+    }
   }
 
   function selectIds(ids) {
@@ -463,8 +563,11 @@ export default function BoardEditor({
     let left = cam.x + (bounds.x + bounds.w / 2) * cam.zoom - barW / 2;
     let top = cam.y + bounds.y * cam.zoom - barH - 16;
     if (top < 60) top = cam.y + (bounds.y + bounds.h) * cam.zoom + 16;
+    const phone = width < 720;
+    const topLimit = phone ? 72 : 60;
+    const bottomLimit = phone ? 76 : 8;
     left = clamp(left, 8, Math.max(8, width - barW - 8));
-    top = clamp(top, 60, Math.max(60, height - barH - 8));
+    top = clamp(top, topLimit, Math.max(topLimit, height - barH - bottomLimit));
     bar.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
     bar.style.visibility = 'visible';
   }
@@ -655,37 +758,33 @@ export default function BoardEditor({
       return;
     }
     if (draft.kind === 'shape') {
-      if (draft.shape === 'triangle' || draft.shape === 'diamond') {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
-        svg.setAttribute('viewBox', '0 0 100 100');
-        svg.setAttribute('preserveAspectRatio', 'none');
-        svg.style.left = `${draft.x}px`;
-        svg.style.top = `${draft.y}px`;
-        svg.style.width = `${Math.max(draft.w, 1)}px`;
-        svg.style.height = `${Math.max(draft.h, 1)}px`;
-        svg.style.opacity = '0.85';
-        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        poly.setAttribute('points', draft.shape === 'triangle' ? '50,1 99,99 1,99' : '50,1 99,50 50,99 1,50');
-        poly.setAttribute('fill', draft.fill);
-        poly.setAttribute('stroke', draft.stroke);
-        poly.setAttribute('stroke-width', '2');
-        poly.setAttribute('vector-effect', 'non-scaling-stroke');
-        svg.appendChild(poly);
-        host.appendChild(svg);
-        return;
-      }
-      const node = document.createElement('div');
-      node.className = 'pointer-events-none absolute';
-      node.style.left = `${draft.x}px`;
-      node.style.top = `${draft.y}px`;
-      node.style.width = `${draft.w}px`;
-      node.style.height = `${draft.h}px`;
-      node.style.background = draft.fill;
-      node.style.border = `2px solid ${draft.stroke}`;
-      node.style.borderRadius = draft.shape === 'ellipse' ? '9999px' : '6px';
-      node.style.opacity = '0.85';
-      host.appendChild(node);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
+      svg.setAttribute('viewBox', '0 0 100 100');
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.style.left = `${draft.x}px`;
+      svg.style.top = `${draft.y}px`;
+      svg.style.width = `${Math.max(draft.w, 1)}px`;
+      svg.style.height = `${Math.max(draft.h, 1)}px`;
+      svg.style.opacity = '0.85';
+      shapeFigures(draft.shape).forEach((fig) => {
+        const node = document.createElementNS('http://www.w3.org/2000/svg', fig.ellipse ? 'ellipse' : fig.d ? 'path' : 'polygon');
+        if (fig.ellipse) {
+          node.setAttribute('cx', fig.ellipse.cx);
+          node.setAttribute('cy', fig.ellipse.cy);
+          node.setAttribute('rx', fig.ellipse.rx);
+          node.setAttribute('ry', fig.ellipse.ry);
+        } else if (fig.d) node.setAttribute('d', fig.d);
+        else node.setAttribute('points', fig.points);
+        node.setAttribute('fill', draft.fill);
+        node.setAttribute('stroke', draft.stroke);
+        node.setAttribute('stroke-width', '2');
+        node.setAttribute('stroke-linejoin', 'round');
+        node.setAttribute('vector-effect', 'non-scaling-stroke');
+        node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
+        svg.appendChild(node);
+      });
+      host.appendChild(svg);
       return;
     }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -725,14 +824,14 @@ export default function BoardEditor({
       svg.style.top = `${top}px`;
       svg.setAttribute('width', Math.max(maxX - minX + pad * 2, 1));
       svg.setAttribute('height', Math.max(maxY - minY + pad * 2, 1));
-      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      poly.setAttribute('points', draft.points.map((point) => `${point.x - left},${point.y - top}`).join(' '));
-      poly.setAttribute('fill', 'none');
-      poly.setAttribute('stroke', draft.color);
-      poly.setAttribute('stroke-width', draft.width);
-      poly.setAttribute('stroke-linecap', 'round');
-      poly.setAttribute('stroke-linejoin', 'round');
-      svg.appendChild(poly);
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - left, y: point.y - top }))));
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', draft.color);
+      path.setAttribute('stroke-width', draft.width);
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(path);
     }
     host.appendChild(svg);
   }
@@ -784,7 +883,7 @@ export default function BoardEditor({
   function fitAll() {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const bounds = boundsOf(objectsRef.current);
+    const bounds = boundsOf(canvasList());
     const cam = bounds
       ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 2 })
       : { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2, zoom: 1 };
@@ -963,7 +1062,7 @@ export default function BoardEditor({
     if (savedCamera) return;
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const bounds = boundsOf(objectsRef.current);
+    const bounds = boundsOf(canvasList());
     const cam = bounds
       ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 1 })
       : { x: Math.round(viewport.clientWidth / 2), y: Math.round(viewport.clientHeight / 2), zoom: 1 };
@@ -1068,7 +1167,7 @@ export default function BoardEditor({
   }
 
   function selectAll() {
-    selectIds(objectsRef.current.filter((obj) => canSelect(obj) && !obj.props?.locked).map((obj) => obj.id));
+    selectIds(canvasList().filter((obj) => canSelect(obj) && !obj.props?.locked).map((obj) => obj.id));
     setEditingId(null);
     setTool('select');
   }
@@ -1294,30 +1393,29 @@ export default function BoardEditor({
         }
         return;
       }
-      const key = event.key.toLowerCase();
       const mod = event.ctrlKey || event.metaKey;
-      if (mod && key === 'z') {
+      if (mod && event.code === 'KeyZ') {
         event.preventDefault();
         if (event.shiftKey) actions.redo();
         else actions.undo();
         return;
       }
-      if (mod && key === 'y') {
+      if (mod && event.code === 'KeyY') {
         event.preventDefault();
         actions.redo();
         return;
       }
-      if (mod && key === 'a') {
+      if (mod && event.code === 'KeyA') {
         event.preventDefault();
         actions.selectAll();
         return;
       }
-      if (mod && key === 'd') {
+      if (mod && event.code === 'KeyD') {
         event.preventDefault();
         actions.duplicateSelected();
         return;
       }
-      if (mod && event.shiftKey && key === 'l') {
+      if (mod && event.shiftKey && event.code === 'KeyL') {
         event.preventDefault();
         actions.toggleLock();
         return;
@@ -1366,10 +1464,10 @@ export default function BoardEditor({
         return;
       }
       if (mod || event.altKey) return;
-      const nextTool = TOOL_KEYS[key];
+      const nextTool = TOOL_CODES[event.code];
       if (!nextTool) return;
-      if (key === 'o' || key === 'r') {
-        const shape = key === 'o' ? 'ellipse' : 'rect';
+      if (event.code === 'KeyO' || event.code === 'KeyR') {
+        const shape = event.code === 'KeyO' ? 'ellipse' : 'rect';
         setStyle((prev) => ({ ...prev, shape }));
       }
       setTool(nextTool);
@@ -1491,7 +1589,7 @@ export default function BoardEditor({
       if (drag.id) send({ type: 'delete', ids: [drag.id] });
       return;
     }
-    const points = simplifyPoints(drag.points, 0.5 / cameraRef.current.zoom);
+    const points = simplifyPoints(drag.points, 0.2 / cameraRef.current.zoom);
     const bounds = strokeBounds(points, drag.width);
     const stroke = createObject('draw', {
       x: bounds.x,
@@ -1621,7 +1719,7 @@ export default function BoardEditor({
         const rect = rectFromPoints(drag.start, world);
         const zoom = cameraRef.current.zoom;
         if (rect.w < 3 / zoom && rect.h < 3 / zoom) return;
-        const hits = objectsRef.current
+        const hits = canvasList()
           .filter((obj) => canSelect(obj) && !obj.props?.locked && intersects(rect, obj))
           .map((obj) => obj.id);
         selectIds([...new Set([...drag.base, ...hits])]);
@@ -1699,11 +1797,18 @@ export default function BoardEditor({
     }
 
     if (drag.kind === 'pen') {
-      const last = drag.points[drag.points.length - 1];
-      if (!last || Math.hypot(world.x - last.x, world.y - last.y) > 1.2 / zoom) {
-        drag.points.push(world);
-        streamStroke(drag);
-      }
+      const raw = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : null;
+      const samples = raw?.length ? raw : [event];
+      const min = 0.35 / zoom;
+      let added = false;
+      samples.forEach((sample) => {
+        const point = toWorld(sample);
+        const last = drag.points[drag.points.length - 1];
+        if (last && Math.hypot(point.x - last.x, point.y - last.y) < min) return;
+        drag.points.push(point);
+        added = true;
+      });
+      if (added) streamStroke(drag);
       paintDraft({ kind: 'pen', points: drag.points, color: currentStyle.pen, width: currentStyle.penWidth });
       return;
     }
@@ -1880,7 +1985,7 @@ export default function BoardEditor({
         return;
       }
 
-      const hit = topHit(objectsRef.current.filter(canSelect), world, cameraRef.current.zoom);
+      const hit = topHit(canvasList().filter(canSelect), world, cameraRef.current.zoom);
       if (!hit) {
         if (event.pointerType === 'touch') {
           selectIds([]);
@@ -2078,7 +2183,7 @@ export default function BoardEditor({
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest('[data-geo-live], [data-chrome], textarea')) return;
     const world = toWorld(event);
-    const hit = topHit(objectsRef.current.filter(canSelect), world, cameraRef.current.zoom);
+    const hit = topHit(canvasList().filter(canSelect), world, cameraRef.current.zoom);
     if (hit) {
       if (canEdit(hit) && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
       return;
@@ -2098,6 +2203,36 @@ export default function BoardEditor({
     navigate(backTo);
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    const load = audience === 'teacher' ? listTeacherBoards : listStudentBoards;
+    load()
+      .then((rows) => {
+        if (cancelled) return;
+        const current = boardMetaRef.current;
+        const mine = (rows || []).filter((row) => sameSeries(row, current));
+        if (!mine.some((row) => row.id === current.id)) mine.unshift(current);
+        if (mine.every((row) => row.createdAt)) {
+          mine.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id)));
+        } else {
+          mine.reverse();
+        }
+        setSeries(mine);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [initialBoard.id, audience]);
+
+  const pages = series.length ? series : [{
+    id: initialBoard.id,
+    title: initialBoard.title,
+    studentIds: initialBoard.studentIds || [],
+    groupId: initialBoard.groupId ?? null,
+    createdAt: initialBoard.createdAt || '',
+  }];
+  const pageIndex = Math.max(0, pages.findIndex((page) => page.id === initialBoard.id));
   const trayContext = tool === 'select' || tool === 'hand' ? null : tool;
   const geoEditing = selectedObjects.length === 1 && editingId === selectedObjects[0].id && selectedObjects[0].type === 'geogebra';
 
@@ -2124,7 +2259,7 @@ export default function BoardEditor({
           className="absolute left-0 top-0 origin-top-left"
           style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}
         >
-          {objects.map((obj) => (
+          {objects.filter((obj) => !isPagesMeta(obj)).map((obj) => (
             <BoardObject
               key={obj.id}
               obj={obj}
@@ -2153,8 +2288,8 @@ export default function BoardEditor({
         </div>
       </div>
 
-      {objects.length === 0 && (
-        <div ref={hintRef} className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
+      {objects.filter((obj) => !isPagesMeta(obj)).length === 0 && (
+        <div ref={hintRef} className="pointer-events-none absolute inset-0 grid place-items-center px-6 pb-28 text-center min-[720px]:pb-6">
           <p className="max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             Пустой холст. N — стикер, T или двойной клик — текст, P — кисть, G — GeoGebra.
             Картинку можно вставить через Ctrl+V или перетащить файл. Колесо двигает доску, Ctrl и колесо — масштаб.
@@ -2207,12 +2342,12 @@ export default function BoardEditor({
         )}
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 p-2 [@media(min-height:760px)]:pl-[4.75rem]">
-        <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-1.5 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] [@media(min-width:720px)_and_(min-height:760px)]:pl-[4.75rem]">
+        <div className="pointer-events-auto flex w-max max-w-[calc(100%-11rem)] items-center gap-0.5 rounded-2xl border border-zinc-200/80 bg-white/95 px-1 py-0.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
           <button
             type="button"
             onClick={goBack}
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl px-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-100 min-[720px]:w-auto min-[720px]:px-2 dark:text-zinc-300 dark:hover:bg-zinc-900"
           >
             <ChevronLeft size={16} />
             <span className="hidden sm:inline">{backLabel}</span>
@@ -2225,30 +2360,135 @@ export default function BoardEditor({
               setTitle(event.target.value);
             }}
             aria-label="Название доски"
-            className="h-9 min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-semibold outline-none"
+            size={Math.max(4, Math.min(title.length || 4, 16))}
+            className="h-8 min-w-0 max-w-40 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
+          <PeerList peers={peers} compact />
           <LinkStatus link={link} readOnly={readOnly} />
         </div>
 
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-          <PeerList peers={peers} />
-          <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/90 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90">
-            <IconButton label="Отменить (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={16} /></IconButton>
-            <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={16} /></IconButton>
+        <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
+            <IconButton label="Отменить (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={18} /></IconButton>
+            <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={18} /></IconButton>
           </div>
-          <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/90 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90">
-            <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={16} /></IconButton>
+          <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
+            <span className="hidden min-[720px]:contents">
+              <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
+            </span>
             <button
               ref={zoomLabelRef}
               type="button"
               title="100% (Shift+0)"
               onClick={() => zoomTo(1)}
-              className="w-12 text-center text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-300"
+              className="h-9 w-10 text-center text-xs font-medium tabular-nums text-zinc-600 min-[720px]:h-8 min-[720px]:w-12 dark:text-zinc-300"
             >
               {Math.round(camera.zoom * 100)}%
             </button>
-            <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={16} /></IconButton>
-            <IconButton label="Показать всё (Shift+1)" onClick={fitAll}><Maximize2 size={15} /></IconButton>
+            <span className="hidden min-[720px]:contents">
+              <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={18} /></IconButton>
+            </span>
+            <IconButton label="Показать всё (Shift+1)" onClick={fitAll}><Maximize2 size={16} /></IconButton>
+          </div>
+        </div>
+      </div>
+
+      {pagesOpen && (
+        <div className="absolute left-2 top-[4.5rem] z-40 flex max-h-[min(70vh,32rem)] w-64 flex-col rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold">Страницы</p>
+            <button type="button" aria-label="Закрыть" onClick={() => setPagesOpen(false)} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+              <X size={16} />
+            </button>
+          </div>
+          {audience === 'teacher' && (
+            <button
+              type="button"
+              onClick={addPage}
+              className="mb-2 rounded-xl bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              + Новая страница
+            </button>
+          )}
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+            {pages.map((page, index) => (
+              <div key={page.id} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${page.id === initialBoard.id ? 'bg-sky-50 dark:bg-sky-950/40' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'}`}>
+                {editingPageId === page.id ? (
+                  <input
+                    autoFocus
+                    value={editingPageTitle}
+                    aria-label={`Название страницы ${index + 1}`}
+                    onChange={(event) => setEditingPageTitle(event.target.value)}
+                    onBlur={() => commitPageTitle(page.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') event.currentTarget.blur();
+                      if (event.key === 'Escape') setEditingPageId(null);
+                    }}
+                    className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    title="Двойное нажатие меняет название"
+                    onClick={() => {
+                      window.clearTimeout(pageClickRef.current);
+                      pageClickRef.current = window.setTimeout(() => switchPage(page.id), 220);
+                    }}
+                    onDoubleClick={(event) => {
+                      event.preventDefault();
+                      window.clearTimeout(pageClickRef.current);
+                      beginPageRename(page);
+                    }}
+                    className="min-w-0 flex-1 truncate text-left text-sm"
+                  >
+                    <span className="mr-2 text-zinc-500">{index + 1}</span>
+                    {page.id === initialBoard.id ? title : (page.title || 'Доска')}
+                  </button>
+                )}
+                {audience === 'teacher' && pages.length > 1 && (
+                  <button type="button" aria-label="Удалить страницу" onClick={() => removePage(page.id)} className="text-zinc-400 hover:text-red-600">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-2 z-40 min-[720px]:bottom-4 [@media(min-width:720px)_and_(min-height:760px)]:bottom-4 [@media(min-width:720px)_and_(min-height:760px)]:left-4">
+        <div className="flex items-center gap-0.5 rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
+          <button
+            type="button"
+            aria-label="Страницы"
+            title="Страницы"
+            onClick={() => setPagesOpen((open) => !open)}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl min-[720px]:h-9 min-[720px]:w-9 ${pagesOpen ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900'}`}
+          >
+            <Menu size={18} />
+          </button>
+          <div className="hidden items-center min-[720px]:flex">
+            <button
+              type="button"
+              aria-label="Предыдущая страница"
+              onClick={() => switchPage(pages[Math.max(0, pageIndex - 1)].id)}
+              className="flex h-9 w-8 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-12 text-center text-sm font-medium tabular-nums text-zinc-800 dark:text-zinc-100">
+              {pageIndex + 1}
+              {' / '}
+              {pages.length}
+            </span>
+            <button
+              type="button"
+              aria-label="Следующая страница"
+              onClick={() => switchPage(pages[Math.min(pages.length - 1, pageIndex + 1)].id)}
+              className="flex h-9 w-8 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
       </div>
@@ -2263,22 +2503,22 @@ export default function BoardEditor({
         </div>
       )}
 
-      <div className="absolute inset-x-3 bottom-3 z-30 flex items-end justify-center gap-2 [@media(min-height:760px)]:inset-x-auto [@media(min-height:760px)]:bottom-auto [@media(min-height:760px)]:left-3 [@media(min-height:760px)]:top-16 [@media(min-height:760px)]:flex-col [@media(min-height:760px)]:items-start">
-        <div className="flex flex-row items-center gap-1 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-height:760px)]:w-12 [@media(min-height:760px)]:flex-col">
+      <div className="absolute inset-x-16 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex flex-col-reverse items-center gap-2 min-[720px]:inset-x-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:inset-x-auto [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
+        <div className="mx-auto flex w-max max-w-full min-w-0 flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:mx-0 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
           {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand').map((item) => {
             const Icon = item.icon;
             const active = tool === item.id;
             const divider = item.id === 'sticky' || item.id === 'image';
             return (
-              <div key={item.id} className="flex items-center [@media(min-height:760px)]:w-full [@media(min-height:760px)]:flex-col">
-                {divider && <div className="mx-0.5 h-6 w-px bg-zinc-200 dark:bg-zinc-800 [@media(min-height:760px)]:mx-1 [@media(min-height:760px)]:my-1 [@media(min-height:760px)]:h-px [@media(min-height:760px)]:w-6" />}
+              <div key={item.id} className="flex items-center [@media(min-width:720px)_and_(min-height:760px)]:w-full [@media(min-width:720px)_and_(min-height:760px)]:flex-col">
+                {divider && <div className="mx-0.5 h-6 w-px bg-zinc-200 dark:bg-zinc-800 [@media(min-width:720px)_and_(min-height:760px)]:mx-1 [@media(min-width:720px)_and_(min-height:760px)]:my-1 [@media(min-width:720px)_and_(min-height:760px)]:h-px [@media(min-width:720px)_and_(min-height:760px)]:w-6" />}
                 <button
                   type="button"
                   title={`${item.label} (${item.hint})`}
                   aria-label={item.label}
                   aria-pressed={active}
                   onClick={() => setTool(item.id)}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${active ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors [@media(min-width:720px)_and_(min-height:760px)]:h-9 [@media(min-width:720px)_and_(min-height:760px)]:w-9 ${active ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
                 >
                   <Icon size={18} strokeWidth={1.75} />
                 </button>
@@ -2336,21 +2576,16 @@ function LinkStatus({ link, readOnly }) {
       </span>
     );
   }
-  return (
-    <span className={`${base} text-zinc-400`} title="Все правки на сервере">
-      <Check size={13} />
-      <span className="hidden sm:inline">Сохранено</span>
-    </span>
-  );
+  return null;
 }
 
-function PeerList({ peers }) {
+function PeerList({ peers, compact = false }) {
   if (!peers.length) return null;
   const shown = peers.slice(0, 4);
   const rest = peers.length - shown.length;
   return (
     <div
-      className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/90 py-1 pl-1 pr-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90"
+      className={`flex shrink-0 items-center ${compact ? 'pr-1' : 'rounded-2xl border border-zinc-200/80 bg-white/90 py-1 pl-1 pr-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90'}`}
       title={peers.map(peerName).join(', ')}
     >
       <div className="flex -space-x-1.5">
@@ -2369,7 +2604,7 @@ function PeerList({ peers }) {
   );
 }
 
-function IconButton({ label, onClick, disabled, children }) {
+function IconButton({ label, onClick, disabled, className = '', children }) {
   return (
     <button
       type="button"
@@ -2377,7 +2612,7 @@ function IconButton({ label, onClick, disabled, children }) {
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 dark:text-zinc-200 dark:hover:bg-zinc-900"
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 min-[720px]:h-8 min-[720px]:w-8 dark:text-zinc-200 dark:hover:bg-zinc-900 ${className}`}
     >
       {children}
     </button>
@@ -2458,23 +2693,27 @@ function StyleTray({ context, style, templates, onStyle }) {
 
   if (context === 'shape') {
     return (
-      <SwatchCard label="Фигура">
-        <div className="mb-2 flex gap-1">
-          {SHAPE_KINDS.map((kind) => {
-            const Icon = SHAPE_ICONS[kind.id];
-            return (
-              <button
-                key={kind.id}
-                type="button"
-                aria-label={kind.label}
-                title={kind.label}
-                onClick={() => onStyle((prev) => ({ ...prev, shape: kind.id }))}
-                className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.shape === kind.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
-              >
-                <Icon size={14} />
-              </button>
-            );
-          })}
+      <SwatchCard label="Фигуры" wide>
+        <div className="max-h-64 space-y-2 overflow-y-auto">
+          {SHAPE_GROUPS.map((group) => (
+            <div key={group.id}>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{group.label}</p>
+              <div className="grid grid-cols-5 gap-1">
+                {group.kinds.map((kind) => (
+                  <button
+                    key={kind.id}
+                    type="button"
+                    aria-label={kind.label}
+                    title={kind.label}
+                    onClick={() => onStyle((prev) => ({ ...prev, shape: kind.id }))}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.shape === kind.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
+                  >
+                    <ShapeGlyph id={kind.id} size={16} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {SHAPE_FILLS.map((fill) => (
@@ -2556,7 +2795,7 @@ function StyleTray({ context, style, templates, onStyle }) {
 
 function SwatchCard({ label, children, wide = false }) {
   return (
-    <div className={`${wide ? 'w-48' : 'w-40'} rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95`}>
+    <div className={`${wide ? 'w-[min(100vw-1.5rem,18rem)]' : 'w-[min(100vw-1.5rem,15rem)]'} max-h-[38vh] overflow-y-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-sm min-[720px]:max-h-none ${wide ? 'min-[720px]:w-56' : 'min-[720px]:w-40'} dark:border-zinc-800 dark:bg-zinc-950/95`}>
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
       {children}
     </div>

@@ -3,6 +3,17 @@ export function uid() {
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+export function boardCountLabel(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word = mod10 === 1 && mod100 !== 11
+    ? 'доска'
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? 'доски'
+      : 'досок';
+  return `${count} ${word}`;
+}
+
 export function formatUpdated(iso) {
   if (!iso) return '';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -40,13 +51,6 @@ export const STICKY_COLORS = [
 export const PEN_COLORS = ['#18181b', '#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
 
 export const PEN_WIDTHS = [2, 4, 8];
-
-export const SHAPE_KINDS = [
-  { id: 'rect', label: 'Прямоугольник' },
-  { id: 'ellipse', label: 'Эллипс' },
-  { id: 'triangle', label: 'Треугольник' },
-  { id: 'diamond', label: 'Ромб' },
-];
 
 export const TEXT_SIZES = [
   { id: 's', label: 'S', size: 16 },

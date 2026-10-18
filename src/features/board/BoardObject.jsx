@@ -3,22 +3,8 @@ import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraTemplate } from './model';
-
-const IMAGE_PUBLIC_URL = 'https://pub-2b7cf8fddd9747b69e66cdac8a86c7fd.r2.dev';
-
-export function boardImageSrc(props = {}) {
-  const src = typeof props.src === 'string' ? props.src : '';
-  if (src.startsWith('blob:') || src.startsWith('data:')) return src;
-  if (src) {
-    try {
-      return `${IMAGE_PUBLIC_URL}${new URL(src).pathname}`;
-    } catch {
-      return `${IMAGE_PUBLIC_URL}/${src.replace(/^\/+/, '')}`;
-    }
-  }
-  if (props.fileId) return `${IMAGE_PUBLIC_URL}/boards/${props.fileId}.png`;
-  return '';
-}
+import { boardImageSrc } from './images';
+import { shapeFigures, shapeToneOpacity } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -153,33 +139,24 @@ function TextBody({ obj, editing, onChange, onBlur }) {
 }
 
 function ShapeBody({ obj }) {
-  const shape = obj.props.shape || 'rect';
   const fill = obj.props.fill || '#ffffff';
   const stroke = obj.props.stroke || '#18181b';
-  if (shape === 'triangle' || shape === 'diamond') {
-    const points = shape === 'triangle' ? '50,1 99,99 1,99' : '50,1 99,50 50,99 1,50';
-    return (
-      <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <polygon
-          points={points}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={2}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-    );
-  }
   return (
-    <div
-      className="absolute inset-0"
-      style={{
-        background: fill,
-        border: `2px solid ${stroke}`,
-        borderRadius: shape === 'ellipse' ? '9999px' : '6px',
-      }}
-    />
+    <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+      {shapeFigures(obj.props.shape).map((fig, index) => {
+        const props = {
+          fill,
+          stroke,
+          strokeWidth: 2,
+          strokeLinejoin: 'round',
+          vectorEffect: 'non-scaling-stroke',
+          fillOpacity: shapeToneOpacity(fig.tone),
+        };
+        if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
+        if (fig.d) return <path key={index} d={fig.d} {...props} />;
+        return <polygon key={index} points={fig.points} {...props} />;
+      })}
+    </svg>
   );
 }
 
@@ -238,11 +215,13 @@ function BoardObject({
 
       {obj.type === 'arrow' && (
         <svg width={obj.w} height={obj.h} className="overflow-visible">
-          <defs>
-            <marker id={`arrowhead-${obj.id}`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-              <path d="M0,0 L7,3 L0,6 Z" fill={obj.props.color || '#18181b'} />
-            </marker>
-          </defs>
+          {obj.props.head !== false && (
+            <defs>
+              <marker id={`arrowhead-${obj.id}`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 Z" fill={obj.props.color || '#18181b'} />
+              </marker>
+            </defs>
+          )}
           <line
             x1={obj.props.x1}
             y1={obj.props.y1}
@@ -251,7 +230,8 @@ function BoardObject({
             stroke={obj.props.color || '#18181b'}
             strokeWidth={obj.props.width || 3}
             strokeLinecap="round"
-            markerEnd={`url(#arrowhead-${obj.id})`}
+            strokeDasharray={obj.props.dashed ? `${(obj.props.width || 3) * 2.4} ${(obj.props.width || 3) * 1.6}` : undefined}
+            markerEnd={obj.props.head !== false ? `url(#arrowhead-${obj.id})` : undefined}
           />
         </svg>
       )}

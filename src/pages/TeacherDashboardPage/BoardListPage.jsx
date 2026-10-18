@@ -8,17 +8,10 @@ import {
   listTeacherBoards,
 } from '../../features/board/api';
 import { deleteBoard, saveBoard } from '../../features/board/storage';
-import { formatUpdated } from '../../features/board/model';
+import BoardGallery from '../../features/board/BoardGallery';
+import { boardCountLabel } from '../../features/board/model';
 import { PageShell } from '../../shared/ui';
 import { useTeacherWorkspace } from './TeacherWorkspace';
-
-function objectCountLabel(count) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} объект`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} объекта`;
-  return `${count} объектов`;
-}
 
 function personName(person) {
   const name = `${person.first_name || ''} ${person.last_name || ''}`.trim();
@@ -91,10 +84,8 @@ export default function TeacherBoardListPage() {
     <PageShell>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Доски</h1>
-          <p className="mt-1 max-w-xl text-sm text-zinc-500">
-            Один холст на доску. Его видят и правят вы и те, кому она назначена.
-          </p>
+          <h1 className="text-[28px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Мои доски</h1>
+          <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(boards.length) : 'Загрузка'}</p>
         </div>
         <button
           type="button"
@@ -102,7 +93,7 @@ export default function TeacherBoardListPage() {
             setError('');
             setCreating(true);
           }}
-          className="inline-flex h-11 items-center gap-2 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
         >
           <Plus size={16} />
           Новая доска
@@ -129,53 +120,36 @@ export default function TeacherBoardListPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-3">
-          {boards.map((board) => (
-            <article
-              key={board.id}
-              className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
-            >
+        <BoardGallery
+          boards={boards}
+          titleOf={(board) => audienceLabel(board, students, groups)}
+          onOpen={(board) => navigate(`/teacher/board/${board.id}`)}
+          renderMenu={(board) => (
+            confirmDeleteId === board.id ? (
               <button
                 type="button"
-                onClick={() => navigate(`/teacher/board/${board.id}`)}
-                className="min-w-0 flex-1 text-left"
+                onClick={() => handleDelete(board.id)}
+                className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 shadow-sm"
               >
-                <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{board.title || 'Доска'}</p>
-                <p className="mt-1 truncate text-xs text-zinc-500">
-                  {formatUpdated(board.updatedAt)}
-                  {' · '}
-                  {audienceLabel(board, students, groups)}
-                  {' · '}
-                  {objectCountLabel(board.objectCount ?? 0)}
-                </p>
+                Удалить
               </button>
-              {confirmDeleteId === board.id ? (
-                <button
-                  type="button"
-                  onClick={() => handleDelete(board.id)}
-                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                >
-                  Удалить
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  aria-label="Удалить доску"
-                  onClick={() => setConfirmDeleteId(board.id)}
-                  className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </article>
-          ))}
-        </div>
+            ) : (
+              <button
+                type="button"
+                aria-label="Удалить доску"
+                onClick={() => setConfirmDeleteId(board.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-zinc-500 shadow-sm hover:text-zinc-900"
+              >
+                <Trash2 size={14} />
+              </button>
+            )
+          )}
+        />
       )}
 
       {creating && (
         <CreateBoardDialog
           students={students}
-          groups={groups}
           onClose={() => setCreating(false)}
           onCreate={handleCreate}
         />
@@ -184,11 +158,10 @@ export default function TeacherBoardListPage() {
   );
 }
 
-function CreateBoardDialog({ students, groups, onClose, onCreate }) {
+function CreateBoardDialog({ students, onClose, onCreate }) {
   const [title, setTitle] = useState('');
-  const [mode, setMode] = useState('students');
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [groupId, setGroupId] = useState('');
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [studentId, setStudentId] = useState('');
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -201,15 +174,6 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
     });
   }, [students, query]);
 
-  const filteredGroups = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return (groups || []).filter((group) => !needle || String(group.name || '').toLowerCase().includes(needle));
-  }, [groups, query]);
-
-  function toggleStudent(id) {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
-  }
-
   async function submit(event) {
     event.preventDefault();
     const nextTitle = title.trim();
@@ -217,21 +181,14 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
       setError('Введите название');
       return;
     }
-    if (mode === 'students' && selectedIds.length === 0) {
-      setError('Выберите учеников');
-      return;
-    }
-    if (mode === 'group' && !groupId) {
-      setError('Выберите группу');
+    if (!studentId) {
+      setError('Выберите ученика');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      const body = mode === 'group'
-        ? { title: nextTitle, groupId: Number(groupId) }
-        : { title: nextTitle, studentIds: selectedIds.map((id) => Number(id)) };
-      await onCreate(body);
+      await onCreate({ title: nextTitle, studentIds: [Number(studentId)] });
     } catch (err) {
       setError(boardErrorMessage(err, 'Не удалось создать доску'));
       setSaving(false);
@@ -247,7 +204,7 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Новая доска</h2>
-            <p className="mt-1 text-sm text-zinc-500">Название и либо ученики, либо одна группа.</p>
+            <p className="mt-1 text-sm text-zinc-500">Название — ФИО ученика. Страницы с датами и темами добавляются на холсте.</p>
           </div>
           <button
             type="button"
@@ -265,72 +222,41 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
             <input
               autoFocus
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Дроби"
+              onChange={(event) => {
+                setTitleTouched(true);
+                setTitle(event.target.value);
+              }}
+              placeholder="ФИО ученика"
               className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100"
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900">
-            <button
-              type="button"
-              onClick={() => setMode('students')}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${mode === 'students' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100' : 'text-zinc-500'}`}
-            >
-              Ученики
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('group')}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${mode === 'group' ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100' : 'text-zinc-500'}`}
-            >
-              Группа
-            </button>
-          </div>
-
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={mode === 'group' ? 'Поиск группы' : 'Поиск ученика'}
+            placeholder="Поиск ученика"
             className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100"
           />
 
           <div className="max-h-64 space-y-1 overflow-y-auto">
-            {mode === 'students' ? (
-              filteredStudents.length === 0 ? (
-                <p className="px-1 py-6 text-center text-sm text-zinc-500">Нет учеников</p>
-              ) : filteredStudents.map((person) => {
-                const checked = selectedIds.includes(person.id);
-                return (
-                  <label
-                    key={person.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${checked ? 'bg-zinc-100 dark:bg-zinc-900' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleStudent(person.id)}
-                      className="h-4 w-4 accent-zinc-900"
-                    />
-                    <span className="min-w-0 truncate text-sm text-zinc-800 dark:text-zinc-200">{personName(person)}</span>
-                  </label>
-                );
-              })
-            ) : filteredGroups.length === 0 ? (
-              <p className="px-1 py-6 text-center text-sm text-zinc-500">Нет групп</p>
-            ) : filteredGroups.map((group) => (
+            {filteredStudents.length === 0 ? (
+              <p className="px-1 py-6 text-center text-sm text-zinc-500">Нет учеников</p>
+            ) : filteredStudents.map((person) => (
               <label
-                key={group.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${String(groupId) === String(group.id) ? 'bg-zinc-100 dark:bg-zinc-900' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'}`}
+                key={person.id}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${String(studentId) === String(person.id) ? 'bg-zinc-100 dark:bg-zinc-900' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'}`}
               >
                 <input
                   type="radio"
-                  name="board-group"
-                  checked={String(groupId) === String(group.id)}
-                  onChange={() => setGroupId(group.id)}
+                  name="board-student"
+                  checked={String(studentId) === String(person.id)}
+                  onChange={() => {
+                    setStudentId(person.id);
+                    if (!titleTouched) setTitle(personName(person));
+                  }}
                   className="h-4 w-4 accent-zinc-900"
                 />
-                <span className="min-w-0 truncate text-sm text-zinc-800 dark:text-zinc-200">{group.name}</span>
+                <span className="min-w-0 truncate text-sm text-zinc-800 dark:text-zinc-200">{personName(person)}</span>
               </label>
             ))}
           </div>

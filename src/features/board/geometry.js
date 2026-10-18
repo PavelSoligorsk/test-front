@@ -252,13 +252,18 @@ export function smoothPath(points) {
   if (points.length === 1) return `M${first.x} ${first.y} l0.01 0`;
   if (points.length === 2) return `M${first.x} ${first.y} L${points[1].x} ${points[1].y}`;
   let d = `M${first.x} ${first.y}`;
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const point = points[i];
-    const next = points[i + 1];
-    d += ` Q${point.x} ${point.y} ${round1((point.x + next.x) / 2)} ${round1((point.y + next.y) / 2)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${round1(c1x)} ${round1(c1y)} ${round1(c2x)} ${round1(c2y)} ${p2.x} ${p2.y}`;
   }
-  const last = points[points.length - 1];
-  return `${d} L${last.x} ${last.y}`;
+  return d;
 }
 
 export function eraseStrokes(objects, point, radius) {
