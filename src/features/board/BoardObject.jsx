@@ -2,7 +2,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
 import { smoothPath } from './geometry';
-import { SELECTION_COLOR, geogebraTemplate } from './model';
+import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
 import { shapeFigures, shapeToneOpacity } from './shapes';
 
@@ -171,22 +171,12 @@ function BoardObject({
   onToggleGeo,
   onGeoReady,
   onGeoChange,
-  templateBase64 = '',
-  templateFailed = false,
 }) {
   const locked = Boolean(obj.props?.locked);
   const box = obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape' || obj.type === 'geogebra' || obj.type === 'image';
   const interactiveGeo = obj.type === 'geogebra' && editing;
-  const template = obj.type === 'geogebra' && obj.props.templateId
-    ? (geogebraTemplate(obj.props.templateId) || {
-      id: obj.props.templateId,
-      title: obj.props.templateTitle || obj.props.templateId,
-    })
-    : null;
-  const savedBase64 = obj.type === 'geogebra' ? (obj.props.ggbBase64 || '') : '';
-  const waitingTemplate = Boolean(template && !savedBase64 && !templateBase64 && !templateFailed);
-  const failedTemplate = Boolean(template && !savedBase64 && !templateBase64 && templateFailed);
-  const appletBase64 = savedBase64 || templateBase64;
+  const geoApp = obj.type === 'geogebra' ? geogebraApp(obj.props.appName) : null;
+  const appletBase64 = obj.type === 'geogebra' ? (obj.props.ggbBase64 || '') : '';
   const imageSrc = obj.type === 'image' ? boardImageSrc(obj.props) : '';
   const outlineWidth = handles ? 2 : 1.5;
 
@@ -272,9 +262,9 @@ function BoardObject({
         <div className={`flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-md ${interactiveGeo ? 'border-blue-500' : 'border-zinc-200'}`}>
           <div data-chrome="true" className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-2.5">
             <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              {template ? template.title : `GeoGebra · ${obj.props.appName === 'graphing' ? 'Графики' : 'Геометрия'}`}
+              {geoApp?.title || 'Планиметрия'}
             </span>
-            {!waitingTemplate && !failedTemplate && !locked && (
+            {!locked && (
               <button
                 type="button"
                 data-chrome="true"
@@ -290,27 +280,17 @@ function BoardObject({
             )}
           </div>
           <div className="min-h-0 flex-1">
-            {waitingTemplate ? (
-              <div className="grid h-full place-items-center bg-white px-4 text-center text-xs font-medium text-zinc-400">
-                Загрузка шаблона…
-              </div>
-            ) : failedTemplate ? (
-              <div className="flex h-full flex-col items-center justify-center gap-1 bg-white px-4 text-center">
-                <span className="text-sm font-semibold text-zinc-800">{template.title}</span>
-                <span className="text-[11px] text-zinc-500">Шаблон не загрузился</span>
-              </div>
-            ) : (
-              <GeoGebraWidget
-                appletId={`ggb${obj.id.replace(/-/g, '')}`}
-                appName={obj.props.appName}
-                width={Math.max(40, Math.round(obj.w - 2))}
-                height={Math.max(40, Math.round(obj.h - 38))}
-                ggbBase64={appletBase64}
-                interactive={interactiveGeo}
-                onReady={(api) => onGeoReady(obj.id, api)}
-                onConstructionChange={() => onGeoChange(obj.id)}
-              />
-            )}
+            <GeoGebraWidget
+              appletId={`ggb${obj.id.replace(/-/g, '')}`}
+              appName={geoApp?.id || 'geometry'}
+              width={Math.max(40, Math.round(obj.w - 2))}
+              height={Math.max(40, Math.round(obj.h - 38))}
+              ggbBase64={appletBase64}
+              ggbXml={obj.props.ggbXml || ''}
+              interactive={interactiveGeo}
+              onReady={(api) => onGeoReady(obj.id, api)}
+              onConstructionChange={() => onGeoChange(obj.id)}
+            />
           </div>
         </div>
       )}
@@ -381,6 +361,4 @@ export default memo(BoardObject, (prev, next) => (
   && prev.selected === next.selected
   && prev.handles === next.handles
   && prev.editing === next.editing
-  && prev.templateBase64 === next.templateBase64
-  && prev.templateFailed === next.templateFailed
 ));

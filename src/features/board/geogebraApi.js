@@ -18,6 +18,16 @@ export function loadGeoGebraScript() {
   return scriptPromise;
 }
 
+export function readGeoGebraXml(api) {
+  if (typeof api?.getXML !== 'function') return '';
+  try {
+    const xml = api.getXML();
+    return typeof xml === 'string' ? xml : '';
+  } catch {
+    return '';
+  }
+}
+
 export function readGeoGebraBase64(api) {
   if (!api?.getBase64) return Promise.resolve('');
   return new Promise((resolve) => {

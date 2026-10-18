@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadGeoGebraScript } from './geogebraApi';
 
+function appletKind(appName) {
+  if (appName === 'graphing' || appName === '3d') return appName;
+  return 'geometry';
+}
+
 export default function GeoGebraWidget({
   appletId,
   appName,
   width,
   height,
   ggbBase64,
+  ggbXml = '',
   interactive,
   onReady,
   onConstructionChange,
@@ -15,7 +21,9 @@ export default function GeoGebraWidget({
   const hostRef = useRef(null);
   const apiRef = useRef(null);
   const fileRef = useRef(ggbBase64 || '');
+  const xmlRef = useRef(ggbXml || '');
   const appliedRef = useRef('');
+  const appliedXmlRef = useRef('');
   const fitTimerRef = useRef(0);
   const interactiveRef = useRef(interactive);
   const onReadyRef = useRef(onReady);
@@ -25,7 +33,8 @@ export default function GeoGebraWidget({
 
   useEffect(() => {
     fileRef.current = ggbBase64 || '';
-  }, [ggbBase64]);
+    xmlRef.current = ggbXml || '';
+  }, [ggbBase64, ggbXml]);
 
   function fitToFrame(api) {
     const frame = frameRef.current;
@@ -81,6 +90,29 @@ export default function GeoGebraWidget({
     }
   }
 
+  function applyConstruction(api) {
+    if (!api) return;
+    const xml = xmlRef.current;
+    if (interactiveRef.current) {
+      if (xml) appliedXmlRef.current = xml;
+      if (fileRef.current) appliedRef.current = fileRef.current;
+      return;
+    }
+    if (xml && xml !== appliedXmlRef.current && typeof api.setXML === 'function') {
+      appliedXmlRef.current = xml;
+      try {
+        if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(false);
+        api.setXML(xml);
+        if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
+      } catch {
+        appliedXmlRef.current = '';
+      }
+      return;
+    }
+    if (appliedXmlRef.current) return;
+    applyFile(api);
+  }
+
   useEffect(() => {
     onReadyRef.current = onReady;
     onChangeRef.current = onConstructionChange;
@@ -102,6 +134,7 @@ export default function GeoGebraWidget({
     let cancelled = false;
     const host = hostRef.current;
     const base64AtLoad = ggbBase64 || '';
+    const kind = appletKind(appName);
     const sizeAtStart = { width, height };
 
     (async () => {
@@ -111,13 +144,14 @@ export default function GeoGebraWidget({
         host.innerHTML = '';
         const params = {
           id: appletId,
-          appName: appName === 'graphing' ? 'graphing' : 'geometry',
+          appName: kind,
           width: Math.max(40, Math.round(sizeAtStart.width)),
           height: Math.max(40, Math.round(sizeAtStart.height)),
           language: 'ru',
           showMenuBar: false,
           showToolBar: true,
-          showAlgebraInput: appName === 'graphing',
+          showAlgebraInput: kind !== 'geometry',
+          enable3d: kind === '3d',
           showToolBarHelp: false,
           showResetIcon: true,
           enableLabelDrags: true,
@@ -137,7 +171,7 @@ export default function GeoGebraWidget({
             if (typeof api.registerUpdateListener === 'function') {
               api.registerUpdateListener(() => onChangeRef.current?.());
             }
-            applyFile(api);
+            applyConstruction(api);
             fitToFrame(api);
             setStatus('ready');
           },
@@ -156,15 +190,15 @@ export default function GeoGebraWidget({
       onReadyRef.current?.(null);
       if (host) host.innerHTML = '';
     };
-    // Апплет создаётся один раз. Чужое построение приходит через setBase64, размер — через ResizeObserver.
+    // Апплет создаётся один раз. Чужое построение приходит через setXML, размер — через ResizeObserver.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appletId, attempt, appName]);
 
   useEffect(() => {
-    applyFile(apiRef.current);
-    // fileRef обновляется вместе с пропом, поэтому эффект зависит только от ggbBase64.
+    applyConstruction(apiRef.current);
+    // Ссылки на файл обновляются в эффекте выше, до этого применения.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ggbBase64]);
+  }, [ggbBase64, ggbXml]);
 
   useEffect(() => {
     const frame = frameRef.current;

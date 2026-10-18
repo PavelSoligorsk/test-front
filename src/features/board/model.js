@@ -83,13 +83,12 @@ export function createObject(type, fields) {
   };
 }
 
-export const GEOGEBRA_TEMPLATES = [
-  { id: 'right-triangle', title: 'Прямоугольный треугольник', appName: 'geometry' },
-  { id: 'circle', title: 'Окружность', appName: 'geometry' },
-  { id: 'coordinates', title: 'Координатная плоскость', appName: 'graphing' },
-  { id: 'parabola', title: 'Парабола', appName: 'graphing' },
+export const GEOGEBRA_APPS = [
+  { id: 'geometry', title: 'Планиметрия' },
+  { id: '3d', title: 'Стереометрия' },
+  { id: 'graphing', title: 'Графики' },
 ];
 
-export function geogebraTemplate(id) {
-  return GEOGEBRA_TEMPLATES.find((item) => item.id === id) || null;
+export function geogebraApp(id) {
+  return GEOGEBRA_APPS.find((item) => item.id === id) || GEOGEBRA_APPS[0];
 }

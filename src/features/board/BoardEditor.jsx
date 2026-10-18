@@ -30,14 +30,12 @@ import {
   boardErrorMessage,
   createTeacherBoard,
   deleteTeacherBoard,
-  getGeoGebraTemplate,
-  listGeoGebraTemplates,
   listStudentBoards,
   listTeacherBoards,
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { readGeoGebraBase64 } from './geogebraApi';
+import { readGeoGebraBase64, readGeoGebraXml } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { applyOp, diffOps, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
@@ -56,7 +54,7 @@ import {
 import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
 import { cloneObjects, parseObjects, serializeObjects } from './clipboard';
 import {
-  GEOGEBRA_TEMPLATES,
+  GEOGEBRA_APPS,
   PEN_COLORS,
   PEN_WIDTHS,
   SELECTION_COLOR,
@@ -64,7 +62,7 @@ import {
   STICKY_COLORS,
   TEXT_SIZES,
   createObject,
-  geogebraTemplate,
+  geogebraApp,
   uid,
 } from './model';
 import { boardImageSrc } from './images';
@@ -118,7 +116,8 @@ const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'marquee', 'pinch
 const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
 const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
 const SEND_MS = 50;
-const GEO_SAVE_MS = 1200;
+const GEO_XML_MS = 200;
+const GEO_SAVE_MS = 4000;
 const PEER_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#9333ea', '#0891b2', '#db2777', '#4f46e5'];
 
 function boardTitle(value) {
@@ -237,15 +236,12 @@ export default function BoardEditor({
   const mountedRef = useRef(true);
   const spaceRef = useRef(false);
   const geoTimerRef = useRef(null);
+  const geoXmlTimerRef = useRef(null);
   const geoDirtyRef = useRef(new Set());
-  const templateFilesRef = useRef({});
-  const templateErrorsRef = useRef({});
-  const templatePendingRef = useRef(new Set());
   const readOnlyRef = useRef(readOnly);
   const audienceRef = useRef(audience);
   const fileRef = useRef(null);
   const imagePointRef = useRef(null);
-  const templatesRef = useRef(GEOGEBRA_TEMPLATES);
   const noticeTimerRef = useRef(0);
 
   const [objects, setObjects] = useState(initialBoard.objects || []);
@@ -258,9 +254,6 @@ export default function BoardEditor({
   const [peers, setPeers] = useState([]);
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
   const [style, setStyle] = useState(INITIAL_STYLE);
-  const [templates, setTemplates] = useState(GEOGEBRA_TEMPLATES);
-  const [templateFiles, setTemplateFiles] = useState({});
-  const [templateErrors, setTemplateErrors] = useState({});
   const [notice, setNotice] = useState('');
   const [pagesOpen, setPagesOpen] = useState(false);
   const [series, setSeries] = useState([]);
@@ -902,23 +895,9 @@ export default function BoardEditor({
     scheduleCameraCommit();
   }
 
-  function rememberTemplateFile(id, file) {
-    if (!id || !file || templateFilesRef.current[id] === file) return;
-    templateFilesRef.current = { ...templateFilesRef.current, [id]: file };
-    setTemplateFiles(templateFilesRef.current);
-  }
-
-  function rememberTemplateError(id) {
-    if (!id || templateErrorsRef.current[id]) return;
-    templateErrorsRef.current = { ...templateErrorsRef.current, [id]: true };
-    setTemplateErrors(templateErrorsRef.current);
-  }
-
   function changedGeoBase64(obj, base64) {
     const stored = obj.props.ggbBase64 || '';
-    const templateFile = obj.props.templateId ? (templateFilesRef.current[obj.props.templateId] || '') : '';
-    if (!base64 || base64 === stored) return false;
-    return !(!stored && templateFile && base64 === templateFile);
+    return Boolean(base64) && base64 !== stored;
   }
 
   async function collectGeoBase64() {
@@ -944,10 +923,37 @@ export default function BoardEditor({
     live(next);
   }
 
+  function saveGeoXml() {
+    const updates = new Map();
+    geoDirtyRef.current.forEach((id) => {
+      const obj = objectsRef.current.find((item) => item.id === id);
+      const api = apiMap.current.get(id);
+      if (!obj || obj.type !== 'geogebra' || !api) return;
+      const xml = readGeoGebraXml(api);
+      if (!xml || xml === (obj.props.ggbXml || '')) return;
+      updates.set(id, xml);
+    });
+    if (!updates.size || !mountedRef.current) return;
+    const next = objectsRef.current.map((obj) => (
+      updates.has(obj.id) ? { ...obj, props: { ...obj.props, ggbXml: updates.get(obj.id) } } : obj
+    ));
+    live(next);
+  }
+
   function scheduleGeoSave(id) {
     geoDirtyRef.current.add(id);
-    window.clearTimeout(geoTimerRef.current);
-    geoTimerRef.current = window.setTimeout(() => liveRef.current.saveGeoChanges(), GEO_SAVE_MS);
+    if (!geoXmlTimerRef.current) {
+      geoXmlTimerRef.current = window.setTimeout(() => {
+        geoXmlTimerRef.current = 0;
+        liveRef.current.saveGeoXml?.();
+      }, GEO_XML_MS);
+    }
+    if (!geoTimerRef.current) {
+      geoTimerRef.current = window.setTimeout(() => {
+        geoTimerRef.current = 0;
+        liveRef.current.saveGeoChanges?.();
+      }, GEO_SAVE_MS);
+    }
   }
 
   useEffect(() => {
@@ -1012,6 +1018,7 @@ export default function BoardEditor({
       window.clearTimeout(noticeTimerRef.current);
       window.clearTimeout(cameraSyncRef.current);
       window.clearTimeout(geoTimerRef.current);
+      window.clearTimeout(geoXmlTimerRef.current);
       window.clearTimeout(cursorTimerRef.current);
     };
   }, []);
@@ -1026,47 +1033,10 @@ export default function BoardEditor({
     if (current?.type !== 'geogebra') return undefined;
     const timer = window.setInterval(() => {
       geoDirtyRef.current.add(editingId);
-      liveRef.current.saveGeoChanges?.();
-    }, GEO_SAVE_MS);
+      liveRef.current.saveGeoXml?.();
+    }, GEO_XML_MS);
     return () => window.clearInterval(timer);
   }, [editingId, readOnly]);
-
-  useEffect(() => {
-    let cancelled = false;
-    listGeoGebraTemplates()
-      .then((rows) => {
-        if (!cancelled && Array.isArray(rows) && rows.length) setTemplates(rows);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const ids = new Set();
-    objects.forEach((obj) => {
-      if (obj.type !== 'geogebra' || obj.props?.ggbBase64 || !obj.props?.templateId) return;
-      ids.add(obj.props.templateId);
-    });
-    ids.forEach((id) => {
-      if (templateFilesRef.current[id] || templateErrorsRef.current[id] || templatePendingRef.current.has(id)) return;
-      templatePendingRef.current.add(id);
-      getGeoGebraTemplate(id)
-        .then((full) => {
-          if (!mountedRef.current) return;
-          const file = full?.ggbBase64 || '';
-          if (!file) rememberTemplateError(id);
-          else rememberTemplateFile(id, file);
-        })
-        .catch(() => {
-          if (mountedRef.current) rememberTemplateError(id);
-        })
-        .finally(() => {
-          templatePendingRef.current.delete(id);
-        });
-    });
-  }, [objects]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -1317,7 +1287,11 @@ export default function BoardEditor({
     setEditingId(editingIdRef.current);
     if (turningOff) {
       geoDirtyRef.current.add(id);
+      window.clearTimeout(geoXmlTimerRef.current);
+      geoXmlTimerRef.current = 0;
       window.clearTimeout(geoTimerRef.current);
+      geoTimerRef.current = 0;
+      liveRef.current.saveGeoXml?.();
       liveRef.current.saveGeoChanges?.();
     }
   }
@@ -1346,6 +1320,7 @@ export default function BoardEditor({
     styleRef.current = style;
     liveRef.current = {
       flushOps,
+      saveGeoXml,
       saveGeoChanges,
       onSnapshot,
       onAckObject,
@@ -1377,7 +1352,6 @@ export default function BoardEditor({
     };
     readOnlyRef.current = readOnly;
     audienceRef.current = audience;
-    templatesRef.current = templates;
     wheelRef.current = (event) => {
       if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
       event.preventDefault();
@@ -2161,34 +2135,14 @@ export default function BoardEditor({
     await insertImages(files, point);
   }
 
-  async function placeGeogebra(world) {
-    const templateId = styleRef.current.templateId || '';
-    const known = templatesRef.current.find((item) => item.id === templateId) || geogebraTemplate(templateId);
-    let appName = known?.appName || styleRef.current.appName;
-    let templateTitle = known?.title || '';
-    if (templateId && !templateFilesRef.current[templateId]) {
-      try {
-        const full = await getGeoGebraTemplate(templateId);
-        const file = full?.ggbBase64 || '';
-        if (file) rememberTemplateFile(templateId, file);
-        else rememberTemplateError(templateId);
-        appName = full?.appName || appName;
-        templateTitle = full?.title || templateTitle;
-      } catch (error) {
-        rememberTemplateError(templateId);
-        if (error.response?.status !== 404) {
-          notify(boardErrorMessage(error, 'Шаблон не загрузился'));
-        }
-      }
-    }
+  function placeGeogebra(world) {
+    const appName = geogebraApp(styleRef.current.appName).id;
     const obj = createObject('geogebra', {
       x: world.x - 220,
       y: world.y - 160,
       w: 440,
       h: 320,
-      props: templateId
-        ? { appName, templateId, templateTitle }
-        : { appName },
+      props: { appName },
     });
     if (addObjects([obj])) selectIds([obj.id]);
     setTool('select');
@@ -2280,8 +2234,6 @@ export default function BoardEditor({
               selected={selectedSet.has(obj.id)}
               handles={selectedIds.length === 1 && selectedSet.has(obj.id)}
               editing={obj.id === editingId}
-              templateBase64={obj.props?.templateId ? (templateFiles[obj.props.templateId] || '') : ''}
-              templateFailed={Boolean(obj.props?.templateId && templateErrors[obj.props.templateId])}
               onChangeText={changeText}
               onBlurText={commitEdit}
               onToggleGeo={toggleGeo}
@@ -2539,7 +2491,7 @@ export default function BoardEditor({
             );
           })}
         </div>
-        <StyleTray context={trayContext} style={style} templates={templates} onStyle={setStyle} />
+        <StyleTray context={trayContext} style={style} onStyle={setStyle} />
       </div>
       <input
         ref={fileRef}
@@ -2632,7 +2584,7 @@ function IconButton({ label, onClick, disabled, className = '', children }) {
   );
 }
 
-function StyleTray({ context, style, templates, onStyle }) {
+function StyleTray({ context, style, onStyle }) {
   if (context === 'sticky') {
     return (
       <SwatchCard label="Цвет стикера">
@@ -2774,26 +2726,13 @@ function StyleTray({ context, style, templates, onStyle }) {
   if (context === 'geogebra') {
     return (
       <SwatchCard label="GeoGebra" wide>
-        <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
-          {[
-            ['geometry', 'Пустая геометрия'],
-            ['graphing', 'Пустые графики'],
-          ].map(([id, label]) => (
+        <div className="flex flex-col gap-1">
+          {GEOGEBRA_APPS.map((item) => (
             <button
-              key={id}
+              key={item.id}
               type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, appName: id, templateId: '' }))}
-              className={`rounded-lg px-2 py-1.5 text-left text-xs font-medium ${!style.templateId && style.appName === id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}
-            >
-              {label}
-            </button>
-          ))}
-          {templates.map((item) => (
-            <button
-              key={`${item.teacherId || 'local'}-${item.id}`}
-              type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, appName: item.appName, templateId: item.id }))}
-              className={`rounded-lg px-2 py-1.5 text-left text-xs font-medium ${style.templateId === item.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}
+              onClick={() => onStyle((prev) => ({ ...prev, appName: item.id, templateId: '' }))}
+              className={`rounded-lg px-2 py-1.5 text-left text-xs font-medium ${style.appName === item.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}
             >
               {item.title}
             </button>
