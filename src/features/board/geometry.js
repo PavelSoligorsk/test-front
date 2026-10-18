@@ -115,37 +115,155 @@ export function bringToFront(objects, id) {
   return next;
 }
 
-export function resizeBox(start, handle, world, anchor) {
+export function resizeBox(start, handle, world, anchor, keepRatio = false) {
   let { x, y, w, h } = start;
   const dx = world.x - anchor.x;
   const dy = world.y - anchor.y;
   if (handle.includes('e')) w = start.w + dx;
   if (handle.includes('s')) h = start.h + dy;
-  if (handle.includes('w')) {
-    x = start.x + dx;
-    w = start.w - dx;
-  }
-  if (handle.includes('n')) {
-    y = start.y + dy;
-    h = start.h - dy;
+  if (handle.includes('w')) w = start.w - dx;
+  if (handle.includes('n')) h = start.h - dy;
+
+  const minW = start.type === 'geogebra' ? 320 : 40;
+  const minH = start.type === 'geogebra' ? 240 : 32;
+  w = Math.max(minW, w);
+  h = Math.max(minH, h);
+
+  if (keepRatio && start.w > 0 && start.h > 0) {
+    const ratio = start.w / start.h;
+    if (w / start.w >= h / start.h) h = w / ratio;
+    else w = h * ratio;
+    if (w < minW) {
+      w = minW;
+      h = w / ratio;
+    }
+    if (h < minH) {
+      h = minH;
+      w = h * ratio;
+    }
   }
 
-  const minW = start.type === 'geogebra' ? 320 : 64;
-  const minH = start.type === 'geogebra' ? 240 : 48;
-  if (w < minW) {
-    if (handle.includes('w')) x -= minW - w;
-    w = minW;
-  }
-  if (h < minH) {
-    if (handle.includes('n')) y -= minH - h;
-    h = minH;
-  }
+  if (handle.includes('w')) x = start.x + start.w - w;
+  if (handle.includes('n')) y = start.y + start.h - h;
   return { x, y, w, h };
+}
+
+export function boundsOf(objects) {
+  if (!objects.length) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  objects.forEach((obj) => {
+    minX = Math.min(minX, obj.x);
+    minY = Math.min(minY, obj.y);
+    maxX = Math.max(maxX, obj.x + (obj.w || 0));
+    maxY = Math.max(maxY, obj.y + (obj.h || 0));
+  });
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+export function intersects(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function snapAxis(start, size, targets, threshold) {
+  let best = null;
+  for (const target of targets) {
+    for (const edge of [target.start, target.start + target.size / 2, target.start + target.size]) {
+      for (const point of [start, start + size / 2, start + size]) {
+        const delta = edge - point;
+        if (Math.abs(delta) > threshold) continue;
+        if (!best || Math.abs(delta) < Math.abs(best.delta)) best = { delta, line: edge, target };
+      }
+    }
+  }
+  return best;
+}
+
+export function snapMove(box, others, threshold) {
+  const snapX = snapAxis(box.x, box.w, others.map((o) => ({ start: o.x, size: o.w, box: o })), threshold);
+  const snapY = snapAxis(box.y, box.h, others.map((o) => ({ start: o.y, size: o.h, box: o })), threshold);
+  const dx = snapX ? snapX.delta : 0;
+  const dy = snapY ? snapY.delta : 0;
+  const moved = { x: box.x + dx, y: box.y + dy, w: box.w, h: box.h };
+  const guides = [];
+  if (snapX) {
+    const other = snapX.target.box;
+    guides.push({
+      axis: 'x',
+      at: snapX.line,
+      from: Math.min(moved.y, other.y),
+      to: Math.max(moved.y + moved.h, other.y + other.h),
+    });
+  }
+  if (snapY) {
+    const other = snapY.target.box;
+    guides.push({
+      axis: 'y',
+      at: snapY.line,
+      from: Math.min(moved.x, other.x),
+      to: Math.max(moved.x + moved.w, other.x + other.w),
+    });
+  }
+  return { dx, dy, guides };
+}
+
+function round1(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function perpendicular(point, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return Math.hypot(point.x - a.x, point.y - a.y);
+  return Math.abs(dy * point.x - dx * point.y + b.x * a.y - b.y * a.x) / len;
+}
+
+export function simplifyPoints(points, epsilon = 0.6) {
+  if (points.length < 3) return points.slice();
+  const keep = new Uint8Array(points.length);
+  keep[0] = 1;
+  keep[points.length - 1] = 1;
+  const stack = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop();
+    let maxDist = 0;
+    let index = -1;
+    for (let i = first + 1; i < last; i += 1) {
+      const dist = perpendicular(points[i], points[first], points[last]);
+      if (dist > maxDist) {
+        maxDist = dist;
+        index = i;
+      }
+    }
+    if (index > 0 && maxDist > epsilon) {
+      keep[index] = 1;
+      stack.push([first, index], [index, last]);
+    }
+  }
+  return points.filter((_, i) => keep[i]).map((p) => ({ x: round1(p.x), y: round1(p.y) }));
+}
+
+export function smoothPath(points) {
+  if (!points?.length) return '';
+  const first = points[0];
+  if (points.length === 1) return `M${first.x} ${first.y} l0.01 0`;
+  if (points.length === 2) return `M${first.x} ${first.y} L${points[1].x} ${points[1].y}`;
+  let d = `M${first.x} ${first.y}`;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const point = points[i];
+    const next = points[i + 1];
+    d += ` Q${point.x} ${point.y} ${round1((point.x + next.x) / 2)} ${round1((point.y + next.y) / 2)}`;
+  }
+  const last = points[points.length - 1];
+  return `${d} L${last.x} ${last.y}`;
 }
 
 export function eraseStrokes(objects, point, radius) {
   return objects.filter((obj) => {
-    if (obj.type !== 'draw') return true;
+    if (obj.type !== 'draw' || obj.props?.locked) return true;
     const pts = obj.props.points || [];
     if (!pts.length) return false;
     for (let i = 0; i < pts.length; i += 1) {

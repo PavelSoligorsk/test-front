@@ -1,11 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  AlertCircle,
   ArrowUpRight,
+  Check,
   ChevronLeft,
   Circle,
+  Diamond,
   Eraser,
   Hand,
+  Image,
+  Loader2,
+  Maximize2,
   Minus,
   MousePointer2,
   Pencil,
@@ -14,49 +20,54 @@ import {
   Redo2,
   Square,
   StickyNote,
-  Trash2,
+  Triangle,
   Type,
   Undo2,
-  Image,
+  WifiOff,
+  X,
 } from 'lucide-react';
 import BoardObject from './BoardObject';
+import SelectionToolbar from './SelectionToolbar';
 import {
-  BoardConflictError,
   boardErrorMessage,
   getGeoGebraTemplate,
-  getStudentBoard,
-  getTeacherBoard,
   listGeoGebraTemplates,
-  putStudentBoard,
-  putStudentBoardKeepalive,
-  putTeacherBoard,
-  putTeacherBoardKeepalive,
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
-  watchBoardEvents,
 } from './api';
-import { ENDPOINTS } from '../../shared/api/endpoints';
 import { readGeoGebraBase64 } from './geogebraApi';
+import { connectBoard } from './live';
+import { applyOp, diffOps, reorder } from './ops';
+import { applyHistory, historyEntry } from './history';
 import {
   arrowBounds,
-  bringToFront,
+  boundsOf,
   clamp,
   eraseStrokes,
+  intersects,
   rectFromPoints,
   resizeBox,
+  simplifyPoints,
+  snapMove,
   strokeBounds,
   topHit,
 } from './geometry';
+import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
+import { cloneObjects, parseObjects, serializeObjects } from './clipboard';
 import {
   GEOGEBRA_TEMPLATES,
   PEN_COLORS,
   PEN_WIDTHS,
+  SELECTION_COLOR,
   SHAPE_FILLS,
+  SHAPE_KINDS,
   STICKY_COLORS,
+  TEXT_SIZES,
   createObject,
   geogebraTemplate,
+  uid,
 } from './model';
-import { deleteBoard, saveBoard } from './storage';
+import { deleteBoard } from './storage';
 
 const TOOLS = [
   { id: 'select', label: 'Выбор', hint: 'V', icon: MousePointer2 },
@@ -71,6 +82,8 @@ const TOOLS = [
   { id: 'geogebra', label: 'GeoGebra', hint: 'G', icon: Pi },
 ];
 
+const SHAPE_ICONS = { rect: Square, ellipse: Circle, triangle: Triangle, diamond: Diamond };
+
 const INITIAL_STYLE = {
   sticky: STICKY_COLORS[0].bg,
   pen: PEN_COLORS[0],
@@ -78,6 +91,7 @@ const INITIAL_STYLE = {
   shape: 'rect',
   fill: SHAPE_FILLS[0],
   arrow: PEN_COLORS[0],
+  textSize: 22,
   appName: 'geometry',
   templateId: '',
 };
@@ -88,6 +102,7 @@ const TOOL_KEYS = {
   n: 'sticky',
   t: 'text',
   r: 'shape',
+  o: 'shape',
   l: 'arrow',
   p: 'pen',
   e: 'eraser',
@@ -95,8 +110,67 @@ const TOOL_KEYS = {
   g: 'geogebra',
 };
 
-function replaceObject(objects, id, next) {
-  return objects.map((obj) => (obj.id === id ? next : obj));
+const MAX_OBJECTS = 200;
+const SNAP_PX = 6;
+const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'marquee', 'pinch']);
+const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
+const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
+const SEND_MS = 50;
+const GEO_SAVE_MS = 1200;
+const PEER_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#9333ea', '#0891b2', '#db2777', '#4f46e5'];
+
+function boardTitle(value) {
+  return (value || '').trim() || 'Доска';
+}
+
+function peerColor(clientId) {
+  let hash = 0;
+  for (const char of String(clientId || '')) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  return PEER_COLORS[Math.abs(hash) % PEER_COLORS.length];
+}
+
+function peerName(peer) {
+  return peer?.name || (peer?.role === 'teacher' ? 'Учитель' : 'Ученик');
+}
+
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? parts[0][0] + parts[1][0] : (parts[0] || '?').slice(0, 2)).toUpperCase();
+}
+
+function roundPoint(point) {
+  return { x: Math.round(point.x * 10) / 10, y: Math.round(point.y * 10) / 10 };
+}
+
+function geoBase64Changed(before, after) {
+  const ids = [];
+  const prev = new Map(before.map((obj) => [obj.id, obj]));
+  after.forEach((obj) => {
+    if (obj.type !== 'geogebra') return;
+    const old = prev.get(obj.id);
+    if (old && old !== obj && (old.props?.ggbBase64 || '') !== (obj.props?.ggbBase64 || '')) ids.push(obj.id);
+  });
+  return ids;
+}
+
+function imageFiles(list) {
+  return Array.from(list || []).filter((file) => IMAGE_TYPES.test(file.type));
+}
+
+async function imageSize(file) {
+  if (typeof createImageBitmap !== 'function') return null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { w: bitmap.width, h: bitmap.height };
+    bitmap.close?.();
+    return size;
+  } catch {
+    return null;
+  }
+}
+
+function isTypingTarget(target) {
+  return target instanceof Element && Boolean(target.closest('input, textarea, [contenteditable="true"], [data-geo-live]'));
 }
 
 export default function BoardEditor({
@@ -107,41 +181,47 @@ export default function BoardEditor({
   backLabel = 'Доски',
 }) {
   const navigate = useNavigate();
+  const [savedCamera] = useState(() => loadLocalCamera(initialBoard.id));
+
   const viewportRef = useRef(null);
   const worldRef = useRef(null);
   const draftHostRef = useRef(null);
+  const guideHostRef = useRef(null);
+  const groupBoxRef = useRef(null);
+  const barRef = useRef(null);
   const zoomLabelRef = useRef(null);
   const hintRef = useRef(null);
   const cameraSyncRef = useRef(0);
   const wheelRef = useRef(() => {});
   const objectsRef = useRef(initialBoard.objects || []);
-  const cameraRef = useRef(initialBoard.camera || { x: 64, y: 72, zoom: 1 });
-  const titleRef = useRef(initialBoard.title || 'Доска');
-  const boardRef = useRef(initialBoard);
+  const cameraRef = useRef(savedCamera || DEFAULT_CAMERA);
+  const titleRef = useRef(boardTitle(initialBoard.title));
+  const boardIdRef = useRef(initialBoard.id);
+  const sentRef = useRef(initialBoard.objects || []);
+  const sentTitleRef = useRef(boardTitle(initialBoard.title));
+  const socketRef = useRef(null);
+  const sendTimerRef = useRef(0);
+  const lastCursorRef = useRef(0);
+  const cursorTimerRef = useRef(0);
+  const cursorNodesRef = useRef(new Map());
+  const peerCursorsRef = useRef(new Map());
+  const clientIdRef = useRef(null);
+  const lastErrorRef = useRef({ text: '', at: 0 });
   const apiMap = useRef(new Map());
   const pastRef = useRef([]);
   const futureRef = useRef([]);
   const dragRef = useRef(null);
+  const dragCleanupRef = useRef(null);
+  const touchesRef = useRef(new Map());
+  const pointerClientRef = useRef(null);
   const editOriginRef = useRef(null);
   const editingIdRef = useRef(null);
-  const selectedIdRef = useRef(null);
+  const selectedIdsRef = useRef([]);
   const toolRef = useRef('select');
   const styleRef = useRef(INITIAL_STYLE);
-  const persistRef = useRef(async () => {});
   const actionsRef = useRef({});
+  const liveRef = useRef({});
   const mountedRef = useRef(true);
-  const persistSeq = useRef(0);
-  const skipSave = useRef(true);
-  const persistBusy = useRef(0);
-  const pullingRef = useRef(false);
-  const seenRevisionRef = useRef(initialBoard.revision ?? 0);
-  const ackedRef = useRef({
-    objects: initialBoard.objects || [],
-    camera: { ...(initialBoard.camera || { x: 0, y: 0, zoom: 1 }) },
-    title: (initialBoard.title || 'Доска').trim() || 'Доска',
-  });
-  const pullRemoteRef = useRef(async () => {});
-  const noteRemoteRef = useRef(() => {});
   const spaceRef = useRef(false);
   const geoTimerRef = useRef(null);
   const geoDirtyRef = useRef(new Set());
@@ -153,35 +233,266 @@ export default function BoardEditor({
   const fileRef = useRef(null);
   const imagePointRef = useRef(null);
   const templatesRef = useRef(GEOGEBRA_TEMPLATES);
+  const noticeTimerRef = useRef(0);
 
   const [objects, setObjects] = useState(initialBoard.objects || []);
-  const [camera, setCamera] = useState(initialBoard.camera || { x: 64, y: 72, zoom: 1 });
-  const [title, setTitle] = useState(initialBoard.title || 'Доска');
+  const [camera, setCamera] = useState(savedCamera || DEFAULT_CAMERA);
+  const [title, setTitle] = useState(boardTitle(initialBoard.title));
   const [tool, setTool] = useState('select');
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [saveState, setSaveState] = useState('saved');
+  const [link, setLink] = useState({ state: 'connecting', pending: 0 });
+  const [peers, setPeers] = useState([]);
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
-  const [geoEpoch, setGeoEpoch] = useState(0);
+  const [geoVersions, setGeoVersions] = useState({});
   const [style, setStyle] = useState(INITIAL_STYLE);
   const [templates, setTemplates] = useState(GEOGEBRA_TEMPLATES);
   const [templateFiles, setTemplateFiles] = useState({});
   const [templateErrors, setTemplateErrors] = useState({});
   const [notice, setNotice] = useState('');
 
+  const selectedSet = new Set(selectedIds);
+  const selectedObjects = objects.filter((obj) => selectedSet.has(obj.id));
+  const canUndo = historyCounts.undo > 0;
+  const canRedo = historyCounts.redo > 0;
+
+  function notify(text) {
+    if (!mountedRef.current) return;
+    window.clearTimeout(noticeTimerRef.current);
+    setNotice(text);
+    if (text) noticeTimerRef.current = window.setTimeout(() => setNotice(''), 6000);
+  }
+
   function noteHistory() {
     setHistoryCounts({ undo: pastRef.current.length, redo: futureRef.current.length });
   }
 
-  const selected = objects.find((obj) => obj.id === selectedId) || null;
-
-  function commit(next) {
-    pastRef.current.push(objectsRef.current);
+  function pushHistory(before, after = objectsRef.current) {
+    const entry = historyEntry(before, after);
+    if (!entry) return;
+    pastRef.current.push(entry);
     if (pastRef.current.length > 80) pastRef.current.shift();
     futureRef.current = [];
+    noteHistory();
+  }
+
+  function commit(next) {
+    pushHistory(objectsRef.current, next);
     objectsRef.current = next;
     setObjects(next);
-    noteHistory();
+    scheduleSend();
+  }
+
+  function send(op) {
+    if (readOnlyRef.current) return;
+    socketRef.current?.send(op);
+  }
+
+  function flushOps() {
+    window.clearTimeout(sendTimerRef.current);
+    sendTimerRef.current = 0;
+    if (readOnlyRef.current) {
+      sentRef.current = objectsRef.current;
+      return;
+    }
+    const before = sentRef.current;
+    const after = objectsRef.current;
+    if (before !== after) {
+      sentRef.current = after;
+      diffOps(before, after).forEach(send);
+    }
+    const nextTitle = boardTitle(titleRef.current);
+    if (nextTitle !== sentTitleRef.current) {
+      sentTitleRef.current = nextTitle;
+      send({ type: 'title', title: nextTitle });
+    }
+  }
+
+  function scheduleSend() {
+    if (sendTimerRef.current) return;
+    sendTimerRef.current = window.setTimeout(() => liveRef.current.flushOps(), SEND_MS);
+  }
+
+  function applyIncoming(op) {
+    const before = objectsRef.current;
+    sentRef.current = applyOp(sentRef.current, op);
+    const next = applyOp(before, op);
+    if (next === before) return;
+    objectsRef.current = next;
+    setObjects(next);
+    remountGeo(geoBase64Changed(before, next).filter((id) => id !== editingIdRef.current));
+    pruneSelection();
+  }
+
+  function remountGeo(ids) {
+    if (!ids.length) return;
+    setGeoVersions((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => {
+        next[id] = (next[id] || 0) + 1;
+      });
+      return next;
+    });
+  }
+
+  function onSnapshot(message, readPending) {
+    flushOps();
+    const pendingOps = readPending();
+    let next = Array.isArray(message.board?.objects) ? message.board.objects : [];
+    pendingOps.forEach((op) => {
+      next = applyOp(next, op);
+    });
+    const before = objectsRef.current;
+    const remoteTitle = boardTitle(message.board?.title);
+    const pendingTitle = [...pendingOps].reverse().find((op) => op.type === 'title');
+    sentRef.current = next;
+    objectsRef.current = next;
+    sentTitleRef.current = pendingTitle ? pendingTitle.title : remoteTitle;
+    titleRef.current = sentTitleRef.current;
+    clientIdRef.current = message.clientId || null;
+    const roster = (message.peers || []).filter((peer) => peer.clientId !== message.clientId);
+    peerCursorsRef.current = new Map([...peerCursorsRef.current].filter(([id]) => roster.some((peer) => peer.clientId === id)));
+    if (!mountedRef.current) return;
+    setObjects(next);
+    setTitle(titleRef.current);
+    setPeers(roster);
+    remountGeo(geoBase64Changed(before, next).filter((id) => id !== editingIdRef.current));
+    pruneSelection();
+  }
+
+  function onAckObject(obj) {
+    if (!obj?.id) return;
+    applyIncoming({ type: 'upsert', object: obj });
+  }
+
+  function onOpError(detail) {
+    const text = typeof detail === 'string' && detail ? detail : 'Сервер не принял изменение';
+    const last = lastErrorRef.current;
+    const now = Date.now();
+    if (last.text === text && now - last.at < 4000) return;
+    lastErrorRef.current = { text, at: now };
+    notify(text);
+  }
+
+  function onClosed(code) {
+    if (code === 4404) {
+      deleteBoard(boardIdRef.current).catch(() => {});
+      if (mountedRef.current) navigate(backTo, { replace: true });
+      return;
+    }
+    if (!mountedRef.current) return;
+    setLink({ state: 'denied', pending: 0 });
+    notify(code === 4401 ? 'Сессия истекла. Войдите заново, чтобы продолжить.' : 'Нет доступа к этой доске.');
+  }
+
+  function paintPeerCursors() {
+    const cam = cameraRef.current;
+    cursorNodesRef.current.forEach((node, clientId) => {
+      const point = peerCursorsRef.current.get(clientId);
+      if (!point) {
+        node.style.display = 'none';
+        return;
+      }
+      node.style.display = '';
+      node.style.transform = `translate(${Math.round(cam.x + point.x * cam.zoom)}px, ${Math.round(cam.y + point.y * cam.zoom)}px)`;
+    });
+  }
+
+  function sendCursor(clientX, clientY) {
+    const socket = socketRef.current;
+    if (!socket || !viewportRef.current) return;
+    const now = performance.now();
+    const wait = SEND_MS - (now - lastCursorRef.current);
+    const push = () => {
+      cursorTimerRef.current = 0;
+      lastCursorRef.current = performance.now();
+      const client = pointerClientRef.current;
+      if (!client || !viewportRef.current) return;
+      const world = clientToWorld(client.x, client.y);
+      socket.cursor(Math.round(world.x), Math.round(world.y));
+    };
+    pointerClientRef.current = { x: clientX, y: clientY };
+    if (wait <= 0) push();
+    else if (!cursorTimerRef.current) cursorTimerRef.current = window.setTimeout(push, wait);
+  }
+
+  function addObjects(list) {
+    if (!list.length) return false;
+    if (objectsRef.current.length + list.length > MAX_OBJECTS) {
+      notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+      return false;
+    }
+    commit([...objectsRef.current, ...list]);
+    return true;
+  }
+
+  function selectIds(ids) {
+    selectedIdsRef.current = ids;
+    setSelectedIds(ids);
+  }
+
+  function pruneSelection() {
+    const alive = new Set(objectsRef.current.map((obj) => obj.id));
+    const ids = selectedIdsRef.current.filter((id) => alive.has(id));
+    if (ids.length !== selectedIdsRef.current.length) selectIds(ids);
+    if (editingIdRef.current && !alive.has(editingIdRef.current)) {
+      editingIdRef.current = null;
+      editOriginRef.current = null;
+      setEditingId(null);
+    }
+  }
+
+  function canSelect(obj) {
+    return audienceRef.current === 'teacher' || !obj.props?.locked;
+  }
+
+  function canEdit(obj) {
+    return !readOnlyRef.current && !obj.props?.locked;
+  }
+
+  function selectedList() {
+    const set = new Set(selectedIdsRef.current);
+    return objectsRef.current.filter((obj) => set.has(obj.id));
+  }
+
+  function paintSelectionUi() {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const list = selectedList();
+    const bounds = boundsOf(list);
+    const cam = cameraRef.current;
+    const group = groupBoxRef.current;
+    if (group) {
+      if (list.length > 1 && bounds) {
+        group.style.display = 'block';
+        group.style.left = `${bounds.x}px`;
+        group.style.top = `${bounds.y}px`;
+        group.style.width = `${bounds.w}px`;
+        group.style.height = `${bounds.h}px`;
+        group.style.outline = `${1.5 / cam.zoom}px solid ${SELECTION_COLOR}`;
+      } else {
+        group.style.display = 'none';
+      }
+    }
+    const bar = barRef.current;
+    if (!bar) return;
+    const drag = dragRef.current;
+    const hidden = !bounds || (drag && DRAG_HIDES_BAR.has(drag.kind) && drag.dirty !== false);
+    if (hidden || !bar.firstElementChild) {
+      bar.style.visibility = 'hidden';
+      return;
+    }
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+    const barW = bar.offsetWidth;
+    const barH = bar.offsetHeight;
+    let left = cam.x + (bounds.x + bounds.w / 2) * cam.zoom - barW / 2;
+    let top = cam.y + bounds.y * cam.zoom - barH - 16;
+    if (top < 60) top = cam.y + (bounds.y + bounds.h) * cam.zoom + 16;
+    left = clamp(left, 8, Math.max(8, width - barW - 8));
+    top = clamp(top, 60, Math.max(60, height - barH - 8));
+    bar.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+    bar.style.visibility = 'visible';
   }
 
   function paintCamera(cam) {
@@ -192,11 +503,11 @@ export default function BoardEditor({
     }
     const viewport = viewportRef.current;
     if (viewport) {
+      const inv = 1 / cam.zoom;
       viewport.style.backgroundSize = `${22 * cam.zoom}px ${22 * cam.zoom}px`;
       viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
       viewport.querySelectorAll('[data-handle]').forEach((handle) => {
         const kind = handle.dataset.handle;
-        const inv = 1 / cam.zoom;
         if (kind === 'start' || kind === 'end') {
           handle.style.transform = `translate(-50%, -50%) scale(${inv})`;
           return;
@@ -205,10 +516,18 @@ export default function BoardEditor({
         const y = kind?.includes('n') ? '-50%' : '50%';
         handle.style.transform = `translate(${x}, ${y}) scale(${inv})`;
       });
+      viewport.querySelectorAll('[data-outline]').forEach((outline) => {
+        outline.style.outlineWidth = `${Number(outline.dataset.outline || 1) * inv}px`;
+      });
+      viewport.querySelectorAll('[data-counter-scale]').forEach((badge) => {
+        badge.style.transform = `scale(${inv})`;
+      });
     }
     if (zoomLabelRef.current) {
       zoomLabelRef.current.textContent = `${Math.round(cam.zoom * 100)}%`;
     }
+    paintSelectionUi();
+    paintPeerCursors();
   }
 
   function paintObject(obj) {
@@ -259,11 +578,14 @@ export default function BoardEditor({
   function live(next) {
     objectsRef.current = next;
     setObjects(next);
+    scheduleSend();
   }
 
-  function gesture(next, obj) {
+  function gesture(next, changed) {
     objectsRef.current = next;
-    paintObject(obj);
+    changed.forEach(paintObject);
+    paintSelectionUi();
+    scheduleSend();
   }
 
   function hideErased(before, next) {
@@ -274,6 +596,7 @@ export default function BoardEditor({
       if (el) el.style.display = 'none';
     });
     objectsRef.current = next;
+    scheduleSend();
   }
 
   function publishGesture() {
@@ -283,6 +606,7 @@ export default function BoardEditor({
     setCamera((prev) => (
       prev.x === cam.x && prev.y === cam.y && prev.zoom === cam.zoom ? prev : cam
     ));
+    saveLocalCamera(boardIdRef.current, cam);
   }
 
   function scheduleCameraCommit() {
@@ -293,23 +617,48 @@ export default function BoardEditor({
         return;
       }
       publishGesture();
-    }, 80);
+    }, 120);
   }
 
   function paintCursor() {
     const el = viewportRef.current;
     if (!el) return;
     const current = toolRef.current;
-    const panning = dragRef.current?.kind === 'pan';
-    el.style.cursor = panning
+    const kind = dragRef.current?.kind;
+    el.style.cursor = kind === 'pan' || kind === 'pinch'
       ? 'grabbing'
       : (spaceRef.current || current === 'hand')
         ? 'grab'
-        : (current === 'pen' || current === 'eraser' || current === 'shape' || current === 'arrow')
+        : (current === 'pen' || current === 'eraser' || current === 'shape' || current === 'arrow' || current === 'sticky')
           ? 'crosshair'
           : current === 'text'
             ? 'text'
             : 'default';
+  }
+
+  function paintGuides(guides) {
+    const host = guideHostRef.current;
+    if (!host) return;
+    host.replaceChildren();
+    if (!guides?.length) return;
+    const thickness = 1 / cameraRef.current.zoom;
+    guides.forEach((guide) => {
+      const line = document.createElement('div');
+      line.className = 'pointer-events-none absolute';
+      line.style.background = '#f43f5e';
+      if (guide.axis === 'x') {
+        line.style.left = `${guide.at - thickness / 2}px`;
+        line.style.top = `${guide.from}px`;
+        line.style.width = `${thickness}px`;
+        line.style.height = `${guide.to - guide.from}px`;
+      } else {
+        line.style.left = `${guide.from}px`;
+        line.style.top = `${guide.at - thickness / 2}px`;
+        line.style.width = `${guide.to - guide.from}px`;
+        line.style.height = `${thickness}px`;
+      }
+      host.appendChild(line);
+    });
   }
 
   function paintDraft(draft) {
@@ -317,7 +666,40 @@ export default function BoardEditor({
     if (!host) return;
     host.replaceChildren();
     if (!draft) return;
+    const inv = 1 / cameraRef.current.zoom;
+    if (draft.kind === 'marquee') {
+      const node = document.createElement('div');
+      node.className = 'pointer-events-none absolute';
+      node.style.left = `${draft.x}px`;
+      node.style.top = `${draft.y}px`;
+      node.style.width = `${draft.w}px`;
+      node.style.height = `${draft.h}px`;
+      node.style.border = `${inv}px solid ${SELECTION_COLOR}`;
+      node.style.background = 'rgba(66, 98, 255, 0.08)';
+      host.appendChild(node);
+      return;
+    }
     if (draft.kind === 'shape') {
+      if (draft.shape === 'triangle' || draft.shape === 'diamond') {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        svg.style.left = `${draft.x}px`;
+        svg.style.top = `${draft.y}px`;
+        svg.style.width = `${Math.max(draft.w, 1)}px`;
+        svg.style.height = `${Math.max(draft.h, 1)}px`;
+        svg.style.opacity = '0.85';
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', draft.shape === 'triangle' ? '50,1 99,99 1,99' : '50,1 99,50 50,99 1,50');
+        poly.setAttribute('fill', draft.fill);
+        poly.setAttribute('stroke', draft.stroke);
+        poly.setAttribute('stroke-width', '2');
+        poly.setAttribute('vector-effect', 'non-scaling-stroke');
+        svg.appendChild(poly);
+        host.appendChild(svg);
+        return;
+      }
       const node = document.createElement('div');
       node.className = 'pointer-events-none absolute';
       node.style.left = `${draft.x}px`;
@@ -326,7 +708,7 @@ export default function BoardEditor({
       node.style.height = `${draft.h}px`;
       node.style.background = draft.fill;
       node.style.border = `2px solid ${draft.stroke}`;
-      node.style.borderRadius = draft.shape === 'ellipse' ? '999px' : '12px';
+      node.style.borderRadius = draft.shape === 'ellipse' ? '9999px' : '6px';
       node.style.opacity = '0.85';
       host.appendChild(node);
       return;
@@ -347,6 +729,7 @@ export default function BoardEditor({
       line.setAttribute('y2', draft.y2 - top);
       line.setAttribute('stroke', draft.color);
       line.setAttribute('stroke-width', draft.width);
+      line.setAttribute('stroke-linecap', 'round');
       svg.appendChild(line);
     }
     if (draft.kind === 'pen' && draft.points.length) {
@@ -379,24 +762,33 @@ export default function BoardEditor({
     host.appendChild(svg);
   }
 
-  function raiseObject(id) {
-    const node = viewportRef.current?.querySelector(`[data-object="${CSS.escape(id)}"]`);
-    node?.parentElement?.appendChild(node);
+  function toWorld(event) {
+    return clientToWorld(event.clientX, event.clientY);
   }
 
-  function toWorld(event) {
+  function clientToWorld(clientX, clientY) {
     const rect = viewportRef.current.getBoundingClientRect();
     const cam = cameraRef.current;
     return {
-      x: (event.clientX - rect.left - cam.x) / cam.zoom,
-      y: (event.clientY - rect.top - cam.y) / cam.zoom,
+      x: (clientX - rect.left - cam.x) / cam.zoom,
+      y: (clientY - rect.top - cam.y) / cam.zoom,
     };
+  }
+
+  function viewportCenterWorld() {
+    const rect = viewportRef.current.getBoundingClientRect();
+    return clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  function pasteTarget() {
+    const client = pointerClientRef.current;
+    return client ? clientToWorld(client.x, client.y) : viewportCenterWorld();
   }
 
   function zoomAt(nextZoom, clientX, clientY) {
     const rect = viewportRef.current.getBoundingClientRect();
     const cam = cameraRef.current;
-    const zoom = clamp(nextZoom, 0.25, 2.5);
+    const zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
     const px = clientX - rect.left;
     const py = clientY - rect.top;
     const worldX = (px - cam.x) / cam.zoom;
@@ -408,6 +800,21 @@ export default function BoardEditor({
   function zoomBy(factor) {
     const rect = viewportRef.current.getBoundingClientRect();
     zoomAt(cameraRef.current.zoom * factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  function zoomTo(zoom) {
+    zoomBy(zoom / cameraRef.current.zoom);
+  }
+
+  function fitAll() {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const bounds = boundsOf(objectsRef.current);
+    const cam = bounds
+      ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 2 })
+      : { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2, zoom: 1 };
+    paintCamera(cam);
+    scheduleCameraCommit();
   }
 
   function rememberTemplateFile(id, file) {
@@ -422,263 +829,104 @@ export default function BoardEditor({
     setTemplateErrors(templateErrorsRef.current);
   }
 
-  async function attachBase64(list) {
-    const next = [];
-    let changed = false;
-    for (const obj of list) {
-      if (obj.type !== 'geogebra' || !geoDirtyRef.current.has(obj.id)) {
-        next.push(obj);
-        continue;
-      }
-      const api = apiMap.current.get(obj.id);
-      const base64 = api ? await readGeoGebraBase64(api) : '';
-      geoDirtyRef.current.delete(obj.id);
-      const stored = obj.props.ggbBase64 || '';
-      const templateFile = obj.props.templateId ? (templateFilesRef.current[obj.props.templateId] || '') : '';
-      const untouchedTemplate = !stored && templateFile && base64 === templateFile;
-      if (!base64 || base64 === stored || untouchedTemplate) {
-        next.push(obj);
-        continue;
-      }
-      changed = true;
-      next.push({ ...obj, props: { ...obj.props, ggbBase64: base64 } });
+  function changedGeoBase64(obj, base64) {
+    const stored = obj.props.ggbBase64 || '';
+    const templateFile = obj.props.templateId ? (templateFilesRef.current[obj.props.templateId] || '') : '';
+    if (!base64 || base64 === stored) return false;
+    return !(!stored && templateFile && base64 === templateFile);
+  }
+
+  async function collectGeoBase64() {
+    const updates = new Map();
+    const ids = [...geoDirtyRef.current];
+    for (const id of ids) {
+      geoDirtyRef.current.delete(id);
+      const obj = objectsRef.current.find((item) => item.id === id);
+      const api = apiMap.current.get(id);
+      if (!obj || obj.type !== 'geogebra' || !api) continue;
+      const base64 = await readGeoGebraBase64(api);
+      if (changedGeoBase64(obj, base64)) updates.set(id, base64);
     }
-    return changed ? next : list;
+    return updates;
   }
 
-  function ggbSignature(list) {
-    return (list || []).map((obj) => (
-      obj.type === 'geogebra' ? `${obj.id}:${obj.props?.templateId || ''}:${obj.props?.ggbBase64 || ''}` : ''
-    )).join('|');
+  async function saveGeoChanges() {
+    const updates = await collectGeoBase64();
+    if (!updates.size || !mountedRef.current) return;
+    const next = objectsRef.current.map((obj) => (
+      updates.has(obj.id) ? { ...obj, props: { ...obj.props, ggbBase64: updates.get(obj.id) } } : obj
+    ));
+    live(next);
   }
 
-  function rememberAck() {
-    ackedRef.current = {
-      objects: objectsRef.current,
-      camera: {
-        x: cameraRef.current.x,
-        y: cameraRef.current.y,
-        zoom: cameraRef.current.zoom,
-      },
-      title: titleRef.current.trim() || 'Доска',
-    };
-  }
-
-  function isDirty() {
-    if (dragRef.current || persistBusy.current > 0) return true;
-    const acked = ackedRef.current;
-    if (objectsRef.current !== acked.objects) return true;
-    if ((titleRef.current.trim() || 'Доска') !== acked.title) return true;
-    const cam = cameraRef.current;
-    return cam.x !== acked.camera.x || cam.y !== acked.camera.y || cam.zoom !== acked.camera.zoom;
-  }
-
-  function adoptServerBoard(next, { resetHistory = false } = {}) {
-    const geoChanged = ggbSignature(objectsRef.current) !== ggbSignature(next.objects);
-    skipSave.current = true;
-    boardRef.current = next;
-    objectsRef.current = next.objects || [];
-    cameraRef.current = next.camera || cameraRef.current;
-    titleRef.current = next.title || titleRef.current;
-    rememberAck();
-    if ((next.revision ?? 0) > (seenRevisionRef.current ?? 0)) seenRevisionRef.current = next.revision;
-    setObjects(objectsRef.current);
-    setCamera({ ...cameraRef.current });
-    setTitle(titleRef.current);
-    if (resetHistory) {
-      pastRef.current = [];
-      futureRef.current = [];
-      setEditingId(null);
-      noteHistory();
-    }
-    if (geoChanged) setGeoEpoch((value) => value + 1);
-    saveBoard(next).catch(() => {});
-  }
-
-  async function pullRemote() {
-    if (pullingRef.current || isDirty()) return;
-    const target = Number(seenRevisionRef.current || 0);
-    if (!(target > Number(boardRef.current.revision ?? 0))) return;
-    pullingRef.current = true;
-    const revisionBefore = Number(boardRef.current.revision ?? 0);
-    try {
-      const remote = audienceRef.current === 'teacher'
-        ? await getTeacherBoard(boardRef.current.id)
-        : await getStudentBoard(boardRef.current.id);
-      if (!mountedRef.current || isDirty()) return;
-      if ((remote?.revision ?? 0) > revisionBefore) {
-        adoptServerBoard(remote, { resetHistory: true });
-        if (mountedRef.current) setSaveState('saved');
-      }
-    } catch {
-      /* следующее update или повтор потока скачает документ ещё раз */
-    } finally {
-      pullingRef.current = false;
-      const advanced = Number(boardRef.current.revision ?? 0) > revisionBefore;
-      if (advanced && !isDirty() && Number(seenRevisionRef.current || 0) > Number(boardRef.current.revision ?? 0)) {
-        pullRemote();
-      }
-    }
-  }
-
-  function noteRemoteRevision(revision) {
-    const next = Number(revision);
-    if (!Number.isFinite(next)) return;
-    if (next > Number(seenRevisionRef.current || 0)) seenRevisionRef.current = next;
-    pullRemote();
-  }
-
-  async function persist() {
-    if (readOnlyRef.current) return;
-    persistBusy.current += 1;
-    const seq = persistSeq.current + 1;
-    persistSeq.current = seq;
-    if (mountedRef.current) setSaveState('saving');
-    try {
-      const withGeo = await attachBase64(objectsRef.current);
-      if (persistSeq.current !== seq) return;
-      if (withGeo !== objectsRef.current) {
-        objectsRef.current = withGeo;
-        if (mountedRef.current) setObjects(withGeo);
-      }
-      const nextBoard = {
-        ...boardRef.current,
-        title: titleRef.current.trim() || 'Доска',
-        camera: cameraRef.current,
-        objects: objectsRef.current,
-        updatedAt: new Date().toISOString(),
-      };
-      boardRef.current = nextBoard;
-      await saveBoard(nextBoard);
-      if (persistSeq.current !== seq) return;
-      if (nextBoard.revision == null) {
-        if (mountedRef.current) setSaveState('saved');
-        return;
-      }
-      try {
-        const saved = await (audienceRef.current === 'teacher' ? putTeacherBoard(nextBoard) : putStudentBoard(nextBoard));
-        if (persistSeq.current !== seq) {
-          boardRef.current = {
-            ...boardRef.current,
-            revision: saved.revision,
-            updatedAt: saved.updatedAt,
-          };
-          return;
-        }
-        adoptServerBoard(saved);
-        if (mountedRef.current) setSaveState('saved');
-      } catch (error) {
-        if (persistSeq.current !== seq) return;
-        if (error instanceof BoardConflictError) {
-          adoptServerBoard(error.board, { resetHistory: true });
-          if (mountedRef.current) setSaveState('conflict');
-          return;
-        }
-        if (error.response?.status === 404) {
-          if (mountedRef.current) setSaveState('saved');
-          return;
-        }
-        if (mountedRef.current) {
-          setNotice(boardErrorMessage(error, 'Не удалось сохранить доску'));
-          setSaveState('error');
-        }
-      }
-    } catch {
-      if (mountedRef.current && persistSeq.current === seq) setSaveState('error');
-    } finally {
-      persistBusy.current -= 1;
-      pullRemoteRef.current();
-    }
+  function scheduleGeoSave(id) {
+    geoDirtyRef.current.add(id);
+    window.clearTimeout(geoTimerRef.current);
+    geoTimerRef.current = window.setTimeout(() => liveRef.current.saveGeoChanges(), GEO_SAVE_MS);
   }
 
   useEffect(() => {
     const boardId = initialBoard?.id;
     if (!boardId) return undefined;
-    const controller = new AbortController();
-    let stopped = false;
-    let timer = 0;
-    let attempt = 0;
-    const url = audience === 'teacher'
-      ? ENDPOINTS.TEACHER_BOARD_EVENTS(boardId)
-      : ENDPOINTS.STUDENT_BOARD_EVENTS(boardId);
-
-    const wait = (ms) => new Promise((resolve) => {
-      timer = window.setTimeout(resolve, ms);
+    const call = (name) => (...args) => liveRef.current[name]?.(...args);
+    const socket = connectBoard({
+      audience,
+      boardId,
+      handlers: {
+        onStatus: (state, pending) => {
+          if (mountedRef.current) setLink((prev) => (prev.state === 'denied' ? prev : { state, pending }));
+        },
+        onSnapshot: call('onSnapshot'),
+        onAckObject: call('onAckObject'),
+        onOpError: call('onOpError'),
+        onOp: call('applyRemote'),
+        onCursor: (message) => {
+          if (!message?.clientId || message.clientId === clientIdRef.current) return;
+          peerCursorsRef.current.set(message.clientId, { x: Number(message.x) || 0, y: Number(message.y) || 0 });
+          liveRef.current.paintPeerCursors?.();
+        },
+        onJoin: (peer) => {
+          if (!peer?.clientId || peer.clientId === clientIdRef.current) return;
+          setPeers((prev) => [...prev.filter((item) => item.clientId !== peer.clientId), peer]);
+        },
+        onLeave: (clientId) => {
+          peerCursorsRef.current.delete(clientId);
+          setPeers((prev) => prev.filter((item) => item.clientId !== clientId));
+        },
+        onClosed: call('onClosed'),
+      },
     });
-
-    (async () => {
-      while (!stopped) {
-        try {
-          await watchBoardEvents(url, {
-            signal: controller.signal,
-            onUpdate: (data) => {
-              if (data?.id && data.id !== boardId) return;
-              noteRemoteRef.current(data?.revision);
-            },
-            onDelete: () => {
-              if (stopped) return;
-              stopped = true;
-              controller.abort();
-              deleteBoard(boardId).catch(() => {});
-              navigate(backTo);
-            },
-          });
-          if (stopped) return;
-          attempt += 1;
-        } catch (error) {
-          if (stopped || controller.signal.aborted || error?.name === 'AbortError') return;
-          const status = error?.status;
-          if (status === 401 || status === 403 || status === 404) return;
-          attempt += 1;
-        }
-        if (stopped) return;
-        await wait(Math.min(10000, 1000 * attempt));
-      }
-    })();
-
-    return () => {
-      stopped = true;
-      controller.abort();
-      window.clearTimeout(timer);
+    socketRef.current = socket;
+    const onBeforeUnload = (event) => {
+      liveRef.current.flushOps?.();
+      if (socket.pendingCount() > 0) event.preventDefault();
     };
-  }, [initialBoard.id, audience, backTo, navigate]);
+    const onPageHide = () => liveRef.current.flushOps?.();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onPageHide);
+      liveRef.current.flushOps?.();
+      socket.close();
+      if (socketRef.current === socket) socketRef.current = null;
+    };
+  }, [initialBoard.id, audience]);
 
   useEffect(() => {
     mountedRef.current = true;
-    const onHide = () => {
-      if (document.visibilityState === 'hidden') persistRef.current();
-    };
-    const onPageHide = () => {
-      const board = {
-        ...boardRef.current,
-        title: titleRef.current.trim() || 'Доска',
-        camera: cameraRef.current,
-        objects: objectsRef.current,
-      };
-      saveBoard(board).catch(() => {});
-      if (!readOnlyRef.current && board.revision != null) {
-        const send = audienceRef.current === 'teacher' ? putTeacherBoardKeepalive : putStudentBoardKeepalive;
-        send(board);
-      }
-    };
-    document.addEventListener('visibilitychange', onHide);
-    window.addEventListener('pagehide', onPageHide);
     return () => {
       mountedRef.current = false;
-      document.removeEventListener('visibilitychange', onHide);
-      window.removeEventListener('pagehide', onPageHide);
-      persistRef.current();
+      window.clearTimeout(noticeTimerRef.current);
+      window.clearTimeout(cameraSyncRef.current);
+      window.clearTimeout(geoTimerRef.current);
+      window.clearTimeout(cursorTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
-    if (skipSave.current) {
-      skipSave.current = false;
-      return undefined;
-    }
-    const timer = setTimeout(() => persistRef.current(), 700);
-    return () => clearTimeout(timer);
-  }, [objects, camera, title]);
+    scheduleSend();
+  }, [objects, title]);
 
   useEffect(() => {
     let cancelled = false;
@@ -725,75 +973,244 @@ export default function BoardEditor({
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  function undo() {
+  useLayoutEffect(() => {
+    if (savedCamera) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const bounds = boundsOf(objectsRef.current);
+    const cam = bounds
+      ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 1 })
+      : { x: Math.round(viewport.clientWidth / 2), y: Math.round(viewport.clientHeight / 2), zoom: 1 };
+    paintCamera(cam);
+    scheduleCameraCommit();
+    // Камера подбирается один раз при открытии доски.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function stepHistory(direction) {
     if (readOnlyRef.current) return;
-    const prev = pastRef.current.pop();
-    if (!prev) return;
-    futureRef.current.push(objectsRef.current);
-    objectsRef.current = prev;
-    setObjects(prev);
+    const from = direction === 'undo' ? pastRef.current : futureRef.current;
+    const to = direction === 'undo' ? futureRef.current : pastRef.current;
+    const entry = from.pop();
+    if (!entry) return;
+    to.push(entry);
+    const before = objectsRef.current;
+    const next = applyHistory(before, entry, direction);
+    editOriginRef.current = null;
+    editingIdRef.current = null;
     setEditingId(null);
-    setGeoEpoch((value) => value + 1);
+    live(next);
+    remountGeo(geoBase64Changed(before, next));
     noteHistory();
+    pruneSelection();
+  }
+
+  function undo() {
+    stepHistory('undo');
   }
 
   function redo() {
-    if (readOnlyRef.current) return;
-    const next = futureRef.current.pop();
-    if (!next) return;
-    pastRef.current.push(objectsRef.current);
-    objectsRef.current = next;
-    setObjects(next);
-    setEditingId(null);
-    setGeoEpoch((value) => value + 1);
-    noteHistory();
+    stepHistory('redo');
+  }
+
+  function applyRemote(op) {
+    if (op.type === 'title') {
+      const nextTitle = boardTitle(op.title);
+      sentTitleRef.current = nextTitle;
+      titleRef.current = nextTitle;
+      setTitle(nextTitle);
+      return;
+    }
+    if (op.type === 'camera') return;
+    applyIncoming(op);
   }
 
   function deleteSelected() {
     if (readOnlyRef.current) return;
-    const id = selectedIdRef.current;
-    if (!id) return;
-    const before = objectsRef.current;
-    const next = before.filter((obj) => obj.id !== id);
-    if (next.length === before.length) return;
-    commit(next);
-    setSelectedId(null);
+    const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
+    if (!set.size) return;
+    commit(objectsRef.current.filter((obj) => !set.has(obj.id)));
+    selectIds(selectedIdsRef.current.filter((id) => !set.has(id)));
     setEditingId(null);
+  }
+
+  function patchSelected(type, patch) {
+    const set = new Set(selectedList().filter((obj) => obj.type === type && canEdit(obj)).map((obj) => obj.id));
+    if (!set.size) return;
+    commit(objectsRef.current.map((obj) => (
+      set.has(obj.id) ? { ...obj, props: { ...obj.props, ...patch } } : obj
+    )));
+  }
+
+  function reorderSelected(toFront) {
+    const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
+    if (!set.size) return;
+    const moving = objectsRef.current.filter((obj) => set.has(obj.id));
+    const rest = objectsRef.current.filter((obj) => !set.has(obj.id));
+    const next = reorder(objectsRef.current, (toFront ? [...rest, ...moving] : [...moving, ...rest]).map((obj) => obj.id));
+    if (next === objectsRef.current) return;
+    commit(next);
+  }
+
+  function toggleLock() {
+    if (readOnlyRef.current || audienceRef.current !== 'teacher') return;
+    const list = selectedList();
+    if (!list.length) return;
+    const lock = !list.every((obj) => obj.props?.locked);
+    const set = new Set(list.map((obj) => obj.id));
+    commit(objectsRef.current.map((obj) => {
+      if (!set.has(obj.id)) return obj;
+      return { ...obj, props: { ...obj.props, locked: lock } };
+    }));
+    if (lock && editingIdRef.current && set.has(editingIdRef.current)) setEditingId(null);
+  }
+
+  async function geoSnapshot(obj) {
+    if (obj.type !== 'geogebra') return obj;
+    const api = apiMap.current.get(obj.id);
+    if (!api) return obj;
+    const base64 = await readGeoGebraBase64(api);
+    return changedGeoBase64(obj, base64) ? { ...obj, props: { ...obj.props, ggbBase64: base64 } } : obj;
+  }
+
+  async function duplicateSelected() {
+    if (readOnlyRef.current) return;
+    const source = selectedList();
+    if (!source.length) return;
+    const snapshot = await Promise.all(source.map(geoSnapshot));
+    const clones = cloneObjects(snapshot, { dx: 24, dy: 24 });
+    if (addObjects(clones)) selectIds(clones.map((obj) => obj.id));
+  }
+
+  function selectAll() {
+    selectIds(objectsRef.current.filter((obj) => canSelect(obj) && !obj.props?.locked).map((obj) => obj.id));
+    setEditingId(null);
+    setTool('select');
+  }
+
+  function nudge(dx, dy) {
+    const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
+    if (!set.size) return;
+    commit(objectsRef.current.map((obj) => (set.has(obj.id) ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj)));
+  }
+
+  function pasteObjects(list, point) {
+    if (readOnlyRef.current) return;
+    const clones = cloneObjects(list, { center: point });
+    if (addObjects(clones)) {
+      selectIds(clones.map((obj) => obj.id));
+      setTool('select');
+    }
+  }
+
+  function pasteText(text, point) {
+    if (readOnlyRef.current) return;
+    const lines = text.split('\n').length;
+    const obj = createObject('text', {
+      x: point.x - 160,
+      y: point.y - 20,
+      w: 320,
+      h: Math.max(48, lines * 30 + 16),
+      props: { text, fontSize: 22 },
+    });
+    if (addObjects([obj])) {
+      selectIds([obj.id]);
+      setTool('select');
+    }
+  }
+
+  async function uploadImageAt(file, point) {
+    const upload = audienceRef.current === 'teacher' ? uploadTeacherBoardImage : uploadStudentBoardImage;
+    const size = await imageSize(file);
+    const uploaded = await upload(file);
+    let w = 320;
+    let h = 240;
+    if (size?.w && size?.h) {
+      const scale = Math.min(1, 480 / Math.max(size.w, size.h));
+      w = Math.max(40, Math.round(size.w * scale));
+      h = Math.max(32, Math.round(size.h * scale));
+    }
+    return createObject('image', {
+      x: point.x - w / 2,
+      y: point.y - h / 2,
+      w,
+      h,
+      props: {
+        fileId: uploaded.fileId,
+        src: uploaded.src,
+        name: uploaded.name || file.name,
+      },
+    });
+  }
+
+  async function insertImages(files, point) {
+    if (readOnlyRef.current || !files.length) return;
+    notify('');
+    const created = [];
+    for (let i = 0; i < files.length; i += 1) {
+      try {
+        created.push(await uploadImageAt(files[i], { x: point.x + i * 24, y: point.y + i * 24 }));
+      } catch (error) {
+        notify(boardErrorMessage(error, 'Не удалось загрузить изображение'));
+      }
+    }
+    if (!mountedRef.current) return;
+    if (created.length && addObjects(created)) {
+      selectIds(created.map((obj) => obj.id));
+      setTool('select');
+    }
   }
 
   function commitEdit(id) {
     const origin = editOriginRef.current;
     editOriginRef.current = null;
+    editingIdRef.current = null;
     setEditingId(null);
     if (!origin || !id) return;
     const prev = origin.find((obj) => obj.id === id);
     const curr = objectsRef.current.find((obj) => obj.id === id);
+    if (curr?.type === 'text' && !(curr.props?.text || '').trim()) {
+      const next = objectsRef.current.filter((obj) => obj.id !== id);
+      const top = pastRef.current[pastRef.current.length - 1];
+      const created = top?.changes.length === 1 && top.changes[0].id === id && !top.changes[0].before;
+      if (!(prev?.props?.text || '').trim() && created) {
+        pastRef.current.pop();
+        noteHistory();
+      } else {
+        pushHistory(origin, next);
+      }
+      live(next);
+      pruneSelection();
+      return;
+    }
     if ((prev?.props?.text || '') === (curr?.props?.text || '')) return;
-    pastRef.current.push(origin);
-    if (pastRef.current.length > 80) pastRef.current.shift();
-    futureRef.current = [];
-    noteHistory();
+    pushHistory(origin);
   }
 
   function beginEdit(id) {
     if (editOriginRef.current == null) editOriginRef.current = objectsRef.current;
-    setSelectedId(id);
+    editingIdRef.current = id;
+    selectIds([id]);
     setEditingId(id);
     setTool('select');
   }
 
-  function changeText(id, text) {
-    live(objectsRef.current.map((obj) => (
-      obj.id === id ? { ...obj, props: { ...obj.props, text } } : obj
-    )));
+  function changeText(id, text, measure) {
+    live(objectsRef.current.map((obj) => {
+      if (obj.id !== id) return obj;
+      const props = { ...obj.props, text };
+      if (measure?.fontSize) props.fontSize = measure.fontSize;
+      const next = { ...obj, props };
+      if (obj.type === 'text' && measure?.height) next.h = Math.max(40, Math.ceil(measure.height));
+      return next;
+    }));
   }
 
-  function patchProps(id, propsPatch) {
-    const before = objectsRef.current;
-    const next = before.map((obj) => (
-      obj.id === id ? { ...obj, props: { ...obj.props, ...propsPatch } } : obj
-    ));
-    commit(next);
+  function toggleGeo(id) {
+    const obj = objectsRef.current.find((item) => item.id === id);
+    if (!obj || !canEdit(obj)) return;
+    selectIds([id]);
+    setEditingId((current) => (current === id ? null : id));
   }
 
   useLayoutEffect(() => {
@@ -801,22 +1218,53 @@ export default function BoardEditor({
     paintCamera(cameraRef.current);
     paintCursor();
     const drag = dragRef.current;
-    if (!drag?.id) return;
-    raiseObject(drag.id);
-    const obj = objectsRef.current.find((item) => item.id === drag.id);
-    if (obj) paintObject(obj);
+    if (drag?.kind === 'move') {
+      objectsRef.current.forEach((obj) => {
+        if (drag.starts.has(obj.id)) paintObject(obj);
+      });
+    } else if (drag?.id) {
+      const obj = objectsRef.current.find((item) => item.id === drag.id);
+      if (obj) paintObject(obj);
+    }
   });
 
   useEffect(() => {
     titleRef.current = title;
     editingIdRef.current = editingId;
-    selectedIdRef.current = selectedId;
+    selectedIdsRef.current = selectedIds;
     toolRef.current = tool;
     styleRef.current = style;
-    persistRef.current = persist;
-    pullRemoteRef.current = pullRemote;
-    noteRemoteRef.current = noteRemoteRevision;
-    actionsRef.current = { undo, redo, deleteSelected, commitEdit };
+    liveRef.current = {
+      flushOps,
+      saveGeoChanges,
+      onSnapshot,
+      onAckObject,
+      onOpError,
+      applyRemote,
+      onClosed,
+      paintPeerCursors,
+    };
+    actionsRef.current = {
+      undo,
+      redo,
+      deleteSelected,
+      commitEdit,
+      beginEdit,
+      duplicateSelected,
+      selectAll,
+      toggleLock,
+      reorderSelected,
+      nudge,
+      fitAll,
+      zoomTo,
+      pasteObjects,
+      pasteText,
+      insertImages,
+      pasteTarget,
+      pinchMove,
+      endPinch,
+      selectedList,
+    };
     readOnlyRef.current = readOnly;
     audienceRef.current = audience;
     templatesRef.current = templates;
@@ -824,59 +1272,115 @@ export default function BoardEditor({
       if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
       event.preventDefault();
       const cam = cameraRef.current;
+      const scale = event.deltaMode === 1 ? 16 : 1;
       if (event.ctrlKey || event.metaKey) {
-        const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
-        zoomAt(cam.zoom * factor, event.clientX, event.clientY);
+        const delta = clamp(event.deltaY * scale, -60, 60);
+        zoomAt(cam.zoom * Math.exp(-delta * 0.006), event.clientX, event.clientY);
         return;
       }
-      paintCamera({ ...cam, x: cam.x - event.deltaX, y: cam.y - event.deltaY });
+      paintCamera({ ...cam, x: cam.x - event.deltaX * scale, y: cam.y - event.deltaY * scale });
       scheduleCameraCommit();
     };
   });
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      const typing = event.target instanceof Element
-        && event.target.closest('input, textarea, [data-geo-live]');
-      if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[data-geo-live]')) return;
+      const typing = isTypingTarget(target);
+      const actions = actionsRef.current;
       if (event.code === 'Space' && !typing) {
         event.preventDefault();
         spaceRef.current = true;
         paintCursor();
         return;
       }
-      if (typing) return;
-      const key = event.key.toLowerCase();
-      if ((event.ctrlKey || event.metaKey) && key === 'z') {
-        event.preventDefault();
-        if (event.shiftKey) actionsRef.current.redo();
-        else actionsRef.current.undo();
+      if (typing) {
+        if (event.key === 'Escape' && editingIdRef.current) {
+          event.preventDefault();
+          actions.commitEdit(editingIdRef.current);
+        }
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && key === 'y') {
+      const key = event.key.toLowerCase();
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && key === 'z') {
         event.preventDefault();
-        actionsRef.current.redo();
+        if (event.shiftKey) actions.redo();
+        else actions.undo();
+        return;
+      }
+      if (mod && key === 'y') {
+        event.preventDefault();
+        actions.redo();
+        return;
+      }
+      if (mod && key === 'a') {
+        event.preventDefault();
+        actions.selectAll();
+        return;
+      }
+      if (mod && key === 'd') {
+        event.preventDefault();
+        actions.duplicateSelected();
+        return;
+      }
+      if (mod && event.shiftKey && key === 'l') {
+        event.preventDefault();
+        actions.toggleLock();
+        return;
+      }
+      if (event.shiftKey && event.code === 'Digit1') {
+        event.preventDefault();
+        actions.fitAll();
+        return;
+      }
+      if (event.shiftKey && event.code === 'Digit0') {
+        event.preventDefault();
+        actions.zoomTo(1);
+        return;
+      }
+      if (event.key === 'PageUp' || event.key === 'PageDown') {
+        event.preventDefault();
+        actions.reorderSelected(event.key === 'PageUp');
+        return;
+      }
+      if (event.key.startsWith('Arrow') && selectedIdsRef.current.length) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+        const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+        actions.nudge(dx, dy);
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
-        actionsRef.current.deleteSelected();
+        actions.deleteSelected();
         return;
       }
       if (event.key === 'Escape') {
         setEditingId(null);
-        setSelectedId(null);
+        selectedIdsRef.current = [];
+        setSelectedIds([]);
         setTool('select');
         return;
       }
-      if (event.key === 'Enter' && selectedIdRef.current) {
-        const obj = objectsRef.current.find((item) => item.id === selectedIdRef.current);
-        if (obj && (obj.type === 'sticky' || obj.type === 'text')) beginEdit(obj.id);
+      if (event.key === 'Enter' && selectedIdsRef.current.length === 1) {
+        const obj = objectsRef.current.find((item) => item.id === selectedIdsRef.current[0]);
+        if (obj && !obj.props?.locked && (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape')) {
+          event.preventDefault();
+          actions.beginEdit(obj.id);
+        }
         return;
       }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (mod || event.altKey) return;
       const nextTool = TOOL_KEYS[key];
-      if (nextTool) setTool(nextTool);
+      if (!nextTool) return;
+      if (key === 'o' || key === 'r') {
+        const shape = key === 'o' ? 'ellipse' : 'rect';
+        setStyle((prev) => ({ ...prev, shape }));
+      }
+      setTool(nextTool);
     };
     const onKeyUp = (event) => {
       if (event.code === 'Space') {
@@ -884,125 +1388,336 @@ export default function BoardEditor({
         paintCursor();
       }
     };
+    const onCopy = (event) => {
+      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) return;
+      if (window.getSelection()?.toString()) return;
+      const list = actionsRef.current.selectedList();
+      if (!list.length) return;
+      event.preventDefault();
+      event.clipboardData?.setData('text/plain', serializeObjects(list));
+      if (event.type === 'cut') actionsRef.current.deleteSelected();
+    };
+    const onPaste = (event) => {
+      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) return;
+      const data = event.clipboardData;
+      if (!data) return;
+      const actions = actionsRef.current;
+      const point = actions.pasteTarget();
+      const files = imageFiles(data.files);
+      if (files.length) {
+        event.preventDefault();
+        actions.insertImages(files, point);
+        return;
+      }
+      const text = data.getData('text/plain');
+      const parsed = parseObjects(text);
+      if (parsed?.length) {
+        event.preventDefault();
+        actions.pasteObjects(parsed, point);
+        return;
+      }
+      if (text && text.trim()) {
+        event.preventDefault();
+        actions.pasteText(text.trim(), point);
+      }
+    };
+    const onTouchMove = (event) => {
+      if (event.pointerType !== 'touch' || !touchesRef.current.has(event.pointerId)) return;
+      touchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (dragRef.current?.kind === 'pinch') actionsRef.current.pinchMove();
+    };
+    const onTouchEnd = (event) => {
+      if (event.pointerType !== 'touch') return;
+      touchesRef.current.delete(event.pointerId);
+      if (dragRef.current?.kind === 'pinch' && touchesRef.current.size < 2) actionsRef.current.endPinch();
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('copy', onCopy);
+    window.addEventListener('cut', onCopy);
+    window.addEventListener('paste', onPaste);
+    window.addEventListener('pointermove', onTouchMove);
+    window.addEventListener('pointerup', onTouchEnd);
+    window.addEventListener('pointercancel', onTouchEnd);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('copy', onCopy);
+      window.removeEventListener('cut', onCopy);
+      window.removeEventListener('paste', onPaste);
+      window.removeEventListener('pointermove', onTouchMove);
+      window.removeEventListener('pointerup', onTouchEnd);
+      window.removeEventListener('pointercancel', onTouchEnd);
     };
   }, []);
+
+  function strokePoints(drag, from) {
+    return drag.points.slice(from).map((point) => roundPoint({ x: point.x - drag.origin.x, y: point.y - drag.origin.y }));
+  }
+
+  function appendStroke(drag) {
+    window.clearTimeout(drag.timer);
+    drag.timer = 0;
+    if (!drag.id || drag.sent >= drag.points.length) return;
+    const points = strokePoints(drag, drag.sent);
+    drag.sent = drag.points.length;
+    drag.lastSent = performance.now();
+    send({ type: 'append_points', id: drag.id, points });
+  }
+
+  // Штрих видят другие ещё во время рисования: upsert с первыми точками, затем append_points раз в 50 мс.
+  function streamStroke(drag) {
+    if (readOnlyRef.current || !socketRef.current) return;
+    if (!drag.id) {
+      if (drag.points.length < 2) return;
+      drag.id = uid();
+      drag.sent = drag.points.length;
+      drag.lastSent = performance.now();
+      send({
+        type: 'upsert',
+        object: {
+          id: drag.id,
+          type: 'draw',
+          x: drag.origin.x,
+          y: drag.origin.y,
+          w: 12,
+          h: 12,
+          rotation: 0,
+          props: { points: strokePoints(drag, 0), color: drag.color, width: drag.width },
+        },
+      });
+      return;
+    }
+    if (performance.now() - drag.lastSent >= SEND_MS) appendStroke(drag);
+    else if (!drag.timer) drag.timer = window.setTimeout(() => appendStroke(drag), SEND_MS);
+  }
+
+  function finishStroke(drag) {
+    window.clearTimeout(drag.timer);
+    drag.timer = 0;
+    if (drag.points.length < 2) {
+      if (drag.id) send({ type: 'delete', ids: [drag.id] });
+      return;
+    }
+    const points = simplifyPoints(drag.points, 0.5 / cameraRef.current.zoom);
+    const bounds = strokeBounds(points, drag.width);
+    const stroke = createObject('draw', {
+      x: bounds.x,
+      y: bounds.y,
+      w: bounds.w,
+      h: bounds.h,
+      props: { points: bounds.points, color: drag.color, width: drag.width },
+    });
+    flushOps();
+    if (drag.id) {
+      stroke.id = drag.id;
+      // Итоговый штрих упрощён и нормализован по рамке, поэтому точки уходят одним patch вместо хвоста append_points.
+      send({
+        type: 'patch',
+        id: stroke.id,
+        set: { x: stroke.x, y: stroke.y, w: stroke.w, h: stroke.h, props: { points: stroke.props.points } },
+      });
+    } else {
+      send({ type: 'upsert', object: stroke });
+    }
+    const upsert = { type: 'upsert', object: stroke };
+    const next = applyOp(objectsRef.current, upsert);
+    sentRef.current = applyOp(sentRef.current, upsert);
+    pushHistory(objectsRef.current, next);
+    objectsRef.current = next;
+    setObjects(next);
+  }
+
+  function startPinch() {
+    const viewport = viewportRef.current;
+    const points = [...touchesRef.current.values()].slice(0, 2);
+    if (!viewport || points.length < 2) return;
+    const rect = viewport.getBoundingClientRect();
+    const [a, b] = points;
+    dragRef.current = {
+      kind: 'pinch',
+      dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+      mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top },
+      camera: { ...cameraRef.current },
+    };
+    paintCursor();
+    paintSelectionUi();
+  }
+
+  function pinchMove() {
+    const drag = dragRef.current;
+    const viewport = viewportRef.current;
+    const points = [...touchesRef.current.values()].slice(0, 2);
+    if (!drag || drag.kind !== 'pinch' || !viewport || points.length < 2) return;
+    const rect = viewport.getBoundingClientRect();
+    const [a, b] = points;
+    const dist = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+    const mid = { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top };
+    const zoom = clamp(drag.camera.zoom * (dist / drag.dist), MIN_ZOOM, MAX_ZOOM);
+    const worldX = (drag.mid.x - drag.camera.x) / drag.camera.zoom;
+    const worldY = (drag.mid.y - drag.camera.y) / drag.camera.zoom;
+    paintCamera({ zoom, x: mid.x - worldX * zoom, y: mid.y - worldY * zoom });
+  }
+
+  function endPinch() {
+    dragRef.current = null;
+    paintCursor();
+    publishGesture();
+    paintSelectionUi();
+  }
+
+  function startPan(event) {
+    dragRef.current = {
+      kind: 'pan',
+      pointerId: event.pointerId,
+      client: { x: event.clientX, y: event.clientY },
+      camera: { ...cameraRef.current },
+    };
+    paintCursor();
+    trackPointer(event);
+  }
+
+  function cancelDrag() {
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragRef.current = null;
+    dragCleanupRef.current?.();
+    paintDraft(null);
+    paintGuides(null);
+    if (drag.origin && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'arrow-end')) {
+      objectsRef.current = drag.origin;
+      drag.origin.forEach((obj) => {
+        if (drag.starts?.has(obj.id) || obj.id === drag.id) paintObject(obj);
+      });
+    }
+    if (drag.kind === 'pen') {
+      window.clearTimeout(drag.timer);
+      if (drag.id) send({ type: 'delete', ids: [drag.id] });
+    }
+    if (drag.kind === 'eraser' && drag.origin) {
+      objectsRef.current = drag.origin;
+      viewportRef.current?.querySelectorAll('[data-object]').forEach((el) => {
+        el.style.display = '';
+      });
+    }
+    if (hintRef.current) hintRef.current.style.display = '';
+    paintCursor();
+    paintSelectionUi();
+    scheduleSend();
+  }
 
   function finishDrag(event) {
     const drag = dragRef.current;
     dragRef.current = null;
     window.clearTimeout(cameraSyncRef.current);
     paintDraft(null);
+    paintGuides(null);
     paintCursor();
     if (hintRef.current) hintRef.current.style.display = '';
     try {
       if (!drag) return;
-      if (drag.kind === 'pan' || drag.kind === 'eraser') {
-        if (drag.dirty && drag.origin) {
-          pastRef.current.push(drag.origin);
-          if (pastRef.current.length > 80) pastRef.current.shift();
-          futureRef.current = [];
-          noteHistory();
-        }
-        if (selectedIdRef.current && !objectsRef.current.some((obj) => obj.id === selectedIdRef.current)) {
-          setSelectedId(null);
-        }
+      if (drag.kind === 'pan') return;
+      if (drag.kind === 'eraser') {
+        if (drag.dirty && drag.origin) pushHistory(drag.origin);
+        pruneSelection();
         return;
       }
       const world = toWorld(event);
       const currentStyle = styleRef.current;
 
+      if (drag.kind === 'marquee') {
+        const rect = rectFromPoints(drag.start, world);
+        const zoom = cameraRef.current.zoom;
+        if (rect.w < 3 / zoom && rect.h < 3 / zoom) return;
+        const hits = objectsRef.current
+          .filter((obj) => canSelect(obj) && !obj.props?.locked && intersects(rect, obj))
+          .map((obj) => obj.id);
+        selectIds([...new Set([...drag.base, ...hits])]);
+        return;
+      }
+
       if (drag.kind === 'pen') {
-        if (drag.points.length < 2) return;
-        const bounds = strokeBounds(drag.points, currentStyle.penWidth);
-        const stroke = createObject('draw', {
-          x: bounds.x,
-          y: bounds.y,
-          w: bounds.w,
-          h: bounds.h,
-          props: { points: bounds.points, color: currentStyle.pen, width: currentStyle.penWidth },
-        });
-        commit([...objectsRef.current, stroke]);
-        setSelectedId(stroke.id);
+        finishStroke(drag);
         return;
       }
 
       if (drag.kind === 'shape') {
         const rect = rectFromPoints(drag.start, world);
-        if (rect.w < 8 && rect.h < 8) return;
+        const zoom = cameraRef.current.zoom;
+        const tiny = rect.w < 8 / zoom && rect.h < 8 / zoom;
+        const box = tiny
+          ? { x: drag.start.x - 80, y: drag.start.y - 60, w: 160, h: 120 }
+          : { ...rect, w: Math.max(rect.w, 16), h: Math.max(rect.h, 16) };
         const shape = createObject('shape', {
-          ...rect,
-          w: Math.max(rect.w, 16),
-          h: Math.max(rect.h, 16),
+          ...box,
           props: {
             shape: currentStyle.shape,
             fill: currentStyle.fill.fill,
             stroke: currentStyle.fill.stroke,
+            text: '',
           },
         });
-        commit([...objectsRef.current, shape]);
-        setSelectedId(shape.id);
+        if (addObjects([shape])) selectIds([shape.id]);
         setTool('select');
         return;
       }
 
       if (drag.kind === 'arrow') {
-        if (Math.hypot(world.x - drag.start.x, world.y - drag.start.y) < 8) return;
+        if (Math.hypot(world.x - drag.start.x, world.y - drag.start.y) < 8 / cameraRef.current.zoom) return;
         const bounds = arrowBounds(drag.start, world, {
           color: currentStyle.arrow,
           width: currentStyle.penWidth,
         });
         const arrow = createObject('arrow', bounds);
-        commit([...objectsRef.current, arrow]);
-        setSelectedId(arrow.id);
+        if (addObjects([arrow])) selectIds([arrow.id]);
         setTool('select');
         return;
       }
 
-      if (drag.dirty && drag.origin) {
-        pastRef.current.push(drag.origin);
-        if (pastRef.current.length > 80) pastRef.current.shift();
-        futureRef.current = [];
-        noteHistory();
-      }
-      if (selectedIdRef.current && !objectsRef.current.some((obj) => obj.id === selectedIdRef.current)) {
-        setSelectedId(null);
-      }
+      if (drag.dirty && drag.origin) pushHistory(drag.origin);
+      pruneSelection();
     } finally {
       publishGesture();
+      paintSelectionUi();
     }
   }
 
   function moveDrag(event) {
     const drag = dragRef.current;
     if (!drag) return;
-    const world = toWorld(event);
-    const currentStyle = styleRef.current;
+    if (event.pointerType === 'touch') pointerClientRef.current = { x: event.clientX, y: event.clientY };
+    else sendCursor(event.clientX, event.clientY);
 
     if (drag.kind === 'pan') {
-      const next = {
+      paintCamera({
         ...cameraRef.current,
         x: drag.camera.x + (event.clientX - drag.client.x),
         y: drag.camera.y + (event.clientY - drag.client.y),
-      };
-      paintCamera(next);
+      });
+      return;
+    }
+
+    const world = toWorld(event);
+    const currentStyle = styleRef.current;
+    const zoom = cameraRef.current.zoom;
+
+    if (drag.kind === 'marquee') {
+      paintDraft({ kind: 'marquee', ...rectFromPoints(drag.start, world) });
       return;
     }
 
     if (drag.kind === 'pen') {
       const last = drag.points[drag.points.length - 1];
-      if (!last || Math.hypot(world.x - last.x, world.y - last.y) > 1.2) drag.points.push(world);
-      paintDraft({ kind: 'pen', points: drag.points.slice(), color: currentStyle.pen, width: currentStyle.penWidth });
+      if (!last || Math.hypot(world.x - last.x, world.y - last.y) > 1.2 / zoom) {
+        drag.points.push(world);
+        streamStroke(drag);
+      }
+      paintDraft({ kind: 'pen', points: drag.points, color: currentStyle.pen, width: currentStyle.penWidth });
       return;
     }
 
     if (drag.kind === 'eraser') {
-      const radius = 16 / cameraRef.current.zoom;
-      const next = eraseStrokes(objectsRef.current, world, radius);
+      const next = eraseStrokes(objectsRef.current, world, 16 / zoom);
       if (next.length !== objectsRef.current.length) {
         drag.dirty = true;
         hideErased(objectsRef.current, next);
@@ -1011,10 +1726,9 @@ export default function BoardEditor({
     }
 
     if (drag.kind === 'shape') {
-      const rect = rectFromPoints(drag.start, world);
       paintDraft({
         kind: 'shape',
-        ...rect,
+        ...rectFromPoints(drag.start, world),
         shape: currentStyle.shape,
         fill: currentStyle.fill.fill,
         stroke: currentStyle.fill.stroke,
@@ -1035,28 +1749,43 @@ export default function BoardEditor({
       return;
     }
 
-    const dx = world.x - drag.start.x;
-    const dy = world.y - drag.start.y;
-    if (!drag.dirty && Math.hypot(dx, dy) < 3 / cameraRef.current.zoom) return;
-    drag.dirty = true;
+    let dx = world.x - drag.start.x;
+    let dy = world.y - drag.start.y;
+    if (!drag.dirty && Math.hypot(dx, dy) < 3 / zoom) return;
+    if (!drag.dirty) {
+      drag.dirty = true;
+      paintSelectionUi();
+    }
 
     if (drag.kind === 'move') {
-      gesture(replaceObject(objectsRef.current, drag.id, {
-        ...drag.obj,
-        x: drag.obj.x + dx,
-        y: drag.obj.y + dy,
-      }), {
-        ...drag.obj,
-        x: drag.obj.x + dx,
-        y: drag.obj.y + dy,
+      if (!event.altKey && drag.others.length && drag.bounds) {
+        const snap = snapMove(
+          { x: drag.bounds.x + dx, y: drag.bounds.y + dy, w: drag.bounds.w, h: drag.bounds.h },
+          drag.others,
+          SNAP_PX / zoom,
+        );
+        dx += snap.dx;
+        dy += snap.dy;
+        paintGuides(snap.guides);
+      } else {
+        paintGuides(null);
+      }
+      const changed = [];
+      const next = objectsRef.current.map((obj) => {
+        const start = drag.starts.get(obj.id);
+        if (!start) return obj;
+        const moved = { ...start, x: start.x + dx, y: start.y + dy };
+        changed.push(moved);
+        return moved;
       });
+      gesture(next, changed);
       return;
     }
 
     if (drag.kind === 'resize') {
-      const size = resizeBox(drag.obj, drag.handle, world, drag.start);
-      const nextObj = { ...drag.obj, ...size };
-      gesture(replaceObject(objectsRef.current, drag.id, nextObj), nextObj);
+      const keepRatio = drag.obj.type === 'image' ? !event.shiftKey : event.shiftKey;
+      const nextObj = { ...drag.obj, ...resizeBox(drag.obj, drag.handle, world, drag.start, keepRatio) };
+      gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
       return;
     }
 
@@ -1067,71 +1796,86 @@ export default function BoardEditor({
       const end = drag.handle === 'end'
         ? world
         : { x: drag.obj.x + drag.obj.props.x2, y: drag.obj.y + drag.obj.props.y2 };
-      const bounds = arrowBounds(start, end, drag.obj.props);
-      const nextObj = { ...drag.obj, ...bounds };
-      gesture(replaceObject(objectsRef.current, drag.id, nextObj), nextObj);
+      const nextObj = { ...drag.obj, ...arrowBounds(start, end, drag.obj.props) };
+      gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
     }
   }
 
   function trackPointer(event) {
-    const move = (ev) => moveDrag(ev);
-    const up = (ev) => {
+    const pointerId = event.pointerId;
+    const move = (ev) => {
+      if (ev.pointerId === pointerId) moveDrag(ev);
+    };
+    const detach = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      finishDrag(ev);
+      window.removeEventListener('pointercancel', cancel);
+      if (dragCleanupRef.current === detach) dragCleanupRef.current = null;
     };
+    const up = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      detach();
+      if (dragRef.current?.pointerId === pointerId) finishDrag(ev);
+    };
+    const cancel = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      detach();
+      if (dragRef.current?.pointerId === pointerId) cancelDrag();
+    };
+    dragCleanupRef.current?.();
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-    if (event.currentTarget.setPointerCapture) {
-      try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* уже отпущен */ }
+    window.addEventListener('pointercancel', cancel);
+    dragCleanupRef.current = detach;
+    const capture = event.currentTarget;
+    if (capture?.setPointerCapture) {
+      try { capture.setPointerCapture(pointerId); } catch { /* уже отпущен */ }
     }
   }
 
   function onPointerDown(event) {
-    if (event.button !== 0 && event.button !== 1) return;
-    if (readOnlyRef.current) {
-      if (event.target.closest?.('[data-chrome], textarea, input')) return;
-      dragRef.current = {
-        kind: 'pan',
-        client: { x: event.clientX, y: event.clientY },
-        camera: { ...cameraRef.current },
-      };
-      paintCursor();
-      trackPointer(event);
-      return;
-    }
-    if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
-    if (event.target.closest('textarea, input')) return;
-    if (event.target.closest('[data-chrome]')) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('[data-geo-live]')) return;
+    if (target?.closest('textarea, input')) return;
+    if (target?.closest('[data-chrome]')) return;
 
-    const handleEl = event.target.closest('[data-handle]');
+    if (event.pointerType === 'touch') {
+      touchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touchesRef.current.size === 2) {
+        cancelDrag();
+        startPinch();
+        return;
+      }
+      if (touchesRef.current.size > 2) return;
+    }
+    if (dragRef.current) return;
+    if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+
+    pointerClientRef.current = { x: event.clientX, y: event.clientY };
     const world = toWorld(event);
-    const hand = toolRef.current === 'hand' || spaceRef.current || event.button === 1;
+    const currentTool = toolRef.current;
+    const handleEl = target?.closest('[data-handle]');
+    const panButton = event.button === 1 || event.button === 2;
 
-    if (hand && !handleEl) {
-      dragRef.current = {
-        kind: 'pan',
-        client: { x: event.clientX, y: event.clientY },
-        camera: { ...cameraRef.current },
-      };
-      paintCursor();
-      trackPointer(event);
+    if (readOnlyRef.current || panButton || currentTool === 'hand' || (spaceRef.current && !handleEl)) {
+      startPan(event);
       return;
     }
 
-    if (editingIdRef.current && !event.target.closest('textarea')) {
-      actionsRef.current.commitEdit(editingIdRef.current);
+    if (editingIdRef.current && !target?.closest('textarea')) {
+      const editing = objectsRef.current.find((obj) => obj.id === editingIdRef.current);
+      if (editing && editing.type !== 'geogebra') actionsRef.current.commitEdit(editingIdRef.current);
     }
 
-    if (toolRef.current === 'select' || handleEl) {
+    if (currentTool === 'select' || handleEl) {
       if (handleEl) {
-        const objectEl = handleEl.closest('[data-object]');
-        const id = objectEl?.dataset.object;
+        const id = handleEl.closest('[data-object]')?.dataset.object;
         const obj = objectsRef.current.find((item) => item.id === id);
-        if (!obj) return;
+        if (!obj || !canEdit(obj)) return;
         const handle = handleEl.dataset.handle;
         dragRef.current = {
           kind: handle === 'start' || handle === 'end' ? 'arrow-end' : 'resize',
+          pointerId: event.pointerId,
           id,
           handle,
           start: world,
@@ -1139,118 +1883,169 @@ export default function BoardEditor({
           origin: objectsRef.current,
           dirty: false,
         };
-        setSelectedId(id);
+        selectIds([id]);
         trackPointer(event);
         return;
       }
 
-      const hit = topHit(objectsRef.current, world, cameraRef.current.zoom);
+      const hit = topHit(objectsRef.current.filter(canSelect), world, cameraRef.current.zoom);
       if (!hit) {
-        setSelectedId(null);
-        setEditingId(null);
+        if (event.pointerType === 'touch') {
+          selectIds([]);
+          setEditingId(null);
+          startPan(event);
+          return;
+        }
+        const base = event.shiftKey ? selectedIdsRef.current : [];
+        if (!event.shiftKey) {
+          selectIds([]);
+          setEditingId(null);
+        }
+        dragRef.current = { kind: 'marquee', pointerId: event.pointerId, start: world, base };
+        trackPointer(event);
         return;
       }
-      const front = bringToFront(objectsRef.current, hit.id);
-      const origin = objectsRef.current;
-      if (front !== origin) {
-        objectsRef.current = front;
-        raiseObject(hit.id);
+
+      let ids = selectedIdsRef.current;
+      if (event.shiftKey) {
+        ids = ids.includes(hit.id) ? ids.filter((id) => id !== hit.id) : [...ids, hit.id];
+        selectIds(ids);
+        if (!ids.includes(hit.id)) return;
+      } else if (!ids.includes(hit.id)) {
+        ids = [hit.id];
+        selectIds(ids);
       }
-      const obj = front.find((item) => item.id === hit.id);
-      setSelectedId(hit.id);
+      if (editingIdRef.current && editingIdRef.current !== hit.id) setEditingId(null);
       if (hit.type === 'geogebra' && editingIdRef.current === hit.id) return;
+
+      const set = new Set(ids);
+      const movable = objectsRef.current.filter((obj) => set.has(obj.id) && canEdit(obj));
+      if (!movable.length) return;
       dragRef.current = {
         kind: 'move',
-        id: hit.id,
+        pointerId: event.pointerId,
         start: world,
-        obj,
-        origin,
-        dirty: front !== origin,
+        starts: new Map(movable.map((obj) => [obj.id, obj])),
+        bounds: boundsOf(movable),
+        others: objectsRef.current
+          .filter((obj) => !set.has(obj.id) && obj.type !== 'draw')
+          .map((obj) => ({ x: obj.x, y: obj.y, w: obj.w, h: obj.h })),
+        origin: objectsRef.current,
+        dirty: false,
       };
       trackPointer(event);
       return;
     }
 
-    if (toolRef.current === 'pen') {
-      dragRef.current = { kind: 'pen', points: [world] };
+    selectIds([]);
+
+    if (currentTool === 'pen') {
+      if (objectsRef.current.length >= MAX_OBJECTS) {
+        notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+        return;
+      }
+      dragRef.current = {
+        kind: 'pen',
+        pointerId: event.pointerId,
+        points: [world],
+        id: null,
+        origin: world,
+        color: styleRef.current.pen,
+        width: styleRef.current.penWidth,
+        sent: 0,
+        lastSent: 0,
+        timer: 0,
+      };
       if (hintRef.current) hintRef.current.style.display = 'none';
       paintDraft({ kind: 'pen', points: [world], color: styleRef.current.pen, width: styleRef.current.penWidth });
       trackPointer(event);
       return;
     }
 
-    if (toolRef.current === 'eraser') {
-      const radius = 16 / cameraRef.current.zoom;
-      const next = eraseStrokes(objectsRef.current, world, radius);
-      dragRef.current = { kind: 'eraser', origin: objectsRef.current, dirty: next.length !== objectsRef.current.length };
+    if (currentTool === 'eraser') {
+      const next = eraseStrokes(objectsRef.current, world, 16 / cameraRef.current.zoom);
+      dragRef.current = {
+        kind: 'eraser',
+        pointerId: event.pointerId,
+        origin: objectsRef.current,
+        dirty: next.length !== objectsRef.current.length,
+      };
       if (dragRef.current.dirty) hideErased(objectsRef.current, next);
       trackPointer(event);
       return;
     }
 
-    if (toolRef.current === 'shape' || toolRef.current === 'arrow') {
+    if (currentTool === 'shape' || currentTool === 'arrow') {
       if (hintRef.current) hintRef.current.style.display = 'none';
-      dragRef.current = { kind: toolRef.current, start: world };
+      dragRef.current = { kind: currentTool, pointerId: event.pointerId, start: world };
       trackPointer(event);
       return;
     }
 
-    if (toolRef.current === 'sticky' || toolRef.current === 'text') {
-      const sticky = toolRef.current === 'sticky';
-      const obj = createObject(sticky ? 'sticky' : 'text', {
-        x: world.x,
-        y: world.y,
-        w: sticky ? 200 : 240,
-        h: sticky ? 160 : 72,
-        props: sticky
-          ? { text: '', color: styleRef.current.sticky, fontSize: 15 }
-          : { text: '', fontSize: 22 },
-      });
-      commit([...objectsRef.current, obj]);
-      beginEdit(obj.id);
+    if (currentTool === 'sticky' || currentTool === 'text') {
+      const sticky = currentTool === 'sticky';
+      const obj = createObject(sticky ? 'sticky' : 'text', sticky
+        ? {
+          x: world.x - 100,
+          y: world.y - 100,
+          w: 200,
+          h: 200,
+          props: { text: '', color: styleRef.current.sticky, fontSize: 28 },
+        }
+        : {
+          x: world.x,
+          y: world.y - 20,
+          w: 280,
+          h: Math.max(40, Math.round(styleRef.current.textSize * 1.4 + 16)),
+          props: { text: '', fontSize: styleRef.current.textSize },
+        });
+      if (addObjects([obj])) beginEdit(obj.id);
       return;
     }
 
-    if (toolRef.current === 'image') {
+    if (currentTool === 'image') {
       imagePointRef.current = world;
       fileRef.current?.click();
       return;
     }
 
-    if (toolRef.current === 'geogebra') {
+    if (currentTool === 'geogebra') {
       placeGeogebra(world);
     }
   }
 
+  function onViewportPointerMove(event) {
+    if (event.pointerType === 'touch') return;
+    if (dragRef.current) return;
+    sendCursor(event.clientX, event.clientY);
+  }
+
+  function onContextMenu(event) {
+    if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
+    event.preventDefault();
+  }
+
+  function onDragOver(event) {
+    if (readOnlyRef.current) return;
+    if (Array.from(event.dataTransfer?.types || []).includes('Files')) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  function onDrop(event) {
+    const files = imageFiles(event.dataTransfer?.files);
+    if (!files.length) return;
+    event.preventDefault();
+    insertImages(files, toWorld(event));
+  }
+
   async function onImageFile(event) {
-    const file = event.target.files?.[0];
+    const files = imageFiles(event.target.files);
     event.target.value = '';
     const point = imagePointRef.current;
-    if (!file || !point || readOnlyRef.current) return;
-    setNotice('');
-    setSaveState('saving');
-    try {
-      const upload = audienceRef.current === 'teacher' ? uploadTeacherBoardImage : uploadStudentBoardImage;
-      const uploaded = await upload(file);
-      const obj = createObject('image', {
-        x: point.x,
-        y: point.y,
-        w: 320,
-        h: 240,
-        props: {
-          fileId: uploaded.fileId,
-          src: uploaded.src,
-          name: uploaded.name || file.name,
-        },
-      });
-      commit([...objectsRef.current, obj]);
-      setSelectedId(obj.id);
-      setTool('select');
-      setSaveState('saved');
-    } catch (error) {
-      setNotice(boardErrorMessage(error, 'Не удалось загрузить изображение'));
-      setSaveState('error');
-    }
+    if (!files.length || !point) return;
+    await insertImages(files, point);
   }
 
   async function placeGeogebra(world) {
@@ -1269,39 +2064,50 @@ export default function BoardEditor({
       } catch (error) {
         rememberTemplateError(templateId);
         if (error.response?.status !== 404) {
-          setNotice(boardErrorMessage(error, 'Шаблон не загрузился'));
+          notify(boardErrorMessage(error, 'Шаблон не загрузился'));
         }
       }
     }
     const obj = createObject('geogebra', {
-      x: world.x,
-      y: world.y,
+      x: world.x - 220,
+      y: world.y - 160,
       w: 440,
       h: 320,
       props: templateId
         ? { appName, templateId, templateTitle }
         : { appName },
     });
-    commit([...objectsRef.current, obj]);
-    setSelectedId(obj.id);
+    if (addObjects([obj])) selectIds([obj.id]);
     setTool('select');
   }
 
   function onDoubleClick(event) {
-    if (toolRef.current !== 'select') return;
+    if (toolRef.current !== 'select' || readOnlyRef.current) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('[data-geo-live], [data-chrome], textarea')) return;
     const world = toWorld(event);
-    const hit = topHit(objectsRef.current, world, cameraRef.current.zoom);
-    if (hit && (hit.type === 'sticky' || hit.type === 'text')) beginEdit(hit.id);
+    const hit = topHit(objectsRef.current.filter(canSelect), world, cameraRef.current.zoom);
+    if (hit) {
+      if (canEdit(hit) && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
+      return;
+    }
+    const obj = createObject('text', {
+      x: world.x,
+      y: world.y - 20,
+      w: 280,
+      h: Math.max(40, Math.round(styleRef.current.textSize * 1.4 + 16)),
+      props: { text: '', fontSize: styleRef.current.textSize },
+    });
+    if (addObjects([obj])) beginEdit(obj.id);
   }
 
-  async function goBack() {
-    await persistRef.current();
+  function goBack() {
+    flushOps();
     navigate(backTo);
   }
 
-  const context = tool === 'select' && selected ? selected.type : tool;
-  const canUndo = historyCounts.undo > 0;
-  const canRedo = historyCounts.redo > 0;
+  const trayContext = tool === 'select' || tool === 'hand' ? null : tool;
+  const geoEditing = selectedObjects.length === 1 && editingId === selectedObjects[0].id && selectedObjects[0].type === 'geogebra';
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100">
@@ -1314,7 +2120,12 @@ export default function BoardEditor({
           backgroundPosition: `${camera.x}px ${camera.y}px`,
         }}
         onPointerDown={onPointerDown}
+        onPointerMove={onViewportPointerMove}
+        onPointerLeave={() => { pointerClientRef.current = null; }}
         onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
       >
         <div
           ref={worldRef}
@@ -1326,40 +2137,84 @@ export default function BoardEditor({
               key={obj.id}
               obj={obj}
               zoom={camera.zoom}
-              selected={obj.id === selectedId}
+              selected={selectedSet.has(obj.id)}
+              handles={selectedIds.length === 1 && selectedSet.has(obj.id)}
               editing={obj.id === editingId}
-              geoEpoch={geoEpoch}
+              geoEpoch={geoVersions[obj.id] || 0}
               templateBase64={obj.props?.templateId ? (templateFiles[obj.props.templateId] || '') : ''}
               templateFailed={Boolean(obj.props?.templateId && templateErrors[obj.props.templateId])}
               onChangeText={changeText}
               onBlurText={commitEdit}
-              onToggleGeo={(id) => {
-                setSelectedId(id);
-                setEditingId((current) => (current === id ? null : id));
-              }}
+              onToggleGeo={toggleGeo}
               onGeoReady={(id, api) => {
                 if (api) apiMap.current.set(id, api);
                 else apiMap.current.delete(id);
               }}
               onGeoChange={(id) => {
-                if (editingIdRef.current !== id) return;
-                geoDirtyRef.current.add(id);
-                clearTimeout(geoTimerRef.current);
-                geoTimerRef.current = setTimeout(() => persistRef.current(), 1200);
+                if (editingIdRef.current !== id || readOnlyRef.current) return;
+                scheduleGeoSave(id);
               }}
             />
           ))}
+          <div ref={groupBoxRef} className="pointer-events-none absolute" style={{ display: 'none' }} />
+          <div ref={guideHostRef} className="pointer-events-none absolute left-0 top-0" />
           <div ref={draftHostRef} className="pointer-events-none absolute left-0 top-0" />
         </div>
       </div>
 
       {objects.length === 0 && (
         <div ref={hintRef} className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">
-          <p className="max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
-            Пустой холст. Стикер, изображение и GeoGebra — на панели инструментов. Колесо двигает доску, Ctrl и колесо — масштаб.
+          <p className="max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            Пустой холст. N — стикер, T или двойной клик — текст, P — кисть, G — GeoGebra.
+            Картинку можно вставить через Ctrl+V или перетащить файл. Колесо двигает доску, Ctrl и колесо — масштаб.
           </p>
         </div>
       )}
+
+      <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+        {peers.map((peer) => (
+          <div
+            key={peer.clientId}
+            ref={(node) => {
+              if (node) {
+                cursorNodesRef.current.set(peer.clientId, node);
+                liveRef.current.paintPeerCursors?.();
+              } else {
+                cursorNodesRef.current.delete(peer.clientId);
+              }
+            }}
+            className="absolute left-0 top-0 transition-transform duration-75 ease-linear"
+            style={{ display: 'none' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" className="drop-shadow-sm">
+              <path d="M2 1.5 L15 8.5 L9 10 L6.5 16 Z" fill={peerColor(peer.clientId)} stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
+            </svg>
+            <span
+              className="ml-3 mt-0.5 inline-block max-w-40 truncate whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium text-white shadow-sm"
+              style={{ background: peerColor(peer.clientId) }}
+            >
+              {peerName(peer)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div ref={barRef} className="absolute left-0 top-0 z-30" style={{ visibility: 'hidden' }}>
+        {!readOnly && selectedObjects.length > 0 && (
+          <SelectionToolbar
+            objects={selectedObjects}
+            canLock={audience === 'teacher'}
+            geoEditing={geoEditing}
+            onPatch={patchSelected}
+            onDuplicate={duplicateSelected}
+            onDelete={deleteSelected}
+            onFront={() => reorderSelected(true)}
+            onBack={() => reorderSelected(false)}
+            onToggleLock={toggleLock}
+            onToggleGeo={() => selectedObjects[0] && toggleGeo(selectedObjects[0].id)}
+          />
+        )}
+      </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 p-2 [@media(min-height:760px)]:pl-[4.75rem]">
         <div className="pointer-events-auto flex min-w-0 flex-1 items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
@@ -1381,45 +2236,45 @@ export default function BoardEditor({
             aria-label="Название доски"
             className="h-9 min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
-          <span className="hidden shrink-0 pr-2 text-[11px] text-zinc-400 lg:inline">
-            {saveState === 'saving' ? 'Сохранение…' : saveState === 'error' ? 'Не сохранилось' : saveState === 'conflict' ? 'На сервере новее' : readOnly ? 'Только просмотр' : 'Сохранено'}
-          </span>
+          <LinkStatus link={link} readOnly={readOnly} />
         </div>
 
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-          {selected && !readOnly && (
-            <button
-              type="button"
-              onClick={deleteSelected}
-              aria-label="Удалить"
-              title="Удалить"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/90 text-zinc-700 shadow-sm hover:text-red-600 dark:border-zinc-800 dark:bg-zinc-950/90 dark:text-zinc-200"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
+          <PeerList peers={peers} />
           <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/90 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90">
-            <IconButton label="Отменить" disabled={!canUndo} onClick={undo}><Undo2 size={16} /></IconButton>
-            <IconButton label="Повторить" disabled={!canRedo} onClick={redo}><Redo2 size={16} /></IconButton>
+            <IconButton label="Отменить (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={16} /></IconButton>
+            <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={16} /></IconButton>
           </div>
           <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/90 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90">
-            <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.15)}><Minus size={16} /></IconButton>
+            <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={16} /></IconButton>
             <button
               ref={zoomLabelRef}
               type="button"
-              onClick={() => zoomBy(1 / cameraRef.current.zoom)}
+              title="100% (Shift+0)"
+              onClick={() => zoomTo(1)}
               className="w-12 text-center text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-300"
             >
               {Math.round(camera.zoom * 100)}%
             </button>
-            <IconButton label="Увеличить" onClick={() => zoomBy(1.15)}><Plus size={16} /></IconButton>
+            <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={16} /></IconButton>
+            <IconButton label="Показать всё (Shift+1)" onClick={fitAll}><Maximize2 size={15} /></IconButton>
           </div>
         </div>
       </div>
 
+      {notice && (
+        <div className="pointer-events-auto absolute left-1/2 top-16 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-start gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+          <AlertCircle size={14} className="mt-px shrink-0" />
+          <span className="min-w-0">{notice}</span>
+          <button type="button" aria-label="Закрыть" onClick={() => notify('')} className="-mr-1 shrink-0 opacity-70 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="absolute inset-x-3 bottom-3 z-30 flex items-end justify-center gap-2 [@media(min-height:760px)]:inset-x-auto [@media(min-height:760px)]:bottom-auto [@media(min-height:760px)]:left-3 [@media(min-height:760px)]:top-16 [@media(min-height:760px)]:flex-col [@media(min-height:760px)]:items-start">
-        <div className="flex flex-row items-center gap-1 rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-height:760px)]:w-12 [@media(min-height:760px)]:flex-col">
-          {TOOLS.map((item) => {
+        <div className="flex flex-row items-center gap-1 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-height:760px)]:w-12 [@media(min-height:760px)]:flex-col">
+          {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand').map((item) => {
             const Icon = item.icon;
             const active = tool === item.id;
             const divider = item.id === 'sticky' || item.id === 'image';
@@ -1432,7 +2287,7 @@ export default function BoardEditor({
                   aria-label={item.label}
                   aria-pressed={active}
                   onClick={() => setTool(item.id)}
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${active ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${active ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
                 >
                   <Icon size={18} strokeWidth={1.75} />
                 </button>
@@ -1440,27 +2295,85 @@ export default function BoardEditor({
             );
           })}
         </div>
-        <StyleTray
-          context={context}
-          style={style}
-          selected={selected}
-          editingId={editingId}
-          templates={templates}
-          templateFiles={templateFiles}
-          templateErrors={templateErrors}
-          notice={notice}
-          onStyle={setStyle}
-          onPatch={(patch) => selected && patchProps(selected.id, patch)}
-          onToggleGeo={() => selected && setEditingId((current) => (current === selected.id ? null : selected.id))}
-        />
+        <StyleTray context={trayContext} style={style} templates={templates} onStyle={setStyle} />
       </div>
       <input
         ref={fileRef}
         type="file"
+        multiple
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
         onChange={onImageFile}
       />
+    </div>
+  );
+}
+
+function LinkStatus({ link, readOnly }) {
+  const base = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium';
+  if (link.state === 'denied') {
+    return (
+      <span className={`${base} text-red-600`} title="Соединение закрыто сервером">
+        <AlertCircle size={13} />
+        <span className="hidden sm:inline">Нет доступа</span>
+      </span>
+    );
+  }
+  if (link.state === 'offline') {
+    const text = link.pending ? `Нет связи · ${link.pending} в очереди` : 'Нет связи · переподключение';
+    return (
+      <span className={`${base} text-amber-600`} title="Правки отправятся после переподключения">
+        <WifiOff size={13} />
+        <span className="hidden sm:inline">{text}</span>
+      </span>
+    );
+  }
+  if (link.state === 'connecting') {
+    return (
+      <span className={`${base} text-zinc-400`} title="Подключение к доске">
+        <Loader2 size={13} className="animate-spin" />
+        <span className="hidden sm:inline">Подключение…</span>
+      </span>
+    );
+  }
+  if (readOnly) return <span className={`${base} text-zinc-400`}>Только просмотр</span>;
+  if (link.state === 'syncing') {
+    return (
+      <span className={`${base} text-zinc-400`} title="Сервер ещё не подтвердил правки">
+        <Loader2 size={13} className="animate-spin" />
+        <span className="hidden sm:inline">Сохранение…</span>
+      </span>
+    );
+  }
+  return (
+    <span className={`${base} text-zinc-400`} title="Все правки на сервере">
+      <Check size={13} />
+      <span className="hidden sm:inline">Сохранено</span>
+    </span>
+  );
+}
+
+function PeerList({ peers }) {
+  if (!peers.length) return null;
+  const shown = peers.slice(0, 4);
+  const rest = peers.length - shown.length;
+  return (
+    <div
+      className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/90 py-1 pl-1 pr-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90"
+      title={peers.map(peerName).join(', ')}
+    >
+      <div className="flex -space-x-1.5">
+        {shown.map((peer) => (
+          <span
+            key={peer.clientId}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white ring-2 ring-white dark:ring-zinc-950"
+            style={{ background: peerColor(peer.clientId) }}
+          >
+            {initials(peerName(peer))}
+          </span>
+        ))}
+      </div>
+      {rest > 0 && <span className="ml-1.5 text-[11px] font-medium text-zinc-500">+{rest}</span>}
     </div>
   );
 }
@@ -1480,55 +2393,37 @@ function IconButton({ label, onClick, disabled, children }) {
   );
 }
 
-function StyleTray({ context, style, selected, editingId, templates, templateFiles, templateErrors, notice, onStyle, onPatch, onToggleGeo }) {
+function StyleTray({ context, style, templates, onStyle }) {
   if (context === 'sticky') {
     return (
       <SwatchCard label="Цвет стикера">
-        {STICKY_COLORS.map((color) => (
-          <ColorDot
-            key={color.id}
-            color={color.bg}
-            label={color.label}
-            active={(selected?.props.color || style.sticky) === color.bg}
-            onClick={() => {
-              onStyle((prev) => ({ ...prev, sticky: color.bg }));
-              if (selected?.type === 'sticky') onPatch({ color: color.bg });
-            }}
-          />
-        ))}
+        <div className="flex flex-wrap gap-1.5">
+          {STICKY_COLORS.map((color) => (
+            <ColorDot
+              key={color.id}
+              color={color.bg}
+              label={color.label}
+              active={style.sticky === color.bg}
+              onClick={() => onStyle((prev) => ({ ...prev, sticky: color.bg }))}
+            />
+          ))}
+        </div>
       </SwatchCard>
     );
   }
 
-  if (context === 'pen' || context === 'draw' || context === 'eraser') {
+  if (context === 'text') {
     return (
-      <SwatchCard label="Кисть">
-        <div className="flex flex-wrap gap-1.5">
-          {PEN_COLORS.map((color) => (
-            <ColorDot
-              key={color}
-              color={color}
-              label={color}
-              active={(selected?.type === 'draw' ? selected.props.color : style.pen) === color}
-              onClick={() => {
-                onStyle((prev) => ({ ...prev, pen: color, arrow: prev.arrow }));
-                if (selected?.type === 'draw') onPatch({ color });
-              }}
-            />
-          ))}
-        </div>
-        <div className="mt-2 flex gap-1">
-          {PEN_WIDTHS.map((width) => (
+      <SwatchCard label="Текст">
+        <div className="flex gap-1">
+          {TEXT_SIZES.map((item) => (
             <button
-              key={width}
+              key={item.id}
               type="button"
-              onClick={() => {
-                onStyle((prev) => ({ ...prev, penWidth: width }));
-                if (selected?.type === 'draw') onPatch({ width });
-              }}
-              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${(selected?.type === 'draw' ? selected.props.width : style.penWidth) === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              onClick={() => onStyle((prev) => ({ ...prev, textSize: item.size }))}
+              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.textSize === item.size ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
             >
-              {width}
+              {item.label}
             </button>
           ))}
         </div>
@@ -1536,33 +2431,59 @@ function StyleTray({ context, style, selected, editingId, templates, templateFil
     );
   }
 
+  if (context === 'pen' || context === 'eraser') {
+    return (
+      <SwatchCard label={context === 'eraser' ? 'Ластик стирает штрихи кисти' : 'Кисть'}>
+        {context === 'pen' && (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {PEN_COLORS.map((color) => (
+                <ColorDot
+                  key={color}
+                  color={color}
+                  label={color}
+                  active={style.pen === color}
+                  onClick={() => onStyle((prev) => ({ ...prev, pen: color }))}
+                />
+              ))}
+            </div>
+            <div className="mt-2 flex gap-1">
+              {PEN_WIDTHS.map((width) => (
+                <button
+                  key={width}
+                  type="button"
+                  onClick={() => onStyle((prev) => ({ ...prev, penWidth: width }))}
+                  className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.penWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  {width}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </SwatchCard>
+    );
+  }
+
   if (context === 'shape') {
-    const activeFill = selected?.type === 'shape' ? selected.props.fill : style.fill.fill;
     return (
       <SwatchCard label="Фигура">
         <div className="mb-2 flex gap-1">
-          <button
-            type="button"
-            aria-label="Прямоугольник"
-            onClick={() => {
-              onStyle((prev) => ({ ...prev, shape: 'rect' }));
-              if (selected?.type === 'shape') onPatch({ shape: 'rect' });
-            }}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg ${(selected?.props.shape || style.shape) === 'rect' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
-          >
-            <Square size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Эллипс"
-            onClick={() => {
-              onStyle((prev) => ({ ...prev, shape: 'ellipse' }));
-              if (selected?.type === 'shape') onPatch({ shape: 'ellipse' });
-            }}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg ${(selected?.props.shape || style.shape) === 'ellipse' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
-          >
-            <Circle size={15} />
-          </button>
+          {SHAPE_KINDS.map((kind) => {
+            const Icon = SHAPE_ICONS[kind.id];
+            return (
+              <button
+                key={kind.id}
+                type="button"
+                aria-label={kind.label}
+                title={kind.label}
+                onClick={() => onStyle((prev) => ({ ...prev, shape: kind.id }))}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.shape === kind.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
+              >
+                <Icon size={14} />
+              </button>
+            );
+          })}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {SHAPE_FILLS.map((fill) => (
@@ -1570,11 +2491,8 @@ function StyleTray({ context, style, selected, editingId, templates, templateFil
               key={fill.id}
               color={fill.fill}
               label={fill.label}
-              active={activeFill === fill.fill}
-              onClick={() => {
-                onStyle((prev) => ({ ...prev, fill }));
-                if (selected?.type === 'shape') onPatch({ fill: fill.fill, stroke: fill.stroke });
-              }}
+              active={style.fill.fill === fill.fill}
+              onClick={() => onStyle((prev) => ({ ...prev, fill }))}
             />
           ))}
         </div>
@@ -1591,11 +2509,8 @@ function StyleTray({ context, style, selected, editingId, templates, templateFil
               key={color}
               color={color}
               label={color}
-              active={(selected?.type === 'arrow' ? selected.props.color : style.arrow) === color}
-              onClick={() => {
-                onStyle((prev) => ({ ...prev, arrow: color }));
-                if (selected?.type === 'arrow') onPatch({ color });
-              }}
+              active={style.arrow === color}
+              onClick={() => onStyle((prev) => ({ ...prev, arrow: color }))}
             />
           ))}
         </div>
@@ -1607,43 +2522,13 @@ function StyleTray({ context, style, selected, editingId, templates, templateFil
     return (
       <SwatchCard label="Изображение" wide>
         <p className="text-[11px] leading-snug text-zinc-500">
-          Клик по доске открывает файл. На холст попадёт адрес с сервера.
+          Клик по доске открывает файл. Ещё можно вставить картинку через Ctrl+V или перетащить её на холст.
         </p>
-        {notice && <p className="mt-2 text-[11px] leading-snug text-red-600">{notice}</p>}
       </SwatchCard>
     );
   }
 
   if (context === 'geogebra') {
-    const selectedTemplate = selected?.type === 'geogebra' && selected.props.templateId
-      ? (templates.find((item) => item.id === selected.props.templateId) || {
-        id: selected.props.templateId,
-        title: selected.props.templateTitle || selected.props.templateId,
-      })
-      : null;
-    if (selected?.type === 'geogebra' && selectedTemplate && !selected.props.ggbBase64 && !templateFiles[selected.props.templateId]) {
-      return (
-        <SwatchCard label="Шаблон" wide>
-          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">{selectedTemplate.title}</p>
-          <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-            {templateErrors[selected.props.templateId] ? 'Шаблон не загрузился' : 'Загрузка шаблона…'}
-          </p>
-        </SwatchCard>
-      );
-    }
-    if (selected?.type === 'geogebra') {
-      return (
-        <SwatchCard label="GeoGebra">
-          <button
-            type="button"
-            onClick={onToggleGeo}
-            className="w-full rounded-lg bg-zinc-900 px-2 py-1.5 text-xs font-semibold text-white dark:bg-white dark:text-zinc-950"
-          >
-            {editingId === selected.id ? 'Двигать объект' : 'Чертить внутри'}
-          </button>
-        </SwatchCard>
-      );
-    }
     return (
       <SwatchCard label="GeoGebra" wide>
         <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
@@ -1680,7 +2565,7 @@ function StyleTray({ context, style, selected, editingId, templates, templateFil
 
 function SwatchCard({ label, children, wide = false }) {
   return (
-    <div className={`${wide ? 'w-48' : 'w-36'} rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95`}>
+    <div className={`${wide ? 'w-48' : 'w-40'} rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95`}>
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
       {children}
     </div>

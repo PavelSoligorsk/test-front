@@ -41,6 +41,22 @@ export const PEN_COLORS = ['#18181b', '#dc2626', '#2563eb', '#16a34a', '#d97706'
 
 export const PEN_WIDTHS = [2, 4, 8];
 
+export const SHAPE_KINDS = [
+  { id: 'rect', label: 'Прямоугольник' },
+  { id: 'ellipse', label: 'Эллипс' },
+  { id: 'triangle', label: 'Треугольник' },
+  { id: 'diamond', label: 'Ромб' },
+];
+
+export const TEXT_SIZES = [
+  { id: 's', label: 'S', size: 16 },
+  { id: 'm', label: 'M', size: 22 },
+  { id: 'l', label: 'L', size: 32 },
+  { id: 'xl', label: 'XL', size: 48 },
+];
+
+export const SELECTION_COLOR = '#4262ff';
+
 export const SHAPE_FILLS = [
   { id: 'white', label: 'Белый', fill: '#ffffff', stroke: '#18181b' },
   { id: 'blue', label: 'Синий', fill: '#dbeafe', stroke: '#1d4ed8' },
