@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TEXT_SIZES } from './model';
 import ShapeGlyph from './ShapeGlyph';
-import { SHAPE_KINDS } from './shapes';
+import { SHAPE_KINDS, defaultDepth } from './shapes';
 
 function Divider() {
   return <span className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />;
@@ -147,7 +147,7 @@ export default function SelectionToolbar({
               key={kind.id}
               label={kind.label}
               active={(first.props.shape || 'rect') === kind.id}
-              onClick={() => onPatch('shape', { shape: kind.id })}
+              onClick={() => onPatch('shape', { shape: kind.id, depth: defaultDepth(kind.id) })}
             >
               <ShapeGlyph id={kind.id} size={15} />
             </ToolButton>

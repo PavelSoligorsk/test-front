@@ -4,7 +4,7 @@ import GeoGebraWidget from './GeoGebraWidget';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
-import { shapeFigures, shapeToneOpacity } from './shapes';
+import { shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -138,20 +138,25 @@ function TextBody({ obj, editing, onChange, onBlur }) {
   );
 }
 
+function shapePaint(fig, fill, stroke) {
+  return {
+    fill: fig.fill === 'none' ? 'none' : fill,
+    stroke,
+    strokeWidth: 2,
+    strokeLinejoin: 'round',
+    vectorEffect: 'non-scaling-stroke',
+    fillOpacity: fig.fill === 'none' ? 1 : shapeToneOpacity(fig.tone),
+    strokeDasharray: fig.dashed ? '4 3' : undefined,
+  };
+}
+
 function ShapeBody({ obj }) {
   const fill = obj.props.fill || '#ffffff';
   const stroke = obj.props.stroke || '#18181b';
   return (
-    <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-      {shapeFigures(obj.props.shape).map((fig, index) => {
-        const props = {
-          fill,
-          stroke,
-          strokeWidth: 2,
-          strokeLinejoin: 'round',
-          vectorEffect: 'non-scaling-stroke',
-          fillOpacity: shapeToneOpacity(fig.tone),
-        };
+    <svg data-shape="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+      {shapeFigures(obj.props.shape, obj.props.depth).map((fig, index) => {
+        const props = shapePaint(fig, fill, stroke);
         if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
         if (fig.d) return <path key={index} d={fig.d} {...props} />;
         return <polygon key={index} points={fig.points} {...props} />;
@@ -314,6 +319,21 @@ function BoardObject({
       )}
 
       {selected && handles && box && !interactiveGeo && !locked && <BoxHandles zoom={zoom} />}
+
+      {selected && handles && !locked && obj.type === 'shape' && (
+        <span
+          data-handle="depth"
+          aria-label="Глубина"
+          title="Глубина"
+          className="absolute z-30 h-3 w-3 border-2 border-amber-600 bg-amber-400"
+          style={{
+            left: `${shapeHandle(obj.props.shape, obj.props.depth).x}%`,
+            top: `${shapeHandle(obj.props.shape, obj.props.depth).y}%`,
+            transform: `translate(-50%, -50%) rotate(45deg) scale(${1 / zoom})`,
+            cursor: 'grab',
+          }}
+        />
+      )}
 
       {selected && handles && !locked && obj.type === 'arrow' && (
         <>

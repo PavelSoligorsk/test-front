@@ -1,98 +1,217 @@
-const PLANE = [
-  { id: 'rect', label: 'Прямоугольник', group: 'plane' },
-  { id: 'round', label: 'Скруглённый', group: 'plane' },
-  { id: 'ellipse', label: 'Эллипс', group: 'plane' },
-  { id: 'triangle', label: 'Треугольник', group: 'plane' },
-  { id: 'right', label: 'Прямоугольный', group: 'plane' },
-  { id: 'diamond', label: 'Ромб', group: 'plane' },
-  { id: 'parallelogram', label: 'Параллелограмм', group: 'plane' },
-  { id: 'trapezoid', label: 'Трапеция', group: 'plane' },
-  { id: 'hexagon', label: 'Шестиугольник', group: 'plane' },
-  { id: 'heart', label: 'Сердце', group: 'plane' },
-  { id: 'star', label: 'Звезда', group: 'plane' },
-  { id: 'cloud', label: 'Облако', group: 'plane' },
-  { id: 'bubble', label: 'Реплика', group: 'plane' },
-];
-
 const SOLID = [
-  { id: 'cube', label: 'Куб', group: 'solid' },
-  { id: 'box', label: 'Брусок', group: 'solid' },
-  { id: 'pyramid', label: 'Пирамида', group: 'solid' },
-  { id: 'prism', label: 'Призма', group: 'solid' },
-  { id: 'cylinder', label: 'Цилиндр', group: 'solid' },
-  { id: 'cone', label: 'Конус', group: 'solid' },
+  { id: 'cube', label: 'Куб' },
+  { id: 'box', label: 'Параллелепипед' },
+  { id: 'prism3', label: 'Треугольная призма' },
+  { id: 'prism6', label: 'Шестиугольная призма' },
+  { id: 'pyramid3', label: 'Треугольная пирамида' },
+  { id: 'pyramid4', label: 'Четырёхугольная пирамида' },
+  { id: 'pyramid6', label: 'Шестиугольная пирамида' },
+  { id: 'cylinder', label: 'Цилиндр' },
+  { id: 'cone', label: 'Конус' },
+  { id: 'sphere', label: 'Шар' },
 ];
 
 export const SHAPE_GROUPS = [
-  { id: 'plane', label: 'Планиметрия', kinds: PLANE },
-  { id: 'solid', label: 'Геометрия', kinds: SOLID },
+  { id: 'solid', label: 'Стереометрия', kinds: SOLID },
 ];
 
-export const SHAPE_KINDS = [...PLANE, ...SOLID];
+export const SHAPE_KINDS = SOLID;
 
-const TONE = { top: 1, front: 0.86, side: 0.68 };
+const TONE = { top: 1, front: 0.92, side: 0.72, line: 1 };
+
+function clampDepth(value, id) {
+  const n = Number(value);
+  const fallback = defaultDepth(id);
+  const depth = Number.isFinite(n) ? n : fallback;
+  return Math.max(-20, Math.min(40, depth));
+}
+
+export function defaultDepth(id) {
+  if (id === 'cone' || id === 'pyramid3' || id === 'pyramid4' || id === 'pyramid6') return 0;
+  if (id === 'sphere') return 16;
+  if (id === 'cylinder') return 14;
+  return 20;
+}
+
+function r(n) {
+  return Math.round(n * 10) / 10;
+}
 
 function poly(points, tone = 'front') {
-  return { points, tone };
+  return { points: points.map(([x, y]) => `${r(x)},${r(y)}`).join(' '), tone };
 }
 
-function path(d, tone = 'front') {
-  return { d, tone };
+function segment(a, b, dashed = false) {
+  return { d: `M${r(a[0])} ${r(a[1])} L${r(b[0])} ${r(b[1])}`, fill: 'none', dashed, tone: 'line' };
 }
 
-function ellipse(cx, cy, rx, ry, tone = 'front') {
-  return { ellipse: { cx, cy, rx, ry }, tone };
+function ellipse(cx, cy, rx, ry, tone = 'front', extra = {}) {
+  return { ellipse: { cx: r(cx), cy: r(cy), rx: r(rx), ry: r(Math.max(ry, 0.8)) }, tone, ...extra };
+}
+
+function arc(cx, cy, rx, ry, upper, dashed) {
+  const sweep = upper ? 0 : 1;
+  return {
+    d: `M${r(cx - rx)} ${r(cy)} A${r(rx)} ${r(Math.max(ry, 0.8))} 0 0 ${sweep} ${r(cx + rx)} ${r(cy)}`,
+    fill: 'none',
+    dashed,
+    tone: 'line',
+  };
+}
+
+function ring(n, cx, cy, rx, ry, rotate = -Math.PI / 2) {
+  return Array.from({ length: n }, (_, i) => {
+    const a = rotate + (i * 2 * Math.PI) / n;
+    return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
+  });
+}
+
+function block(d, box) {
+  const dx = d * 0.62;
+  const dy = d * 0.48;
+  const L = box.l;
+  const T = box.t;
+  const R = box.r;
+  const B = box.b;
+  const l = L - dx;
+  const t = T - dy;
+  const right = R - dx;
+  const bottom = B - dy;
+  const parts = [];
+  if (d > 0.4) {
+    parts.push(poly([[L, T], [R, T], [right, t], [l, t]], 'top'));
+    parts.push(poly([[L, T], [l, t], [l, bottom], [L, B]], 'side'));
+  }
+  parts.push(poly([[L, T], [R, T], [R, B], [L, B]], 'front'));
+  if (d > 0.4) {
+    parts.push(segment([right, t], [right, bottom], true));
+    parts.push(segment([l, bottom], [right, bottom], true));
+    parts.push(segment([right, bottom], [R, B], true));
+  }
+  return parts;
+}
+
+function obliquePrism(n, d, cx, cy, rx, ry, rotate) {
+  const dx = d * 0.62;
+  const dy = d * 0.5;
+  const front = ring(n, cx, cy, rx, ry, rotate);
+  const back = front.map(([x, y]) => [x - dx, y - dy]);
+  const parts = [];
+  if (d > 0.4) {
+    front.forEach((point, i) => {
+      const j = (i + 1) % n;
+      const midY = (point[1] + front[j][1]) / 2;
+      if (midY < cy - 1) return;
+      parts.push(poly([point, front[j], back[j], back[i]], midY > cy + ry * 0.2 ? 'front' : 'side'));
+    });
+  }
+  parts.push(poly(front, 'front'));
+  if (d > 0.4) {
+    front.forEach((point, i) => {
+      const j = (i + 1) % n;
+      const midY = (back[i][1] + back[j][1]) / 2;
+      if (midY < cy + 1) parts.push(segment(back[i], back[j], true));
+      if (point[1] < cy && point[0] > cx - rx * 0.2) parts.push(segment(point, back[i], true));
+    });
+  }
+  return parts;
+}
+
+function pyramid(n, d, rotate) {
+  const apex = [50 + d * 0.9, 14];
+  const base = ring(n, 50, 72, 34, 16, rotate);
+  const parts = [];
+  base.forEach((point, i) => {
+    const j = (i + 1) % n;
+    const midY = (point[1] + base[j][1]) / 2;
+    if (midY >= 70) parts.push(poly([apex, point, base[j]], midY > 80 ? 'front' : 'side'));
+  });
+  base.forEach((point, i) => {
+    const j = (i + 1) % n;
+    const midY = (point[1] + base[j][1]) / 2;
+    if (midY < 70) parts.push(segment(point, base[j], true));
+    if (point[1] < 70) parts.push(segment(apex, point, true));
+  });
+  return parts;
+}
+
+function cylinder(d) {
+  const ry = 5 + d * 0.28;
+  const parts = [
+    ellipse(50, 24, 32, ry, 'top'),
+    poly([[18, 24], [82, 24], [82, 78], [18, 78]], 'front'),
+    ellipse(50, 78, 32, ry, 'front'),
+    arc(50, 78, 32, ry, true, true),
+  ];
+  return parts;
+}
+
+function cone(d) {
+  const ry = 7 + d * 0.12;
+  const apex = [50 + d * 0.95, 12];
+  return [
+    poly([apex, [84, 74], [16, 74]], 'front'),
+    ellipse(50, 74, 34, ry, 'front'),
+    arc(50, 74, 34, ry, true, true),
+  ];
+}
+
+function sphere(d) {
+  const ry = 4 + d * 0.72;
+  return [
+    ellipse(50, 50, 40, 40, 'front'),
+    arc(50, 50, 40, ry, false, false),
+    arc(50, 50, 40, ry, true, true),
+    segment([50, 10], [50, 90], true),
+  ];
 }
 
 const FIGURES = {
-  rect: [poly('4,4 96,4 96,96 4,96')],
-  round: [path('M18 4 H82 Q96 4 96 18 V82 Q96 96 82 96 H18 Q4 96 4 82 V18 Q4 4 18 4 Z')],
-  ellipse: [ellipse(50, 50, 46, 46)],
-  triangle: [poly('50,6 94,94 6,94')],
-  right: [poly('10,8 10,92 92,92')],
-  diamond: [poly('50,4 96,50 50,96 4,50')],
-  parallelogram: [poly('26,12 96,12 74,88 4,88')],
-  trapezoid: [poly('22,14 78,14 96,88 4,88')],
-  hexagon: [poly('50,4 93,27 93,73 50,96 7,73 7,27')],
-  heart: [path('M50 86 C22 66 8 52 8 34 C8 18 20 8 34 8 C42 8 47 13 50 20 C53 13 58 8 66 8 C80 8 92 18 92 34 C92 52 78 66 50 86 Z')],
-  star: [poly('50,6 61,36 94,38 68,58 76,90 50,72 24,90 32,58 6,38 39,36')],
-  cloud: [path('M28 74 H74 C86 74 94 66 94 56 C94 48 88 42 80 40 C80 26 70 16 56 16 C46 16 38 22 34 30 C24 30 16 38 16 48 C16 60 24 70 28 74 Z')],
-  bubble: [path('M14 10 H86 Q96 10 96 20 V62 Q96 72 86 72 H40 L24 90 V72 H14 Q4 72 4 62 V20 Q4 10 14 10 Z')],
-  cube: [
-    poly('50,16 84,34 50,52 16,34', 'top'),
-    poly('16,34 50,52 50,86 16,68', 'side'),
-    poly('50,52 84,34 84,68 50,86', 'front'),
-  ],
-  box: [
-    poly('46,18 88,32 54,48 12,34', 'top'),
-    poly('12,34 54,48 54,84 12,70', 'side'),
-    poly('54,48 88,32 88,68 54,84', 'front'),
-  ],
-  pyramid: [
-    poly('50,10 86,42 50,56 14,42', 'top'),
-    poly('14,42 50,56 50,90 14,74', 'side'),
-    poly('50,56 86,42 86,74 50,90', 'front'),
-  ],
-  prism: [
-    poly('22,28 50,14 78,28 50,42', 'top'),
-    poly('22,28 50,42 50,86 22,72', 'side'),
-    poly('50,42 78,28 78,72 50,86', 'front'),
-  ],
-  cylinder: [
-    ellipse(50, 24, 32, 12, 'top'),
-    poly('18,24 82,24 82,78 18,78', 'front'),
-    ellipse(50, 78, 32, 12, 'front'),
-  ],
-  cone: [
-    poly('50,10 84,72 16,72', 'front'),
-    ellipse(50, 72, 34, 12, 'top'),
-  ],
+  cube: (d) => block(d, { l: 30, t: 34, r: 90, b: 90 }),
+  box: (d) => block(d, { l: 34, t: 42, r: 94, b: 80 }),
+  prism3: (d) => obliquePrism(3, d, 58, 60, 30, 30, -Math.PI / 2),
+  prism6: (d) => obliquePrism(6, d, 58, 58, 30, 28, -Math.PI / 2),
+  pyramid3: (d) => pyramid(3, d, -Math.PI / 2),
+  pyramid4: (d) => pyramid(4, d, Math.PI / 4),
+  pyramid6: (d) => pyramid(6, d, -Math.PI / 2),
+  cylinder,
+  cone,
+  sphere,
 };
 
-export function shapeFigures(id) {
-  return FIGURES[id] || FIGURES.rect;
+export function shapeFigures(id, depth) {
+  const draw = FIGURES[id] || FIGURES.cube;
+  return draw(clampDepth(depth, id));
 }
 
 export function shapeToneOpacity(tone) {
   return TONE[tone] || 1;
+}
+
+function handlePoint(id, depth) {
+  const d = clampDepth(depth, id);
+  if (id === 'cone' || id === 'pyramid3' || id === 'pyramid4' || id === 'pyramid6') {
+    return { x: 50 + d * 0.95, y: id === 'cone' ? 12 : 14 };
+  }
+  if (id === 'sphere') return { x: 90, y: 50 + (4 + d * 0.72) };
+  if (id === 'cylinder') return { x: 82, y: 24 + (5 + d * 0.28) };
+  const dx = d * 0.62;
+  const dy = d * 0.48;
+  if (id === 'box') return { x: 34 - dx, y: 42 - dy };
+  if (id === 'prism3' || id === 'prism6') return { x: 28 - dx, y: 30 - dy };
+  return { x: 30 - dx, y: 34 - dy };
+}
+
+export function shapeHandle(id, depth) {
+  return handlePoint(id, depth);
+}
+
+export function depthFromLocal(id, x, y) {
+  const start = handlePoint(id, 0);
+  const end = handlePoint(id, 40);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len2 = dx * dx + dy * dy || 1;
+  const t = ((x - start.x) * dx + (y - start.y) * dy) / len2;
+  return clampDepth(t * 40, id);
 }

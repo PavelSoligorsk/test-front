@@ -66,7 +66,7 @@ import {
 } from './model';
 import { boardImageSrc } from './images';
 import ShapeGlyph from './ShapeGlyph';
-import { SHAPE_GROUPS, shapeFigures, shapeToneOpacity } from './shapes';
+import { SHAPE_GROUPS, defaultDepth, depthFromLocal, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
 import { isPagesMeta } from './pages';
 import { deleteBoard } from './storage';
 
@@ -87,7 +87,7 @@ const INITIAL_STYLE = {
   sticky: STICKY_COLORS[0].bg,
   pen: PEN_COLORS[0],
   penWidth: 4,
-  shape: 'rect',
+  shape: 'cube',
   fill: SHAPE_FILLS[0],
   arrow: PEN_COLORS[0],
   textSize: 22,
@@ -111,7 +111,7 @@ const TOOL_CODES = {
 
 const MAX_OBJECTS = 200;
 const SNAP_PX = 6;
-const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'marquee', 'pinch']);
+const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'marquee', 'pinch']);
 const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
 const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
 const SEND_MS = 50;
@@ -632,6 +632,38 @@ export default function BoardEditor({
         end.style.top = `${obj.props.y2}px`;
       }
     }
+    if (obj.type === 'shape') {
+      const svg = el.querySelector('[data-shape]');
+      if (svg) {
+        svg.replaceChildren();
+        const fill = obj.props.fill || '#ffffff';
+        const stroke = obj.props.stroke || '#18181b';
+        shapeFigures(obj.props.shape, obj.props.depth).forEach((fig) => {
+          const node = document.createElementNS('http://www.w3.org/2000/svg', fig.ellipse ? 'ellipse' : fig.d ? 'path' : 'polygon');
+          if (fig.ellipse) {
+            node.setAttribute('cx', fig.ellipse.cx);
+            node.setAttribute('cy', fig.ellipse.cy);
+            node.setAttribute('rx', fig.ellipse.rx);
+            node.setAttribute('ry', fig.ellipse.ry);
+          } else if (fig.d) node.setAttribute('d', fig.d);
+          else node.setAttribute('points', fig.points);
+          node.setAttribute('fill', fig.fill === 'none' ? 'none' : fill);
+          node.setAttribute('stroke', stroke);
+          node.setAttribute('stroke-width', '2');
+          node.setAttribute('stroke-linejoin', 'round');
+          node.setAttribute('vector-effect', 'non-scaling-stroke');
+          if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
+          if (fig.dashed) node.setAttribute('stroke-dasharray', '4 3');
+          svg.appendChild(node);
+        });
+      }
+      const knob = el.querySelector('[data-handle="depth"]');
+      if (knob) {
+        const point = shapeHandle(obj.props.shape, obj.props.depth);
+        knob.style.left = `${point.x}%`;
+        knob.style.top = `${point.y}%`;
+      }
+    }
   }
 
   function live(next) {
@@ -766,12 +798,13 @@ export default function BoardEditor({
           node.setAttribute('ry', fig.ellipse.ry);
         } else if (fig.d) node.setAttribute('d', fig.d);
         else node.setAttribute('points', fig.points);
-        node.setAttribute('fill', draft.fill);
+        node.setAttribute('fill', fig.fill === 'none' ? 'none' : draft.fill);
         node.setAttribute('stroke', draft.stroke);
         node.setAttribute('stroke-width', '2');
         node.setAttribute('stroke-linejoin', 'round');
         node.setAttribute('vector-effect', 'non-scaling-stroke');
-        node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
+        if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
+        if (fig.dashed) node.setAttribute('stroke-dasharray', '4 3');
         svg.appendChild(node);
       });
       host.appendChild(svg);
@@ -1448,7 +1481,7 @@ export default function BoardEditor({
       const nextTool = TOOL_CODES[event.code];
       if (!nextTool) return;
       if (event.code === 'KeyO' || event.code === 'KeyR') {
-        const shape = event.code === 'KeyO' ? 'ellipse' : 'rect';
+        const shape = event.code === 'KeyO' ? 'sphere' : 'cube';
         setStyle((prev) => ({ ...prev, shape }));
       }
       setTool(nextTool);
@@ -1649,7 +1682,7 @@ export default function BoardEditor({
     dragCleanupRef.current?.();
     paintDraft(null);
     paintGuides(null);
-    if (drag.origin && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'arrow-end')) {
+    if (drag.origin && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'arrow-end' || drag.kind === 'depth')) {
       objectsRef.current = drag.origin;
       drag.origin.forEach((obj) => {
         if (drag.starts?.has(obj.id) || obj.id === drag.id) paintObject(obj);
@@ -1721,6 +1754,7 @@ export default function BoardEditor({
             shape: currentStyle.shape,
             fill: currentStyle.fill.fill,
             stroke: currentStyle.fill.stroke,
+            depth: defaultDepth(currentStyle.shape),
             text: '',
           },
         });
@@ -1865,6 +1899,16 @@ export default function BoardEditor({
       return;
     }
 
+    if (drag.kind === 'depth') {
+      const box = drag.obj;
+      const u = ((world.x - box.x) / box.w) * 100;
+      const v = ((world.y - box.y) / box.h) * 100;
+      const depth = depthFromLocal(box.props.shape, u, v);
+      const nextObj = { ...box, props: { ...box.props, depth } };
+      gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
+      return;
+    }
+
     if (drag.kind === 'arrow-end') {
       const start = drag.handle === 'start'
         ? world
@@ -1950,7 +1994,7 @@ export default function BoardEditor({
         if (!obj || !canEdit(obj)) return;
         const handle = handleEl.dataset.handle;
         dragRef.current = {
-          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : 'resize',
+          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : handle === 'depth' ? 'depth' : 'resize',
           pointerId: event.pointerId,
           id,
           handle,
@@ -2647,7 +2691,7 @@ function StyleTray({ context, style, onStyle }) {
 
   if (context === 'shape') {
     return (
-      <SwatchCard label="Фигуры" wide>
+      <SwatchCard label="Стереометрия" wide>
         <div className="max-h-64 space-y-2 overflow-y-auto">
           {SHAPE_GROUPS.map((group) => (
             <div key={group.id}>

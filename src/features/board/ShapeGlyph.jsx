@@ -5,10 +5,11 @@ export default function ShapeGlyph({ id, size = 16 }) {
     <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" className="overflow-visible">
       {shapeFigures(id).map((fig, index) => {
         const props = {
-          fill: 'currentColor',
+          fill: fig.fill === 'none' ? 'none' : 'currentColor',
           stroke: 'currentColor',
           strokeWidth: 6,
           strokeLinejoin: 'round',
+          strokeDasharray: fig.dashed ? '7 5' : undefined,
           opacity: shapeToneOpacity(fig.tone),
         };
         if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
