@@ -3,6 +3,45 @@ export function uid() {
   return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+export function audienceKey(board) {
+  if (board?.groupId != null) return `g:${board.groupId}`;
+  const ids = [...(board?.studentIds || [])].map(Number).filter((id) => Number.isFinite(id)).sort((a, b) => a - b);
+  if (!ids.length) return `id:${board?.id || ''}`;
+  return `s:${ids.join(',')}`;
+}
+
+export function groupBoardSeries(boards) {
+  const order = [];
+  const groups = new Map();
+  (boards || []).forEach((board) => {
+    const key = audienceKey(board);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key).push(board);
+  });
+  return order.map((key) => {
+    const pages = groups.get(key).slice().sort((a, b) => {
+      const left = new Date(a.updatedAt || 0).getTime();
+      const right = new Date(b.updatedAt || 0).getTime();
+      return right - left;
+    });
+    return { ...pages[0], pageCount: pages.length, pageIds: pages.map((page) => page.id) };
+  });
+}
+
+export function pageCountLabel(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word = mod10 === 1 && mod100 !== 11
+    ? 'страница'
+    : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
+      ? 'страницы'
+      : 'страниц';
+  return `${count} ${word}`;
+}
+
 export function boardCountLabel(count) {
   const mod10 = count % 10;
   const mod100 = count % 100;

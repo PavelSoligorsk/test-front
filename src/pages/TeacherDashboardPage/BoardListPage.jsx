@@ -9,7 +9,7 @@ import {
 } from '../../features/board/api';
 import { deleteBoard, saveBoard } from '../../features/board/storage';
 import BoardGallery from '../../features/board/BoardGallery';
-import { boardCountLabel } from '../../features/board/model';
+import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
 import { PageShell } from '../../shared/ui';
 import { useTeacherWorkspace } from './TeacherWorkspace';
 
@@ -38,6 +38,7 @@ export default function TeacherBoardListPage() {
   const navigate = useNavigate();
   const { students, groups } = useTeacherWorkspace();
   const [boards, setBoards] = useState(null);
+  const series = useMemo(() => groupBoardSeries(boards || []), [boards]);
   const [creating, setCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [error, setError] = useState('');
@@ -68,11 +69,15 @@ export default function TeacherBoardListPage() {
     navigate(`/teacher/board/${board.id}`);
   }
 
-  async function handleDelete(id) {
+  async function handleDelete(board) {
+    const ids = board.pageIds?.length ? board.pageIds : [board.id];
     try {
-      await deleteTeacherBoard(id);
-      await deleteBoard(id).catch(() => {});
-      setBoards((prev) => prev.filter((item) => item.id !== id));
+      await Promise.all(ids.map(async (id) => {
+        await deleteTeacherBoard(id);
+        await deleteBoard(id).catch(() => {});
+      }));
+      const gone = new Set(ids);
+      setBoards((prev) => prev.filter((item) => !gone.has(item.id)));
       setConfirmDeleteId(null);
     } catch (err) {
       setError(boardErrorMessage(err, 'Не удалось удалить доску'));
@@ -85,7 +90,7 @@ export default function TeacherBoardListPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Мои доски</h1>
-          <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(boards.length) : 'Загрузка'}</p>
+          <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(series.length) : 'Загрузка'}</p>
         </div>
         <button
           type="button"
@@ -121,14 +126,14 @@ export default function TeacherBoardListPage() {
         </div>
       ) : (
         <BoardGallery
-          boards={boards}
+          boards={series}
           titleOf={(board) => audienceLabel(board, students, groups)}
           onOpen={(board) => navigate(`/teacher/board/${board.id}`)}
           renderMenu={(board) => (
             confirmDeleteId === board.id ? (
               <button
                 type="button"
-                onClick={() => handleDelete(board.id)}
+                onClick={() => handleDelete(board)}
                 className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 shadow-sm"
               >
                 Удалить

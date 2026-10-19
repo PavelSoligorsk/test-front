@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   Eraser,
@@ -77,7 +76,7 @@ const TOOLS = [
   { id: 'sticky', label: 'Стикер', hint: 'N', icon: StickyNote },
   { id: 'text', label: 'Текст', hint: 'T', icon: Type },
   { id: 'shape', label: 'Фигура', hint: 'R', icon: Square },
-  { id: 'arrow', label: 'Стрелка', hint: 'L', icon: ArrowUpRight },
+  { id: 'arrow', label: 'Отрезок', hint: 'L', icon: Minus },
   { id: 'pen', label: 'Кисть', hint: 'P', icon: Pencil },
   { id: 'eraser', label: 'Ластик', hint: 'E', icon: Eraser },
   { id: 'image', label: 'Изображение', hint: 'I', icon: Image },
@@ -595,10 +594,6 @@ export default function BoardEditor({
     }
     if (zoomLabelRef.current) {
       zoomLabelRef.current.textContent = `${Math.round(cam.zoom * 100)}%`;
-    }
-    if (viewport && viewport.dataset.geoZoom !== String(cam.zoom)) {
-      viewport.dataset.geoZoom = String(cam.zoom);
-      window.dispatchEvent(new CustomEvent('edu-board-camera'));
     }
     paintSelectionUi();
     paintPeerCursors();
@@ -1739,6 +1734,7 @@ export default function BoardEditor({
         const bounds = arrowBounds(drag.start, world, {
           color: currentStyle.arrow,
           width: currentStyle.penWidth,
+          head: false,
         });
         const arrow = createObject('arrow', bounds);
         if (addObjects([arrow])) selectIds([arrow.id]);
@@ -2690,7 +2686,7 @@ function StyleTray({ context, style, onStyle }) {
 
   if (context === 'arrow') {
     return (
-      <SwatchCard label="Стрелка">
+      <SwatchCard label="Отрезок">
         <div className="flex flex-wrap gap-1.5">
           {PEN_COLORS.map((color) => (
             <ColorDot

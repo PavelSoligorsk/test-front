@@ -1,3 +1,5 @@
+import { pageCountLabel } from './model';
+
 function relativeUpdated(iso) {
   if (!iso) return 'Без даты';
   const delta = Date.now() - new Date(iso).getTime();
@@ -47,7 +49,10 @@ export default function BoardGallery({ boards, onOpen, renderMenu, titleOf }) {
             </div>
             <button type="button" onClick={() => onOpen(board)} className="mt-3 block max-w-full text-left">
               <p className="truncate text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">{title}</p>
-              <p className="mt-0.5 text-sm text-zinc-500">{relativeUpdated(board.updatedAt)}</p>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {board.pageCount > 1 ? `${pageCountLabel(board.pageCount)} · ` : ''}
+                {relativeUpdated(board.updatedAt)}
+              </p>
             </button>
           </article>
         );

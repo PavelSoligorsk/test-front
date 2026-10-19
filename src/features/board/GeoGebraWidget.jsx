@@ -41,39 +41,32 @@ export default function GeoGebraWidget({
     const frame = frameRef.current;
     const host = hostRef.current;
     if (!frame || !host) return;
-    const layoutW = Math.round(frame.clientWidth);
-    const layoutH = Math.round(frame.clientHeight);
-    if (layoutW < 2 || layoutH < 2) return;
-    // Растр модели должен совпасть с экраном. Холст потом ещё масштабируется,
-    // поэтому апплет рисуется в видимом размере и обратно ужимается в рамку.
-    const rect = frame.getBoundingClientRect();
-    const viewScale = rect.width > 1 ? rect.width / layoutW : 1;
-    const ratio = Math.round(Math.min(3, Math.max(0.35, viewScale)) * 20) / 20;
-    const sharpW = Math.max(40, Math.round(layoutW * ratio));
-    const sharpH = Math.max(40, Math.round(layoutH * ratio));
+    const w = Math.round(frame.clientWidth);
+    const h = Math.round(frame.clientHeight);
+    if (w < 2 || h < 2) return;
+    // Размер берётся из рамки объекта, не с экрана. Масштаб доски только
+    // увеличивает уже собранную картинку и не перестраивает панели GeoGebra.
     const prev = sharpRef.current;
-    if (prev && prev.w === sharpW && prev.h === sharpH) return;
-    sharpRef.current = { w: sharpW, h: sharpH };
-    const fit = layoutW / sharpW;
+    if (prev && prev.w === w && prev.h === h) return;
+    sharpRef.current = { w, h };
     host.style.left = '0px';
     host.style.top = '0px';
-    host.style.right = 'auto';
-    host.style.bottom = 'auto';
-    host.style.width = `${sharpW}px`;
-    host.style.height = `${sharpH}px`;
-    host.style.transformOrigin = '0 0';
-    host.style.transform = `scale(${fit})`;
+    host.style.right = '0px';
+    host.style.bottom = '0px';
+    host.style.width = '';
+    host.style.height = '';
+    host.style.transform = 'none';
     const appletRoot = host.firstElementChild;
     if (appletRoot instanceof HTMLElement) {
-      appletRoot.style.width = `${sharpW}px`;
-      appletRoot.style.height = `${sharpH}px`;
+      appletRoot.style.width = `${w}px`;
+      appletRoot.style.height = `${h}px`;
       appletRoot.style.maxWidth = 'none';
       appletRoot.style.maxHeight = 'none';
       appletRoot.style.transform = 'none';
     }
     if (api && typeof api.setSize === 'function') {
       try {
-        api.setSize(sharpW, sharpH);
+        api.setSize(w, h);
       } catch {
         /* апплет ещё не готов к смене размера */
       }
@@ -223,10 +216,8 @@ export default function GeoGebraWidget({
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(frame);
-    window.addEventListener('edu-board-camera', fit);
     return () => {
       observer.disconnect();
-      window.removeEventListener('edu-board-camera', fit);
       window.clearTimeout(fitTimerRef.current);
     };
   }, [status]);

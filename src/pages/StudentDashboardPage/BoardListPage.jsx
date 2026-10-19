@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { boardErrorMessage, listStudentBoards } from '../../features/board/api';
 import BoardGallery from '../../features/board/BoardGallery';
-import { boardCountLabel } from '../../features/board/model';
+import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
 import { boardPath } from './studentPaths';
 
 export default function BoardListPage() {
   const navigate = useNavigate();
   const [boards, setBoards] = useState(null);
   const [error, setError] = useState('');
+  const series = useMemo(() => groupBoardSeries(boards || []), [boards]);
 
   useEffect(() => {
     listStudentBoards()
@@ -23,7 +24,7 @@ export default function BoardListPage() {
     <main className="mx-auto max-w-7xl p-4 md:p-8">
       <div className="mb-6">
         <h1 className="text-[28px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Мои доски</h1>
-        <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(boards.length) : 'Загрузка'}</p>
+        <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(series.length) : 'Загрузка'}</p>
       </div>
 
       {error && (
@@ -46,7 +47,7 @@ export default function BoardListPage() {
           </p>
         </div>
       ) : (
-        <BoardGallery boards={boards} onOpen={(board) => navigate(boardPath(board.id))} />
+        <BoardGallery boards={series} onOpen={(board) => navigate(boardPath(board.id))} />
       )}
     </main>
   );
