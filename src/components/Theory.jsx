@@ -120,6 +120,50 @@ const convertMarkdownLists = (content) => {
 
 const THEORY_TAG_NAMES = ['Explanation', 'Important', 'Formula', 'Collapsible', 'Algorithm', 'GeoGebra', 'Steps', 'Card', 'Grid', 'Html', 'Def', 'Ex'];
 
+function readMarkupAttr(attrs, name) {
+  const match = String(attrs || '').match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`));
+  if (!match) return undefined;
+  return match[1] ?? match[2];
+}
+
+function readMarkupNumber(attrs, name) {
+  const raw = readMarkupAttr(attrs, name);
+  if (raw == null || raw.trim() === '') return undefined;
+  const value = Number(raw.replace(',', '.'));
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function parseGeoGebraControls(innerContent) {
+  if (!innerContent) return [];
+  const controls = [];
+  const tagRe = /<(Slider|Input)\b([^>]*)\/?>/gi;
+  let match;
+  while ((match = tagRe.exec(innerContent)) !== null) {
+    const attrs = match[2] || '';
+    const name = readMarkupAttr(attrs, 'name');
+    if (!name) continue;
+    const kind = match[1].toLowerCase() === 'slider' ? 'slider' : 'input';
+    const min = readMarkupNumber(attrs, 'min');
+    const max = readMarkupNumber(attrs, 'max');
+    const step = readMarkupNumber(attrs, 'step');
+    let value = readMarkupNumber(attrs, 'value') ?? 0;
+    const resolvedMin = min ?? (kind === 'slider' ? -10 : undefined);
+    const resolvedMax = max ?? (kind === 'slider' ? 10 : undefined);
+    if (Number.isFinite(resolvedMin)) value = Math.max(resolvedMin, value);
+    if (Number.isFinite(resolvedMax)) value = Math.min(resolvedMax, value);
+    controls.push({
+      kind,
+      name,
+      label: readMarkupAttr(attrs, 'label') || name,
+      min: resolvedMin,
+      max: resolvedMax,
+      step: step ?? (kind === 'slider' ? 0.1 : undefined),
+      value,
+    });
+  }
+  return controls;
+}
+
 function scanTagClose(content, from) {
   let quote = null;
   let brace = 0;
@@ -321,13 +365,14 @@ const parseBlocks = (content) => {
     } else if (tagName === 'GeoGebra') {
       const idMatch = attrs.match(/id="([^"]+)"/);
       const heightMatch = attrs.match(/height="([^"]+)"/);
-      const setupMatch = attrs.match(/setup=\{`([\s\S]*?)`\}/) || attrs.match(/setup="([^"]+)"/);
+      const setupMatch = attrs.match(/setup=\{`([\s\S]*?)`\}/) || attrs.match(/setup="([^"]*)"/) || attrs.match(/setup='([^']*)'/);
 
       blocks.push({
         type: 'geogebra',
         id: idMatch ? idMatch[1] : null,
         height: heightMatch ? heightMatch[1] : "400",
-        setup: setupMatch ? setupMatch[1] : null
+        setup: setupMatch ? setupMatch[1] : null,
+        controls: parseGeoGebraControls(innerContent),
       });
     } else if (tagName === 'Html') {
       const htmlMatch = attrs.match(/html="([^"]*)"/);
@@ -428,11 +473,12 @@ const renderBlocks = (blocks) => {
     }
     if (block.type === 'geogebra') {
       return (
-        <GeoGebra 
+        <GeoGebra
           key={idx}
-          id={block.id} 
-          height={block.height} 
-          setup={block.setup} 
+          id={block.id}
+          height={block.height}
+          setup={block.setup}
+          controls={block.controls}
         />
       );
     }

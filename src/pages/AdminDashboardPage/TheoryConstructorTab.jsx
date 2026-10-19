@@ -106,10 +106,16 @@ export const THEORY_GENERATION_PROMPT = `Ты — эксперт по подго
 8. **Grid** — сетка карточек. Атрибут cols="2" или cols="3".
 9. **Card** — карточка внутри Grid. Атрибут title="Заголовок карточки".
 10. **Steps** — разбор конкретного примера по шагам. Каждый шаг в <div>...</div>.
-11. **GeoGebra** — интерактивный график (используй только при необходимости):
-    <GeoGebra setup="view:-10,10,-6,6,grid
-      f(x) = x^2 - 4
-      color:f,#ff0000" height="400" />
+11. **GeoGebra** — интерактивный график (используй только при необходимости). Слайдеры и поля пиши внутри тега: name совпадает с числом в setup, подпись label может содержать $формулу$.
+    <GeoGebra height="400" setup="view:-10,10,-6,6,grid
+      a = 1
+      b = 0
+      f(x) = a x^2 + b
+      color:f,#ff0000">
+      <Slider name="a" min="-5" max="5" step="0.1" value="1" label="$a$" />
+      <Input name="b" value="0" min="-10" max="10" label="$b$" />
+    </GeoGebra>
+    У Input имя тоже должно быть числом в setup, например b = 0. Без Slider и Input панель не рисуется.
 12. **Html** — сырой HTML, когда нужна своя вёрстка: сравнительная таблица, схема, svg. Внутри только HTML, без Markdown, без $формул$ KaTeX и без Def/Ex. Формулы пиши символами HTML/Unicode (x², √x, ≥). Пример:
 
     <Html>

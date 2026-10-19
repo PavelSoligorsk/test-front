@@ -262,9 +262,56 @@ function hexToRgb(hex) {
   return [r, g, b];
 }
 
-export const GeoGebra = ({ id, setup, height = '400' }) => {
+function roundToStep(value, step) {
+  if (!Number.isFinite(step) || step <= 0) return value;
+  const text = String(step);
+  const dot = text.indexOf('.');
+  const places = dot === -1 ? 0 : text.length - dot - 1;
+  const snapped = Math.round(value / step) * step;
+  return Number(snapped.toFixed(places));
+}
+
+function clampControl(value, control, snap) {
+  let next = value;
+  if (Number.isFinite(control.min)) next = Math.max(control.min, next);
+  if (Number.isFinite(control.max)) next = Math.min(control.max, next);
+  if (snap) next = roundToStep(next, control.step);
+  return next;
+}
+
+function applyControlValue(api, control, value) {
+  if (!api || !control?.name || !Number.isFinite(value)) return;
+  try {
+    api.setValue(control.name, value);
+  } catch (err) {
+    console.error(`GeoGebra setValue ${control.name}:`, err);
+  }
+}
+
+export const GeoGebra = ({ id, setup, height = '400', controls = [] }) => {
   const containerRef = useRef(null);
+  const apiRef = useRef(null);
+  const controlsRef = useRef(controls);
+  const valuesRef = useRef(controls.map((control) => control.value));
   const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
+  const [values, setValues] = useState(() => controls.map((control) => control.value));
+  const [drafts, setDrafts] = useState(() => controls.map((control) => String(control.value)));
+  const controlsKey = controls
+    .map((control) => [control.kind, control.name, control.label, control.min, control.max, control.step, control.value].join(':'))
+    .join('|');
+
+  controlsRef.current = controls;
+  valuesRef.current = values;
+
+  useEffect(() => {
+    const next = controlsRef.current.map((control) => control.value);
+    setValues(next);
+    setDrafts(next.map((value) => String(value)));
+    valuesRef.current = next;
+    controlsRef.current.forEach((control, index) => {
+      applyControlValue(apiRef.current, control, next[index]);
+    });
+  }, [controlsKey]);
 
   useEffect(() => {
     const initApplet = () => {
@@ -283,6 +330,7 @@ export const GeoGebra = ({ id, setup, height = '400' }) => {
         useBrowserForJS: false,
         ...(id ? { material_id: id } : {}),
         appletOnLoad: (api) => {
+          apiRef.current = api;
           if (!id) {
             api.evalCommand('ShowAxes(true)');
             api.evalCommand('ShowGrid(true)');
@@ -413,9 +461,14 @@ export const GeoGebra = ({ id, setup, height = '400' }) => {
               }, 200);
             }
           }
+
+          controlsRef.current.forEach((control, index) => {
+            applyControlValue(api, control, valuesRef.current[index]);
+          });
         },
       };
 
+      apiRef.current = null;
       const applet = new window.GGBApplet(parameters, true);
       applet.inject(containerRef.current);
     };
@@ -431,15 +484,106 @@ export const GeoGebra = ({ id, setup, height = '400' }) => {
     }
 
     return () => {
+      apiRef.current = null;
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
     };
   }, [id, setup, height]);
 
+  const publishValue = (index, next) => {
+    setValues((prev) => {
+      const copy = [...prev];
+      copy[index] = next;
+      valuesRef.current = copy;
+      return copy;
+    });
+    applyControlValue(apiRef.current, controls[index], next);
+  };
+
+  const commitValue = (index, raw, snap) => {
+    const control = controls[index];
+    if (!control) return;
+    const parsed = Number(String(raw).trim().replace(',', '.'));
+    if (!Number.isFinite(parsed)) {
+      setDrafts((prev) => {
+        const copy = [...prev];
+        copy[index] = String(valuesRef.current[index] ?? '');
+        return copy;
+      });
+      return;
+    }
+    const next = clampControl(parsed, control, snap);
+    setDrafts((prev) => {
+      const copy = [...prev];
+      copy[index] = String(next);
+      return copy;
+    });
+    publishValue(index, next);
+  };
+
+  const previewTypedValue = (index, raw) => {
+    const control = controls[index];
+    const text = String(raw).trim().replace(',', '.');
+    if (!/^-?\d+(\.\d+)?$/.test(text)) return;
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) return;
+    if (Number.isFinite(control.min) && parsed < control.min) return;
+    if (Number.isFinite(control.max) && parsed > control.max) return;
+    publishValue(index, parsed);
+  };
+
   return (
     <div className="theory-geogebra my-6 w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60">
       <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }} />
+      {controls.length > 0 && (
+        <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+          {controls.map((control, index) => (
+            <div key={`${control.kind}-${control.name}-${index}`} className="flex items-center gap-3">
+              <span className="w-28 shrink-0 text-sm text-zinc-700 dark:text-zinc-300">
+                <MathText text={control.label} />
+              </span>
+              {control.kind === 'slider' && (
+                <input
+                  type="range"
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={values[index] ?? control.value}
+                  aria-label={control.label.replace(/\$/g, '')}
+                  onChange={(event) => commitValue(index, event.target.value, true)}
+                  className="h-1.5 min-w-0 flex-1 accent-zinc-900 dark:accent-zinc-100"
+                />
+              )}
+              <input
+                type="number"
+                inputMode="decimal"
+                min={control.min}
+                max={control.max}
+                step={control.step || 'any'}
+                value={drafts[index] ?? ''}
+                aria-label={control.label.replace(/\$/g, '')}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  setDrafts((prev) => {
+                    const copy = [...prev];
+                    copy[index] = raw;
+                    return copy;
+                  });
+                  previewTypedValue(index, raw);
+                }}
+                onBlur={(event) => commitValue(index, event.target.value, control.kind === 'slider')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+                className={`rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-600 ${
+                  control.kind === 'slider' ? 'w-24 shrink-0' : 'min-w-0 flex-1'
+                }`}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
