@@ -131,7 +131,7 @@ const TOOL_CODES = {
   KeyG: 'geogebra',
 };
 
-const MAX_OBJECTS = 3000;
+const MAX_OBJECTS = 10000;
 const SNAP_PX = 6;
 const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'marquee', 'pinch']);
 const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
