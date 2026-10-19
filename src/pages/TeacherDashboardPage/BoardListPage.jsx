@@ -155,6 +155,7 @@ export default function TeacherBoardListPage() {
       {creating && (
         <CreateBoardDialog
           students={students}
+          groups={groups}
           onClose={() => setCreating(false)}
           onCreate={handleCreate}
         />
@@ -163,10 +164,12 @@ export default function TeacherBoardListPage() {
   );
 }
 
-function CreateBoardDialog({ students, onClose, onCreate }) {
+function CreateBoardDialog({ students, groups, onClose, onCreate }) {
   const [title, setTitle] = useState('');
   const [titleTouched, setTitleTouched] = useState(false);
+  const [mode, setMode] = useState('student');
   const [studentId, setStudentId] = useState('');
+  const [groupId, setGroupId] = useState('');
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -179,6 +182,14 @@ function CreateBoardDialog({ students, onClose, onCreate }) {
     });
   }, [students, query]);
 
+  const filteredGroups = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (groups || []).filter((group) => {
+      if (!needle) return true;
+      return String(group.name || '').toLowerCase().includes(needle);
+    });
+  }, [groups, query]);
+
   async function submit(event) {
     event.preventDefault();
     const nextTitle = title.trim();
@@ -186,14 +197,20 @@ function CreateBoardDialog({ students, onClose, onCreate }) {
       setError('Введите название');
       return;
     }
-    if (!studentId) {
+    if (mode === 'group' && !groupId) {
+      setError('Выберите группу');
+      return;
+    }
+    if (mode === 'student' && !studentId) {
       setError('Выберите ученика');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      await onCreate({ title: nextTitle, studentIds: [Number(studentId)] });
+      await onCreate(mode === 'group'
+        ? { title: nextTitle, groupId: Number(groupId) }
+        : { title: nextTitle, studentIds: [Number(studentId)] });
     } catch (err) {
       setError(boardErrorMessage(err, 'Не удалось создать доску'));
       setSaving(false);
@@ -209,7 +226,7 @@ function CreateBoardDialog({ students, onClose, onCreate }) {
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Новая доска</h2>
-            <p className="mt-1 text-sm text-zinc-500">Название — ФИО ученика. Страницы с датами и темами добавляются на холсте.</p>
+            <p className="mt-1 text-sm text-zinc-500">Доска для одного ученика или одной группы. Страницы добавляются на холсте.</p>
           </div>
           <button
             type="button"
@@ -236,15 +253,54 @@ function CreateBoardDialog({ students, onClose, onCreate }) {
             />
           </label>
 
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ['student', 'Ученик'],
+              ['group', 'Группа'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setMode(id);
+                  setError('');
+                }}
+                className={`rounded-xl px-3 py-2 text-sm font-medium ${mode === id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Поиск ученика"
+            placeholder={mode === 'group' ? 'Поиск группы' : 'Поиск ученика'}
             className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100"
           />
 
           <div className="max-h-64 space-y-1 overflow-y-auto">
-            {filteredStudents.length === 0 ? (
+            {mode === 'group' ? (filteredGroups.length === 0 ? (
+              <p className="px-1 py-6 text-center text-sm text-zinc-500">Нет групп</p>
+            ) : filteredGroups.map((group) => (
+              <label
+                key={group.id}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${String(groupId) === String(group.id) ? 'bg-zinc-100 dark:bg-zinc-900' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'}`}
+              >
+                <input
+                  type="radio"
+                  name="board-group"
+                  checked={String(groupId) === String(group.id)}
+                  onChange={() => {
+                    setGroupId(group.id);
+                    setStudentId('');
+                    if (!titleTouched) setTitle(group.name || `Группа ${group.id}`);
+                  }}
+                  className="h-4 w-4 accent-zinc-900"
+                />
+                <span className="min-w-0 truncate text-sm text-zinc-800 dark:text-zinc-200">{group.name || `Группа ${group.id}`}</span>
+              </label>
+            ))) : filteredStudents.length === 0 ? (
               <p className="px-1 py-6 text-center text-sm text-zinc-500">Нет учеников</p>
             ) : filteredStudents.map((person) => (
               <label
@@ -257,6 +313,7 @@ function CreateBoardDialog({ students, onClose, onCreate }) {
                   checked={String(studentId) === String(person.id)}
                   onChange={() => {
                     setStudentId(person.id);
+                    setGroupId('');
                     if (!titleTouched) setTitle(personName(person));
                   }}
                   className="h-4 w-4 accent-zinc-900"

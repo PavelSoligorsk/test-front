@@ -9,6 +9,7 @@ import {
   Image,
   Loader2,
   Maximize2,
+  Grid3x3,
   Menu,
   Minus,
   MousePointer2,
@@ -68,6 +69,27 @@ import { boardImageSrc } from './images';
 import ShapeGlyph from './ShapeGlyph';
 import { SHAPE_GROUPS, defaultDepth, depthFromLocal, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
 import { isPagesMeta } from './pages';
+
+const SURFACE_MARK = 'board-surface';
+const SURFACE_COLORS = ['#e7f4fb', '#ffffff', '#eceff1', '#2c2c2e', '#dff6fb', '#e4e8fb', '#fbf3d4', '#f3e8f6', '#e7f6e4', '#fde8e8'];
+const DEFAULT_SURFACE = { color: '#e7f4fb', grid: 'cell' };
+
+function isSurfaceMeta(obj) {
+  return obj?.props?.system === SURFACE_MARK;
+}
+
+function isHiddenBoardObject(obj) {
+  return isPagesMeta(obj) || isSurfaceMeta(obj);
+}
+
+function readSurface(objects) {
+  const meta = (objects || []).find(isSurfaceMeta);
+  const color = SURFACE_COLORS.includes(meta?.props?.color) ? meta.props.color : DEFAULT_SURFACE.color;
+  const grid = meta?.props?.grid === 'empty' || meta?.props?.grid === 'rule' || meta?.props?.grid === 'cell'
+    ? meta.props.grid
+    : DEFAULT_SURFACE.grid;
+  return { color, grid };
+}
 import { deleteBoard } from './storage';
 
 const TOOLS = [
@@ -255,6 +277,9 @@ export default function BoardEditor({
   const [style, setStyle] = useState(INITIAL_STYLE);
   const [notice, setNotice] = useState('');
   const [pagesOpen, setPagesOpen] = useState(false);
+  const [surfaceOpen, setSurfaceOpen] = useState(false);
+  const [surface, setSurface] = useState(() => readSurface(initialBoard.objects));
+  const surfaceRef = useRef(surface);
   const [series, setSeries] = useState([]);
   const [editingPageId, setEditingPageId] = useState(null);
   const [editingPageTitle, setEditingPageTitle] = useState('');
@@ -290,6 +315,20 @@ export default function BoardEditor({
     if (pastRef.current.length > 80) pastRef.current.shift();
     futureRef.current = [];
     noteHistory();
+  }
+
+  function applySurface(next) {
+    surfaceRef.current = next;
+    setSurface(next);
+    paintSurface(cameraRef.current);
+    if (readOnlyRef.current) return;
+    const props = { system: SURFACE_MARK, text: '', color: next.color, grid: next.grid };
+    const existing = objectsRef.current.find(isSurfaceMeta);
+    if (!existing) {
+      commit([...objectsRef.current, createObject('text', { x: -10000, y: -10000, w: 1, h: 1, props })]);
+      return;
+    }
+    commit(objectsRef.current.map((obj) => (obj.id === existing.id ? { ...obj, props } : obj)));
   }
 
   function commit(next) {
@@ -419,7 +458,7 @@ export default function BoardEditor({
   }
 
   function canvasList() {
-    return objectsRef.current.filter((obj) => !isPagesMeta(obj));
+    return objectsRef.current.filter((obj) => !isHiddenBoardObject(obj));
   }
 
   function addObjects(list) {
@@ -564,6 +603,29 @@ export default function BoardEditor({
     bar.style.visibility = 'visible';
   }
 
+  function paintSurface(cam) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const look = surfaceRef.current || DEFAULT_SURFACE;
+    const zoom = cam?.zoom || 1;
+    const step = 28 * zoom;
+    const line = look.color === '#2c2c2e' ? 'rgba(255,255,255,0.28)' : 'rgba(120, 132, 148, 0.45)';
+    viewport.style.backgroundColor = look.color;
+    if (look.grid === 'empty') {
+      viewport.style.backgroundImage = 'none';
+      return;
+    }
+    if (look.grid === 'rule') {
+      viewport.style.backgroundImage = `linear-gradient(to bottom, transparent ${step - 1}px, ${line} ${step - 1}px)`;
+      viewport.style.backgroundSize = `100% ${step}px`;
+      viewport.style.backgroundPosition = `0px ${cam.y}px`;
+      return;
+    }
+    viewport.style.backgroundImage = `linear-gradient(to right, ${line} 1px, transparent 1px), linear-gradient(to bottom, ${line} 1px, transparent 1px)`;
+    viewport.style.backgroundSize = `${step}px ${step}px`;
+    viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
+  }
+
   function paintCamera(cam) {
     cameraRef.current = cam;
     const world = worldRef.current;
@@ -573,8 +635,7 @@ export default function BoardEditor({
     const viewport = viewportRef.current;
     if (viewport) {
       const inv = 1 / cam.zoom;
-      viewport.style.backgroundSize = `${22 * cam.zoom}px ${22 * cam.zoom}px`;
-      viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
+      paintSurface(cam);
       viewport.querySelectorAll('[data-handle]').forEach((handle) => {
         const kind = handle.dataset.handle;
         if (kind === 'start' || kind === 'end') {
@@ -1031,6 +1092,15 @@ export default function BoardEditor({
       if (socketRef.current === socket) socketRef.current = null;
     };
   }, [initialBoard.id, audience]);
+
+  useEffect(() => {
+    const next = readSurface(objects);
+    const current = surfaceRef.current;
+    if (next.color === current.color && next.grid === current.grid) return;
+    surfaceRef.current = next;
+    setSurface(next);
+    paintSurface(cameraRef.current);
+  }, [objects]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -2244,9 +2314,7 @@ export default function BoardEditor({
       <div
         ref={viewportRef}
         className="absolute inset-0 touch-none select-none"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(113,113,122,0.55) 1px, transparent 1px)',
-        }}
+        style={{ backgroundColor: surface.color }}
         onPointerDown={onPointerDown}
         onPointerMove={onViewportPointerMove}
         onPointerLeave={() => { pointerClientRef.current = null; }}
@@ -2259,7 +2327,7 @@ export default function BoardEditor({
           ref={worldRef}
           className="absolute left-0 top-0 h-0 w-0 origin-top-left overflow-visible"
         >
-          {objects.filter((obj) => !isPagesMeta(obj)).map((obj) => (
+          {objects.filter((obj) => !isHiddenBoardObject(obj)).map((obj) => (
             <BoardObject
               key={obj.id}
               obj={obj}
@@ -2286,7 +2354,7 @@ export default function BoardEditor({
         </div>
       </div>
 
-      {objects.filter((obj) => !isPagesMeta(obj)).length === 0 && (
+      {objects.filter((obj) => !isHiddenBoardObject(obj)).length === 0 && (
         <div ref={hintRef} className="pointer-events-none absolute inset-0 grid place-items-center px-6 pb-28 text-center min-[720px]:pb-6">
           <p className="max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             Пустой холст. N — стикер, T или двойной клик — текст, P — кисть, G — GeoGebra.
@@ -2366,6 +2434,26 @@ export default function BoardEditor({
         </div>
 
         <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
+          {!readOnly && (
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Фон и сетка"
+                title="Фон и сетка"
+                onClick={() => setSurfaceOpen((open) => !open)}
+                className="flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/95 text-zinc-600 shadow-sm hover:bg-zinc-50 min-[720px]:h-8 dark:border-zinc-800 dark:bg-zinc-950/95 dark:text-zinc-300"
+              >
+                <Grid3x3 size={16} />
+              </button>
+              {surfaceOpen && (
+                <SurfacePanel
+                  surface={surface}
+                  onChange={applySurface}
+                  onClose={() => setSurfaceOpen(false)}
+                />
+              )}
+            </div>
+          )}
           <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
             <IconButton label="Отменить (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={18} /></IconButton>
             <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={18} /></IconButton>
@@ -2796,5 +2884,61 @@ function ColorDot({ color, label, active, onClick }) {
       className={`h-5 w-5 rounded-full border ${active ? 'ring-2 ring-zinc-900 ring-offset-2 ring-offset-white dark:ring-white dark:ring-offset-zinc-950' : 'border-zinc-300 dark:border-zinc-700'}`}
       style={{ background: color }}
     />
+  );
+}
+
+function SurfacePanel({ surface, onChange, onClose }) {
+  const grids = [
+    { id: 'empty', label: 'Пустой' },
+    { id: 'cell', label: 'Клетка' },
+    { id: 'rule', label: 'Линейка' },
+  ];
+  return (
+    <div className="absolute right-0 top-11 z-50 w-[min(100vw-1.5rem,22rem)] rounded-2xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Фон и сетка</p>
+        <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900">
+          <X size={16} />
+        </button>
+      </div>
+      <p className="mb-2 text-sm text-zinc-500">Цвет фона</p>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {SURFACE_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            aria-label={color}
+            onClick={() => onChange({ ...surface, color })}
+            className={`h-9 w-9 rounded-xl border ${surface.color === color ? 'border-sky-500 ring-2 ring-sky-200' : 'border-zinc-200 dark:border-zinc-700'}`}
+            style={{ background: color }}
+          />
+        ))}
+      </div>
+      <p className="mb-2 text-sm text-zinc-500">Тип сетки</p>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {grids.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onChange({ ...surface, grid: item.id })}
+            className={`rounded-xl border px-2 py-2 text-xs font-medium ${surface.grid === item.id ? 'border-sky-500 bg-sky-50 text-sky-900' : 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div
+        className="h-28 rounded-xl border border-zinc-200"
+        style={{
+          backgroundColor: surface.color,
+          backgroundImage: surface.grid === 'cell'
+            ? 'linear-gradient(to right, rgba(120,132,148,0.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,132,148,0.45) 1px, transparent 1px)'
+            : surface.grid === 'rule'
+              ? 'linear-gradient(to bottom, transparent 15px, rgba(120,132,148,0.45) 15px)'
+              : 'none',
+          backgroundSize: surface.grid === 'rule' ? '100% 16px' : '20px 20px',
+        }}
+      />
+    </div>
   );
 }

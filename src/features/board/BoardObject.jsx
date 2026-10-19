@@ -4,7 +4,7 @@ import GeoGebraWidget from './GeoGebraWidget';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
-import { shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
+import { isSolid, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -320,7 +320,7 @@ function BoardObject({
 
       {selected && handles && box && !interactiveGeo && !locked && <BoxHandles zoom={zoom} />}
 
-      {selected && handles && !locked && obj.type === 'shape' && (
+      {selected && handles && !locked && obj.type === 'shape' && isSolid(obj.props.shape) && (
         <span
           data-handle="depth"
           aria-label="Глубина"

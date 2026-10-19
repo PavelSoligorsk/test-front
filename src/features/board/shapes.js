@@ -1,3 +1,15 @@
+const PLANE = [
+  { id: 'polyline', label: 'Ломаная' },
+  { id: 'triangle', label: 'Треугольник' },
+  { id: 'right', label: 'Прямоугольный треугольник' },
+  { id: 'rect', label: 'Прямоугольник' },
+  { id: 'parallelogram', label: 'Параллелограмм' },
+  { id: 'trapezoid', label: 'Трапеция' },
+  { id: 'diamond', label: 'Ромб' },
+  { id: 'hexagon', label: 'Шестиугольник' },
+  { id: 'circle', label: 'Окружность' },
+];
+
 const SOLID = [
   { id: 'cube', label: 'Куб' },
   { id: 'box', label: 'Параллелепипед' },
@@ -12,10 +24,17 @@ const SOLID = [
 ];
 
 export const SHAPE_GROUPS = [
+  { id: 'plane', label: 'Планиметрия', kinds: PLANE },
   { id: 'solid', label: 'Стереометрия', kinds: SOLID },
 ];
 
-export const SHAPE_KINDS = SOLID;
+export const SHAPE_KINDS = [...PLANE, ...SOLID];
+
+const SOLID_IDS = new Set(SOLID.map((item) => item.id));
+
+export function isSolid(id) {
+  return SOLID_IDS.has(id);
+}
 
 const TONE = { top: 1, front: 0.92, side: 0.72, line: 1 };
 
@@ -167,6 +186,15 @@ function sphere(d) {
 }
 
 const FIGURES = {
+  polyline: () => [{ d: 'M8 74 L30 28 L52 58 L74 16 L94 48', fill: 'none', tone: 'line' }],
+  triangle: () => [poly([[50, 8], [94, 90], [6, 90]])],
+  right: () => [poly([[12, 10], [12, 90], [90, 90]])],
+  rect: () => [poly([[8, 16], [92, 16], [92, 84], [8, 84]])],
+  parallelogram: () => [poly([[28, 16], [94, 16], [72, 84], [6, 84]])],
+  trapezoid: () => [poly([[24, 18], [76, 18], [94, 84], [6, 84]])],
+  diamond: () => [poly([[50, 6], [94, 50], [50, 94], [6, 50]])],
+  hexagon: () => [poly([[50, 6], [90, 28], [90, 72], [50, 94], [10, 72], [10, 28]])],
+  circle: () => [ellipse(50, 50, 42, 42)],
   cube: (d) => block(d, { l: 30, t: 34, r: 90, b: 90 }),
   box: (d) => block(d, { l: 34, t: 42, r: 94, b: 80 }),
   prism3: (d) => obliquePrism(3, d, 58, 60, 30, 30, -Math.PI / 2),
