@@ -18,6 +18,26 @@ export function loadGeoGebraScript() {
   return scriptPromise;
 }
 
+export function readGeoGebraPerspective(api) {
+  if (typeof api?.getPerspectiveXML !== 'function') return '';
+  try {
+    const xml = api.getPerspectiveXML();
+    return typeof xml === 'string' ? xml : '';
+  } catch {
+    return '';
+  }
+}
+
+export function applyGeoGebraPerspective(api, xml) {
+  if (!api || !xml || typeof api.setPerspective !== 'function') return false;
+  try {
+    api.setPerspective(xml);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function readGeoGebraXml(api) {
   if (typeof api?.getXML !== 'function') return '';
   try {

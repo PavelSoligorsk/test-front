@@ -292,6 +292,7 @@ function BoardObject({
               height={Math.max(40, Math.round(obj.h - 38))}
               ggbBase64={appletBase64}
               ggbXml={obj.props.ggbXml || ''}
+              ggbPerspective={obj.props.ggbPerspective || ''}
               interactive={interactiveGeo}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={() => onGeoChange(obj.id)}

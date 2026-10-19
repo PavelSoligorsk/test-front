@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadGeoGebraScript } from './geogebraApi';
+import { applyGeoGebraPerspective, loadGeoGebraScript } from './geogebraApi';
 
 function appletKind(appName) {
   if (appName === 'graphing' || appName === '3d') return appName;
@@ -13,6 +13,7 @@ export default function GeoGebraWidget({
   height,
   ggbBase64,
   ggbXml = '',
+  ggbPerspective = '',
   interactive,
   onReady,
   onConstructionChange,
@@ -22,8 +23,10 @@ export default function GeoGebraWidget({
   const apiRef = useRef(null);
   const fileRef = useRef(ggbBase64 || '');
   const xmlRef = useRef(ggbXml || '');
+  const perspectiveRef = useRef(ggbPerspective || '');
   const appliedRef = useRef('');
   const appliedXmlRef = useRef('');
+  const appliedPerspectiveRef = useRef('');
   const fitTimerRef = useRef(0);
   const sharpRef = useRef(null);
   const interactiveRef = useRef(interactive);
@@ -35,51 +38,50 @@ export default function GeoGebraWidget({
   useEffect(() => {
     fileRef.current = ggbBase64 || '';
     xmlRef.current = ggbXml || '';
-  }, [ggbBase64, ggbXml]);
+    perspectiveRef.current = ggbPerspective || '';
+  }, [ggbBase64, ggbXml, ggbPerspective]);
 
-  function fitToFrame(api) {
+  function lockAppletBox() {
     const frame = frameRef.current;
     const host = hostRef.current;
-    if (!frame || !host) return;
+    if (!frame || !host) return null;
     const w = Math.round(frame.clientWidth);
     const h = Math.round(frame.clientHeight);
-    if (w < 2 || h < 2) return;
-    // Размер берётся из рамки объекта, не с экрана. Масштаб доски только
-    // увеличивает уже собранную картинку и не перестраивает панели GeoGebra.
-    const prev = sharpRef.current;
-    if (prev && prev.w === w && prev.h === h) return;
-    sharpRef.current = { w, h };
+    if (w < 2 || h < 2) return null;
+    const pin = (node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.style.setProperty('width', `${w}px`, 'important');
+      node.style.setProperty('height', `${h}px`, 'important');
+      node.style.setProperty('max-width', 'none', 'important');
+      node.style.setProperty('max-height', 'none', 'important');
+      node.style.setProperty('transform', 'none', 'important');
+    };
     host.style.left = '0px';
     host.style.top = '0px';
     host.style.right = '0px';
     host.style.bottom = '0px';
-    host.style.width = '';
-    host.style.height = '';
+    host.style.width = '100%';
+    host.style.height = '100%';
     host.style.transform = 'none';
-    const appletRoot = host.firstElementChild;
-    if (appletRoot instanceof HTMLElement) {
-      appletRoot.style.width = `${w}px`;
-      appletRoot.style.height = `${h}px`;
-      appletRoot.style.maxWidth = 'none';
-      appletRoot.style.maxHeight = 'none';
-      appletRoot.style.transform = 'none';
-    }
-    if (api && typeof api.setSize === 'function') {
+    pin(host.firstElementChild);
+    return { w, h };
+  }
+
+  function fitToFrame(api) {
+    const box = lockAppletBox();
+    if (!box) return;
+    const prev = sharpRef.current;
+    const resized = !prev || prev.w !== box.w || prev.h !== box.h;
+    sharpRef.current = box;
+    if (resized && api && typeof api.setSize === 'function') {
       try {
-        api.setSize(w, h);
+        api.setSize(box.w, box.h);
       } catch {
         /* апплет ещё не готов к смене размера */
       }
     }
     window.clearTimeout(fitTimerRef.current);
-    fitTimerRef.current = window.setTimeout(() => {
-      const root = hostRef.current?.firstElementChild;
-      const want = sharpRef.current;
-      if (!(root instanceof HTMLElement) || !want) return;
-      if (root.offsetWidth === want.w && root.offsetHeight === want.h) return;
-      sharpRef.current = null;
-      fitToFrame(apiRef.current);
-    }, 200);
+    fitTimerRef.current = window.setTimeout(() => lockAppletBox(), 250);
   }
 
   function applyFile(api) {
@@ -92,18 +94,48 @@ export default function GeoGebraWidget({
     if (!api || typeof api.setBase64 !== 'function') return;
     appliedRef.current = file;
     try {
-      api.setBase64(file, () => fitToFrame(api));
+      api.setBase64(file, () => {
+        fitToFrame(api);
+        applyPerspective(api);
+      });
     } catch {
       appliedRef.current = '';
+    }
+  }
+
+  function applyPerspective(api) {
+    const perspective = perspectiveRef.current;
+    if (!api || !perspective || interactiveRef.current) return;
+    if (perspective === appliedPerspectiveRef.current) return;
+    if (applyGeoGebraPerspective(api, perspective)) {
+      appliedPerspectiveRef.current = perspective;
     }
   }
 
   function applyConstruction(api) {
     if (!api) return;
     const xml = xmlRef.current;
+    const perspective = perspectiveRef.current;
     if (interactiveRef.current) {
       if (xml) appliedXmlRef.current = xml;
       if (fileRef.current) appliedRef.current = fileRef.current;
+      if (perspective) appliedPerspectiveRef.current = perspective;
+      return;
+    }
+    const file = fileRef.current;
+    if (perspective && perspective !== appliedPerspectiveRef.current && file && file !== appliedRef.current && typeof api.setBase64 === 'function') {
+      appliedPerspectiveRef.current = perspective;
+      appliedRef.current = file;
+      appliedXmlRef.current = xml;
+      try {
+        api.setBase64(file, () => {
+          fitToFrame(api);
+          applyGeoGebraPerspective(api, perspective);
+        });
+      } catch {
+        appliedRef.current = '';
+        appliedPerspectiveRef.current = '';
+      }
       return;
     }
     if (xml && xml !== appliedXmlRef.current && typeof api.setXML === 'function') {
@@ -115,6 +147,10 @@ export default function GeoGebraWidget({
       } catch {
         appliedXmlRef.current = '';
       }
+      return;
+    }
+    if (perspective && perspective !== appliedPerspectiveRef.current) {
+      applyPerspective(api);
       return;
     }
     if (appliedXmlRef.current) return;
@@ -206,7 +242,7 @@ export default function GeoGebraWidget({
     applyConstruction(apiRef.current);
     // Ссылки на файл обновляются в эффекте выше, до этого применения.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ggbBase64, ggbXml]);
+  }, [ggbBase64, ggbXml, ggbPerspective]);
 
   useEffect(() => {
     const frame = frameRef.current;

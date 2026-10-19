@@ -34,7 +34,7 @@ import {
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { readGeoGebraBase64, readGeoGebraXml } from './geogebraApi';
+import { readGeoGebraBase64, readGeoGebraPerspective, readGeoGebraXml } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { applyOp, diffOps, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
@@ -1004,21 +1004,51 @@ export default function BoardEditor({
     live(next);
   }
 
-  function saveGeoXml() {
-    const updates = new Map();
-    geoDirtyRef.current.forEach((id) => {
+  async function saveGeoXml() {
+    const ids = new Set(geoDirtyRef.current);
+    if (editingIdRef.current) ids.add(editingIdRef.current);
+    const pending = [];
+    ids.forEach((id) => {
       const obj = objectsRef.current.find((item) => item.id === id);
       const api = apiMap.current.get(id);
       if (!obj || obj.type !== 'geogebra' || !api) return;
       const xml = readGeoGebraXml(api);
-      if (!xml || xml === (obj.props.ggbXml || '')) return;
-      updates.set(id, xml);
+      const perspective = readGeoGebraPerspective(api);
+      const prevXml = obj.props.ggbXml || '';
+      const prevPerspective = obj.props.ggbPerspective || '';
+      const nextXml = xml || prevXml;
+      const nextPerspective = perspective || prevPerspective;
+      if (nextXml === prevXml && nextPerspective === prevPerspective) return;
+      pending.push({
+        id,
+        api,
+        ggbXml: nextXml,
+        ggbPerspective: nextPerspective,
+        layoutChanged: Boolean(nextPerspective) && nextPerspective !== prevPerspective,
+      });
     });
-    if (!updates.size || !mountedRef.current) return;
-    const next = objectsRef.current.map((obj) => (
-      updates.has(obj.id) ? { ...obj, props: { ...obj.props, ggbXml: updates.get(obj.id) } } : obj
-    ));
-    live(next);
+    if (!pending.length) return;
+    const ready = [];
+    for (const item of pending) {
+      const ggbBase64 = item.layoutChanged ? await readGeoGebraBase64(item.api) : '';
+      ready.push({ ...item, ggbBase64 });
+    }
+    if (!mountedRef.current) return;
+    const byId = new Map(ready.map((item) => [item.id, item]));
+    const current = objectsRef.current;
+    let changed = false;
+    const next = current.map((obj) => {
+      const update = byId.get(obj.id);
+      if (!update) return obj;
+      if ((obj.props.ggbPerspective || '') === update.ggbPerspective && (obj.props.ggbXml || '') === update.ggbXml && (!update.ggbBase64 || obj.props.ggbBase64 === update.ggbBase64)) {
+        return obj;
+      }
+      changed = true;
+      const props = { ...obj.props, ggbXml: update.ggbXml, ggbPerspective: update.ggbPerspective };
+      if (update.ggbBase64) props.ggbBase64 = update.ggbBase64;
+      return { ...obj, props };
+    });
+    if (changed) live(next);
   }
 
   function scheduleGeoSave(id) {
@@ -2588,8 +2618,8 @@ export default function BoardEditor({
         </div>
       )}
 
-      <div className="absolute inset-x-16 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex flex-col-reverse items-center gap-2 min-[720px]:inset-x-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:inset-x-auto [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
-        <div className="mx-auto flex w-max max-w-full min-w-0 flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:mx-0 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
+      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-[4.5rem] right-2 z-30 flex min-w-0 flex-col-reverse items-stretch gap-2 min-[720px]:inset-x-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:inset-x-auto [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:right-auto [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
+        <div className="flex w-full min-w-0 flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
           {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand').map((item) => {
             const Icon = item.icon;
             const active = tool === item.id;
@@ -2866,7 +2896,7 @@ function SurfacePanel({ surface, onChange, onClose }) {
     { id: 'rule', label: 'Линейка' },
   ];
   return (
-    <div className="absolute right-0 top-11 z-50 w-[min(100vw-1.5rem,22rem)] rounded-2xl border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-lg min-[720px]:absolute min-[720px]:inset-x-auto min-[720px]:right-0 min-[720px]:top-11 min-[720px]:max-h-none min-[720px]:w-[22rem] dark:border-zinc-800 dark:bg-zinc-950">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Фон и сетка</p>
         <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900">
