@@ -3,7 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { AlertCircle, Bookmark, ChevronDown, ChevronUp, Lightbulb, Pencil } from 'lucide-react';
-import { normalizeDisplayMath } from './theoryMath';
+import remarkGfm from 'remark-gfm';
+import { continueOrderedListNumbers, normalizeDisplayMath } from './theoryMath';
 
 export function MathText({ text }) {
   if (text == null || text === '') return null;
@@ -279,6 +280,41 @@ function clampControl(value, control, snap) {
   return next;
 }
 
+function formatExprValue(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return '';
+    return String(Math.round(value * 1e6) / 1e6);
+  }
+  return String(value);
+}
+
+function evalTextExpr(source, scope, cache) {
+  let fn = cache.get(source);
+  if (fn === undefined) {
+    try {
+      const compiled = new Function(`return (${source})`)();
+      fn = typeof compiled === 'function' ? compiled : null;
+    } catch (err) {
+      fn = null;
+    }
+    cache.set(source, fn);
+  }
+  if (!fn) return '';
+  try {
+    return formatExprValue(fn(scope));
+  } catch (err) {
+    return '';
+  }
+}
+
+function renderGeogebraText(text, scope, cache) {
+  const markdown = (text.parts || []).map((part) => (
+    part.type === 'expr' ? evalTextExpr(part.source, scope, cache) : part.value
+  )).join('');
+  return continueOrderedListNumbers(normalizeDisplayMath(markdown));
+}
+
 function applyControlValue(api, control, value) {
   if (!api || !control?.name || !Number.isFinite(value)) return;
   try {
@@ -288,9 +324,10 @@ function applyControlValue(api, control, value) {
   }
 }
 
-export const GeoGebra = ({ id, setup, height = '400', controls = [] }) => {
+export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] }) => {
   const containerRef = useRef(null);
   const apiRef = useRef(null);
+  const exprCache = useRef(new Map());
   const controlsRef = useRef(controls);
   const valuesRef = useRef(controls.map((control) => control.value));
   const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
@@ -533,10 +570,16 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [] }) => {
     publishValue(index, parsed);
   };
 
+  const scope = {};
+  controls.forEach((control, index) => {
+    scope[control.name] = values[index];
+  });
+  const hasPanel = controls.length > 0 || texts.length > 0;
+
   return (
     <div className="theory-geogebra my-6 w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60">
       <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }} />
-      {controls.length > 0 && (
+      {hasPanel && (
         <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
           {controls.map((control, index) => (
             <div key={`${control.kind}-${control.name}-${index}`} className="flex items-center gap-3">
@@ -580,6 +623,18 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [] }) => {
                   control.kind === 'slider' ? 'w-24 shrink-0' : 'min-w-0 flex-1'
                 }`}
               />
+            </div>
+          ))}
+          {texts.map((text, index) => (
+            <div
+              key={`text-${index}`}
+              className={`dynamic-markdown text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 [&_p]:mb-2 [&_p:last-child]:mb-0 ${
+                controls.length > 0 ? 'border-t border-zinc-200 pt-3 dark:border-zinc-800' : ''
+              }`}
+            >
+              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                {renderGeogebraText(text, scope, exprCache.current)}
+              </ReactMarkdown>
             </div>
           ))}
         </div>

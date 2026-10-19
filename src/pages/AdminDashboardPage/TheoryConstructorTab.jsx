@@ -114,8 +114,12 @@ export const THEORY_GENERATION_PROMPT = `Ты — эксперт по подго
       color:f,#ff0000">
       <Slider name="a" min="-5" max="5" step="0.1" value="1" label="$a$" />
       <Input name="b" value="0" min="-10" max="10" label="$b$" />
+      <Text>
+        $a = {({a}) => a}$, $b = {({b}) => b}$.
+        Ветви направлены {({a}) => a > 0 ? "вверх" : "вниз"}.
+      </Text>
     </GeoGebra>
-    У Input имя тоже должно быть числом в setup, например b = 0. Без Slider и Input панель не рисуется.
+    У Input имя тоже должно быть числом в setup, например b = 0. В лямбду <Text> попадают только значения Slider и Input этого же графика. Пустая строка из функции скрывает фрагмент. Без Slider, Input и Text панель не рисуется.
 12. **Html** — сырой HTML, когда нужна своя вёрстка: сравнительная таблица, схема, svg. Внутри только HTML, без Markdown, без $формул$ KaTeX и без Def/Ex. Формулы пиши символами HTML/Unicode (x², √x, ≥). Пример:
 
     <Html>

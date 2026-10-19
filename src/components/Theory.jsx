@@ -133,35 +133,147 @@ function readMarkupNumber(attrs, name) {
   return Number.isFinite(value) ? value : undefined;
 }
 
-function parseGeoGebraControls(innerContent) {
-  if (!innerContent) return [];
+function dedentMarkup(value) {
+  const text = String(value || '').replace(/^\n/, '').replace(/\s+$/, '');
+  const lines = text.split('\n');
+  const indents = lines.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)[0].length);
+  const min = indents.length ? Math.min(...indents) : 0;
+  if (!min) return text;
+  return lines.map((line) => line.slice(min)).join('\n');
+}
+
+function scanJsGroup(source, openIndex) {
+  const closeOf = { '{': '}', '(': ')', '[': ']' };
+  const open = source[openIndex];
+  const close = closeOf[open];
+  if (!close) return -1;
+  let depth = 0;
+  let quote = null;
+  for (let i = openIndex; i < source.length; i += 1) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === '\\') {
+        i += 1;
+        continue;
+      }
+      if (quote === '`' && ch === '$' && source[i + 1] === '{') {
+        const nested = scanJsGroup(source, i + 1);
+        if (nested < 0) return -1;
+        i = nested;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '/') {
+      i += 2;
+      while (i < source.length && source[i] !== '\n') i += 1;
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '*') {
+      i += 2;
+      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i += 1;
+      i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '{' || ch === '(' || ch === '[') {
+      depth += 1;
+      continue;
+    }
+    if (ch === '}' || ch === ')' || ch === ']') {
+      depth -= 1;
+      if (depth === 0 && ch === close) return i;
+    }
+  }
+  return -1;
+}
+
+function matchTextLambda(source, braceIndex) {
+  if (source[braceIndex] !== '{') return -1;
+  let cursor = braceIndex + 1;
+  while (cursor < source.length && /\s/.test(source[cursor])) cursor += 1;
+  if (source[cursor] !== '(') return -1;
+  const parenEnd = scanJsGroup(source, cursor);
+  if (parenEnd < 0) return -1;
+  cursor = parenEnd + 1;
+  while (cursor < source.length && /\s/.test(source[cursor])) cursor += 1;
+  if (source.slice(cursor, cursor + 2) !== '=>') return -1;
+  return scanJsGroup(source, braceIndex);
+}
+
+function splitTextLambdas(source) {
+  const parts = [];
+  let textStart = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    if (source[i] !== '{') continue;
+    const end = matchTextLambda(source, i);
+    if (end < 0) continue;
+    if (i > textStart) parts.push({ type: 'md', value: source.slice(textStart, i) });
+    parts.push({ type: 'expr', source: source.slice(i + 1, end).trim() });
+    i = end;
+    textStart = end + 1;
+  }
+  if (textStart < source.length) parts.push({ type: 'md', value: source.slice(textStart) });
+  return parts;
+}
+
+function parseGeoGebraControl(tag, attrs) {
+  const name = readMarkupAttr(attrs, 'name');
+  if (!name) return null;
+  const kind = tag.toLowerCase() === 'slider' ? 'slider' : 'input';
+  const min = readMarkupNumber(attrs, 'min');
+  const max = readMarkupNumber(attrs, 'max');
+  const step = readMarkupNumber(attrs, 'step');
+  let value = readMarkupNumber(attrs, 'value') ?? 0;
+  const resolvedMin = min ?? (kind === 'slider' ? -10 : undefined);
+  const resolvedMax = max ?? (kind === 'slider' ? 10 : undefined);
+  if (Number.isFinite(resolvedMin)) value = Math.max(resolvedMin, value);
+  if (Number.isFinite(resolvedMax)) value = Math.min(resolvedMax, value);
+  return {
+    kind,
+    name,
+    label: readMarkupAttr(attrs, 'label') || name,
+    min: resolvedMin,
+    max: resolvedMax,
+    step: step ?? (kind === 'slider' ? 0.1 : undefined),
+    value,
+  };
+}
+
+function parseGeoGebraInner(innerContent) {
   const controls = [];
-  const tagRe = /<(Slider|Input)\b([^>]*)\/?>/gi;
+  const texts = [];
+  if (!innerContent) return { controls, texts };
+  const tagRe = /<(Slider|Input|Text)\b/gi;
   let match;
   while ((match = tagRe.exec(innerContent)) !== null) {
-    const attrs = match[2] || '';
-    const name = readMarkupAttr(attrs, 'name');
-    if (!name) continue;
-    const kind = match[1].toLowerCase() === 'slider' ? 'slider' : 'input';
-    const min = readMarkupNumber(attrs, 'min');
-    const max = readMarkupNumber(attrs, 'max');
-    const step = readMarkupNumber(attrs, 'step');
-    let value = readMarkupNumber(attrs, 'value') ?? 0;
-    const resolvedMin = min ?? (kind === 'slider' ? -10 : undefined);
-    const resolvedMax = max ?? (kind === 'slider' ? 10 : undefined);
-    if (Number.isFinite(resolvedMin)) value = Math.max(resolvedMin, value);
-    if (Number.isFinite(resolvedMax)) value = Math.min(resolvedMax, value);
-    controls.push({
-      kind,
-      name,
-      label: readMarkupAttr(attrs, 'label') || name,
-      min: resolvedMin,
-      max: resolvedMax,
-      step: step ?? (kind === 'slider' ? 0.1 : undefined),
-      value,
-    });
+    const scanned = scanTagClose(innerContent, match.index + match[0].length);
+    if (!scanned) break;
+    const tag = match[1];
+    if (tag.toLowerCase() === 'text') {
+      if (scanned.selfClosing) {
+        tagRe.lastIndex = scanned.end;
+        continue;
+      }
+      const closeRe = /<\/Text\s*>/gi;
+      closeRe.lastIndex = scanned.end;
+      const close = closeRe.exec(innerContent);
+      if (!close) break;
+      const body = dedentMarkup(innerContent.slice(scanned.end, close.index));
+      if (body) texts.push({ parts: splitTextLambdas(body) });
+      tagRe.lastIndex = closeRe.lastIndex;
+      continue;
+    }
+    const attrs = innerContent.slice(match.index + match[0].length, scanned.selfClosing ? scanned.end - 2 : scanned.end - 1);
+    const control = parseGeoGebraControl(tag, attrs);
+    if (control) controls.push(control);
+    tagRe.lastIndex = scanned.end;
   }
-  return controls;
+  return { controls, texts };
 }
 
 function scanTagClose(content, from) {
@@ -367,12 +479,14 @@ const parseBlocks = (content) => {
       const heightMatch = attrs.match(/height="([^"]+)"/);
       const setupMatch = attrs.match(/setup=\{`([\s\S]*?)`\}/) || attrs.match(/setup="([^"]*)"/) || attrs.match(/setup='([^']*)'/);
 
+      const geogebraInner = parseGeoGebraInner(innerContent);
       blocks.push({
         type: 'geogebra',
         id: idMatch ? idMatch[1] : null,
         height: heightMatch ? heightMatch[1] : "400",
         setup: setupMatch ? setupMatch[1] : null,
-        controls: parseGeoGebraControls(innerContent),
+        controls: geogebraInner.controls,
+        texts: geogebraInner.texts,
       });
     } else if (tagName === 'Html') {
       const htmlMatch = attrs.match(/html="([^"]*)"/);
@@ -387,6 +501,38 @@ const parseBlocks = (content) => {
 
   return blocks;
 };
+
+function parseTheorySections(content) {
+  const sections = [];
+  const openRe = /<Section(?=[\s/>])/g;
+  const opens = [];
+  let open;
+  while ((open = openRe.exec(content)) !== null) opens.push(open.index);
+
+  for (let index = 0; index < opens.length; index += 1) {
+    const start = opens[index];
+    const scanned = scanTagClose(content, start + '<Section'.length);
+    if (!scanned || scanned.selfClosing) continue;
+
+    const attrs = content.slice(start + '<Section'.length, scanned.end - 1);
+    const id = readMarkupAttr(attrs, 'id');
+    if (!id) continue;
+
+    const nextOpen = opens[index + 1] ?? content.length;
+    const closeAt = content.indexOf('</Section>', scanned.end);
+    const hasClose = closeAt !== -1 && closeAt < nextOpen;
+    const bodyEnd = hasClose ? closeAt : nextOpen;
+
+    sections.push({
+      id,
+      title: readMarkupAttr(attrs, 'title') || '',
+      isHard: /\bisHard\b/.test(attrs),
+      orderedBlocks: parseBlocks(content.slice(scanned.end, bodyEnd)),
+    });
+  }
+
+  return sections;
+}
 
 const renderBlocks = (blocks) => {
   if (!blocks || !Array.isArray(blocks)) return null;
@@ -479,6 +625,7 @@ const renderBlocks = (blocks) => {
           height={block.height}
           setup={block.setup}
           controls={block.controls}
+          texts={block.texts}
         />
       );
     }
@@ -504,24 +651,7 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
         setIsLoading(false);
         return;
       }
-      const sections = [];
-      const sectionRegex = /<Section\s+id="([^"]+)"\s+title="([^"]+)"(?:\s+isHard)?>([\s\S]*?)<\/Section>/g;
-      let match;
-      
-      while ((match = sectionRegex.exec(content)) !== null) {
-        const [, id, title, sectionContent] = match;
-        const isHard = match[0].includes('isHard');
-        
-        const orderedBlocks = parseBlocks(sectionContent);
-        
-        sections.push({ 
-          id, 
-          title, 
-          isHard, 
-          orderedBlocks
-        });
-      }
-      
+      const sections = parseTheorySections(content);
       setComponents(sections);
 
       if (embedded) {
