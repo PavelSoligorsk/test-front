@@ -596,6 +596,10 @@ export default function BoardEditor({
     if (zoomLabelRef.current) {
       zoomLabelRef.current.textContent = `${Math.round(cam.zoom * 100)}%`;
     }
+    if (viewport && viewport.dataset.geoZoom !== String(cam.zoom)) {
+      viewport.dataset.geoZoom = String(cam.zoom);
+      window.dispatchEvent(new CustomEvent('edu-board-camera'));
+    }
     paintSelectionUi();
     paintPeerCursors();
   }
@@ -631,17 +635,6 @@ export default function BoardEditor({
       if (end) {
         end.style.left = `${obj.props.x2}px`;
         end.style.top = `${obj.props.y2}px`;
-      }
-    }
-    if (obj.type === 'geogebra') {
-      const api = apiMap.current.get(obj.id);
-      const frame = el.querySelector('[data-geo-frame]');
-      if (api && frame && typeof api.setSize === 'function') {
-        const w = Math.round(frame.clientWidth);
-        const h = Math.round(frame.clientHeight);
-        if (w > 1 && h > 1) {
-          try { api.setSize(w, h); } catch { /* апплет ещё не готов */ }
-        }
       }
     }
   }
