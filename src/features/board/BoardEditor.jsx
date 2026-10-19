@@ -7,7 +7,6 @@ import {
   Eraser,
   Hand,
   Image,
-  Loader2,
   Maximize2,
   Grid3x3,
   Menu,
@@ -1048,13 +1047,13 @@ export default function BoardEditor({
       handlers: {
         onStatus: (state, pending) => {
           if (!mountedRef.current) return;
-          const next = { state, pending };
-          if (dragRef.current && (state === 'live' || state === 'syncing')) {
-            linkHoldRef.current = next;
+          if (state !== 'offline' && state !== 'denied') {
+            setLink((prev) => (prev.state === 'live' ? prev : { state: 'live', pending: 0 }));
             return;
           }
-          linkHoldRef.current = null;
-          setLink((prev) => (prev.state === 'denied' ? prev : next));
+          setLink((prev) => (
+            prev.state === state && prev.pending === pending ? prev : { state, pending }
+          ));
         },
         onSnapshot: call('onSnapshot'),
         onAckObject: call('onAckObject'),
@@ -2313,7 +2312,7 @@ export default function BoardEditor({
     <div className="fixed inset-0 z-30 overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100">
       <div
         ref={viewportRef}
-        className="absolute inset-0 touch-none select-none"
+        className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'eraser') ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
         style={{ backgroundColor: surface.color }}
         onPointerDown={onPointerDown}
         onPointerMove={onViewportPointerMove}
@@ -2430,7 +2429,7 @@ export default function BoardEditor({
             className="h-8 min-w-0 max-w-40 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
           <PeerList peers={peers} compact />
-          <LinkStatus link={link} readOnly={readOnly} />
+          <LinkStatus link={link} />
         </div>
 
         <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
@@ -2626,43 +2625,16 @@ export default function BoardEditor({
   );
 }
 
-function LinkStatus({ link, readOnly }) {
+function LinkStatus({ link }) {
+  if (link.state !== 'offline') return null;
   const base = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium';
-  if (link.state === 'denied') {
-    return (
-      <span className={`${base} text-red-600`} title="Соединение закрыто сервером">
-        <AlertCircle size={13} />
-        <span className="hidden sm:inline">Нет доступа</span>
-      </span>
-    );
-  }
-  if (link.state === 'offline') {
-    const text = link.pending ? `Нет связи · ${link.pending} в очереди` : 'Нет связи · переподключение';
-    return (
-      <span className={`${base} text-amber-600`} title="Правки отправятся после переподключения">
-        <WifiOff size={13} />
-        <span className="hidden sm:inline">{text}</span>
-      </span>
-    );
-  }
-  if (link.state === 'connecting') {
-    return (
-      <span className={`${base} text-zinc-400`} title="Подключение к доске">
-        <Loader2 size={13} className="animate-spin" />
-        <span className="hidden sm:inline">Подключение…</span>
-      </span>
-    );
-  }
-  if (readOnly) return <span className={`${base} text-zinc-400`}>Только просмотр</span>;
-  if (link.state === 'syncing') {
-    return (
-      <span className={`${base} text-zinc-400`} title="Сервер ещё не подтвердил правки">
-        <Loader2 size={13} className="animate-spin" />
-        <span className="hidden sm:inline">Сохранение…</span>
-      </span>
-    );
-  }
-  return null;
+  const text = link.pending ? `Потеряно соединение · ${link.pending} в очереди` : 'Потеряно соединение';
+  return (
+    <span className={`${base} text-amber-600`} title="Правки отправятся после переподключения">
+      <WifiOff size={13} />
+      <span className="hidden sm:inline">{text}</span>
+    </span>
+  );
 }
 
 function PeerList({ peers, compact = false }) {
