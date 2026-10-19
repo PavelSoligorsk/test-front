@@ -1086,6 +1086,24 @@ export default function BoardEditor({
     if (changed) live(next);
   }
 
+  function changeGeoControls(id, controls) {
+    if (readOnlyRef.current || !Array.isArray(controls)) return;
+    const current = objectsRef.current;
+    const index = current.findIndex((obj) => obj.id === id);
+    if (index < 0) return;
+    const obj = current[index];
+    if (obj.type !== 'geogebra' || obj.props?.locked) return;
+    const prev = obj.props.controls || [];
+    const same = prev.length === controls.length && prev.every((item, itemIndex) => (
+      item?.name === controls[itemIndex]?.name && Object.is(item?.value, controls[itemIndex]?.value)
+    ));
+    if (same) return;
+    const next = current.slice();
+    next[index] = { ...obj, props: { ...obj.props, controls } };
+    live(next);
+    scheduleGeoSave(id);
+  }
+
   function scheduleGeoSave(id) {
     geoDirtyRef.current.add(id);
     if (!geoXmlTimerRef.current) {
@@ -2411,6 +2429,7 @@ export default function BoardEditor({
                 if (editingIdRef.current !== id || readOnlyRef.current) return;
                 scheduleGeoSave(id);
               }}
+              onGeoControls={changeGeoControls}
             />
           ))}
           <div ref={groupBoxRef} className="pointer-events-none absolute" style={{ display: 'none' }} />

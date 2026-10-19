@@ -177,6 +177,7 @@ function BoardObject({
   onToggleGeo,
   onGeoReady,
   onGeoChange,
+  onGeoControls,
 }) {
   const locked = Boolean(obj.props?.locked);
   const box = obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape' || obj.type === 'geogebra' || obj.type === 'image';
@@ -201,7 +202,7 @@ function BoardObject({
 
       {obj.type === 'text' && (
         markdown
-          ? <MarkdownBody text={obj.props.text} />
+          ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} />
           : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
       )}
 
@@ -303,6 +304,7 @@ function BoardObject({
               interactive={interactiveGeo}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={() => onGeoChange(obj.id)}
+              onControls={locked ? undefined : (controls) => onGeoControls?.(obj.id, controls)}
             />
           </div>
         </div>

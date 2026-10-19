@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -51,12 +51,57 @@ function renderText(text, scope, cache) {
   )).join('');
 }
 
-export default function TheoryControlPanel({ controls = [], texts = [], apiRef }) {
+export default function TheoryControlPanel({ controls = [], texts = [], apiRef, onControls }) {
   const [values, setValues] = useState(() => controls.map((control) => control.value));
   const [drafts, setDrafts] = useState(() => controls.map((control) => String(control.value)));
   const valuesRef = useRef(values);
+  const controlsRef = useRef(controls);
+  const holdRef = useRef(false);
+  const pendingRemoteRef = useRef(false);
   const exprCache = useRef(new Map());
+  const remoteKey = controls.map((control) => `${control.name}:${control.value}`).join('|');
+  controlsRef.current = controls;
   valuesRef.current = values;
+
+  const adopt = (list) => {
+    const next = list.map((control) => control.value);
+    const current = valuesRef.current;
+    if (next.length === current.length && next.every((value, index) => Object.is(value, current[index]))) return;
+    valuesRef.current = next;
+    setValues(next);
+    setDrafts(next.map((value) => String(value)));
+  };
+
+  useEffect(() => {
+    const next = controlsRef.current.map((control) => control.value);
+    const current = valuesRef.current;
+    const same = next.length === current.length && next.every((value, index) => Object.is(value, current[index]));
+    if (same) {
+      pendingRemoteRef.current = false;
+      return;
+    }
+    if (holdRef.current) {
+      pendingRemoteRef.current = true;
+      return;
+    }
+    adopt(controlsRef.current);
+  }, [remoteKey]);
+
+  useEffect(() => {
+    const release = () => {
+      if (!holdRef.current) return;
+      holdRef.current = false;
+      if (!pendingRemoteRef.current) return;
+      pendingRemoteRef.current = false;
+      adopt(controlsRef.current);
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, []);
 
   const setControl = (index, next) => {
     setValues((prev) => {
@@ -67,8 +112,13 @@ export default function TheoryControlPanel({ controls = [], texts = [], apiRef }
     });
     const control = controls[index];
     const api = apiRef.current;
-    if (!api || !control?.name || !Number.isFinite(next)) return;
-    try { api.setValue(control.name, next); } catch { /* объект ещё не создан */ }
+    if (api && control?.name && Number.isFinite(next)) {
+      try { api.setValue(control.name, next); } catch { /* объект ещё не создан */ }
+    }
+    if (!control) return;
+    onControls?.(controls.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, value: next } : item
+    )));
   };
 
   const commit = (index, raw, snap) => {
@@ -112,7 +162,10 @@ export default function TheoryControlPanel({ controls = [], texts = [], apiRef }
               step={control.step}
               value={values[index] ?? control.value}
               aria-label={String(control.label || control.name).replace(/\$/g, '')}
-              onPointerDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                holdRef.current = true;
+              }}
               onChange={(event) => commit(index, event.target.value, true)}
               className="h-1.5 min-w-0 flex-1 accent-zinc-900"
             />
@@ -126,6 +179,14 @@ export default function TheoryControlPanel({ controls = [], texts = [], apiRef }
             value={drafts[index] ?? ''}
             aria-label={String(control.label || control.name).replace(/\$/g, '')}
             onPointerDown={(event) => event.stopPropagation()}
+            onFocus={() => { holdRef.current = true; }}
+            onBlur={(event) => {
+              commit(index, event.target.value, control.kind === 'slider');
+              holdRef.current = false;
+              if (!pendingRemoteRef.current) return;
+              pendingRemoteRef.current = false;
+              adopt(controlsRef.current);
+            }}
             onChange={(event) => {
               const raw = event.target.value;
               setDrafts((prev) => {
@@ -139,7 +200,6 @@ export default function TheoryControlPanel({ controls = [], texts = [], apiRef }
               if (Number.isFinite(control.max) && parsed > control.max) return;
               setControl(index, parsed);
             }}
-            onBlur={(event) => commit(index, event.target.value, control.kind === 'slider')}
             className={`rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-900 outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 ${control.kind === 'slider' ? 'w-20 shrink-0' : 'min-w-0 flex-1'}`}
           />
         </div>

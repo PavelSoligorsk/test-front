@@ -21,6 +21,7 @@ export default function GeoGebraWidget({
   interactive,
   onReady,
   onConstructionChange,
+  onControls,
 }) {
   const frameRef = useRef(null);
   const hostRef = useRef(null);
@@ -33,6 +34,7 @@ export default function GeoGebraWidget({
   const appliedRef = useRef('');
   const appliedXmlRef = useRef('');
   const appliedPerspectiveRef = useRef('');
+  const appliedControlsRef = useRef(new Map());
   const fitTimerRef = useRef(0);
   const sharpRef = useRef(null);
   const interactiveRef = useRef(interactive);
@@ -243,6 +245,7 @@ export default function GeoGebraWidget({
               runTheorySetup(api, setupRef.current);
               controlsRef.current.forEach((control) => {
                 if (control?.name == null || !Number.isFinite(control.value)) return;
+                appliedControlsRef.current.set(control.name, control.value);
                 try { api.setValue(control.name, control.value); } catch { /* значение ещё не к чему применить */ }
               });
             }
@@ -267,6 +270,17 @@ export default function GeoGebraWidget({
     // Апплет создаётся один раз. Чужое построение приходит через setXML, размер — через ResizeObserver.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appletId, attempt, appName]);
+
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api || status !== 'ready') return;
+    controls.forEach((control) => {
+      if (control?.name == null || !Number.isFinite(control.value)) return;
+      if (appliedControlsRef.current.get(control.name) === control.value) return;
+      appliedControlsRef.current.set(control.name, control.value);
+      try { api.setValue(control.name, control.value); } catch { /* значение ещё не к чему применить */ }
+    });
+  }, [controls, status]);
 
   useEffect(() => {
     applyConstruction(apiRef.current);
@@ -336,7 +350,7 @@ export default function GeoGebraWidget({
       )}
     </div>
     {hasPanel && (
-      <TheoryControlPanel controls={controls} texts={texts} apiRef={apiRef} />
+      <TheoryControlPanel controls={controls} texts={texts} apiRef={apiRef} onControls={onControls} />
     )}
     </div>
   );
