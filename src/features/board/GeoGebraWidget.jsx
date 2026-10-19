@@ -208,16 +208,17 @@ export default function GeoGebraWidget({
           w: Math.max(40, Math.round(sizeAtStart.width)),
           h: Math.max(40, Math.round(sizeAtStart.height)),
         };
+        const fromTheory = Boolean(String(setupRef.current || '').trim()) && !base64AtLoad;
         const params = {
           id: appletId,
-          appName: kind,
+          ...(fromTheory ? {} : { appName: kind }),
           width: Math.max(40, Math.round(sizeAtStart.width)),
           height: Math.max(40, Math.round(sizeAtStart.height)),
           language: 'ru',
           showMenuBar: false,
           showToolBar: true,
-          showAlgebraInput: kind !== 'geometry',
-          enable3d: kind === '3d',
+          showAlgebraInput: fromTheory ? false : kind !== 'geometry',
+          enable3d: fromTheory ? true : kind === '3d',
           showToolBarHelp: false,
           showResetIcon: true,
           enableLabelDrags: true,

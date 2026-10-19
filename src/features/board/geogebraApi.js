@@ -77,8 +77,14 @@ export function runTheorySetup(api, setup) {
       }
       return;
     }
-    if (cmd.startsWith('perspective:')) {
-      try { api.setPerspective(cmd.slice(12).trim()); } catch { /* вид не сменился */ }
+    const perspectiveCall = cmd.match(/^SetPerspective\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)$/i);
+    if (perspectiveCall || cmd.startsWith('perspective:')) {
+      const code = perspectiveCall
+        ? (perspectiveCall[1] || perspectiveCall[2] || perspectiveCall[3] || '').trim()
+        : cmd.slice(12).trim();
+      if (code) {
+        try { api.setPerspective(code); } catch { /* вид не сменился */ }
+      }
       return;
     }
     if (cmd.startsWith('color:') || cmd.startsWith('size:') || cmd.startsWith('label:') || cmd.startsWith('show:') || cmd.startsWith('hide:') || cmd.startsWith('animate:')) {
