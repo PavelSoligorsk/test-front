@@ -68,6 +68,7 @@ import { boardImageSrc } from './images';
 import ShapeGlyph from './ShapeGlyph';
 import { SHAPE_GROUPS, defaultDepth, depthFromLocal, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
 import { isPagesMeta } from './pages';
+import BoardTheoryPane from './BoardTheoryPane';
 
 const SURFACE_MARK = 'board-surface';
 const SURFACE_COLORS = ['#e7f4fb', '#ffffff', '#eceff1', '#2c2c2e', '#dff6fb', '#e4e8fb', '#fbf3d4', '#f3e8f6', '#e7f6e4', '#fde8e8'];
@@ -277,6 +278,7 @@ export default function BoardEditor({
   const [notice, setNotice] = useState('');
   const [pagesOpen, setPagesOpen] = useState(false);
   const [surfaceOpen, setSurfaceOpen] = useState(false);
+  const [theoryOpen, setTheoryOpen] = useState(false);
   const [surface, setSurface] = useState(() => readSurface(initialBoard.objects));
   const surfaceRef = useRef(surface);
   const [series, setSeries] = useState([]);
@@ -468,6 +470,39 @@ export default function BoardEditor({
     }
     commit([...objectsRef.current, ...list]);
     return true;
+  }
+
+  function placeTheoryBlock(payload) {
+    const point = viewportCenterWorld();
+    if (payload?.kind === 'geogebra') {
+      const height = Math.max(220, parseInt(payload.height, 10) || 400);
+      const obj = createObject('geogebra', {
+        x: point.x - 220,
+        y: point.y - height / 2,
+        w: 440,
+        h: height + 160,
+        props: {
+          appName: 'geometry',
+          theory: true,
+          setup: payload.setup || '',
+          controls: payload.controls || [],
+          texts: payload.texts || [],
+          height: String(height),
+        },
+      });
+      if (addObjects([obj])) selectIds([obj.id]);
+      return;
+    }
+    const text = String(payload?.text || '').trim();
+    if (!text) return;
+    const obj = createObject('text', {
+      x: point.x - 180,
+      y: point.y - 80,
+      w: 360,
+      h: 220,
+      props: { text, format: 'markdown' },
+    });
+    if (addObjects([obj])) selectIds([obj.id]);
   }
 
   function boardPath(id) {
@@ -1570,7 +1605,7 @@ export default function BoardEditor({
       }
       if (event.key === 'Enter' && selectedIdsRef.current.length === 1) {
         const obj = objectsRef.current.find((item) => item.id === selectedIdsRef.current[0]);
-        if (obj && !obj.props?.locked && (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape')) {
+        if (obj && !obj.props?.locked && obj.props?.format !== 'markdown' && (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape')) {
           event.preventDefault();
           actions.beginEdit(obj.id);
         }
@@ -2287,7 +2322,7 @@ export default function BoardEditor({
     const world = toWorld(event);
     const hit = topHit(canvasList().filter(canSelect), world, cameraRef.current.zoom);
     if (hit) {
-      if (canEdit(hit) && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
+      if (canEdit(hit) && hit.props?.format !== 'markdown' && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
       return;
     }
     const obj = createObject('text', {
@@ -2339,7 +2374,8 @@ export default function BoardEditor({
   const geoEditing = selectedObjects.length === 1 && editingId === selectedObjects[0].id && selectedObjects[0].type === 'geogebra';
 
   return (
-    <div className="fixed inset-0 z-30 overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100">
+    <div className={`fixed inset-0 z-30 flex overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100 ${theoryOpen ? 'min-[720px]:flex-row' : ''}`}>
+      <div className="relative h-full min-w-0 flex-1 overflow-hidden">
       <div
         ref={viewportRef}
         className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'eraser') ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
@@ -2458,6 +2494,15 @@ export default function BoardEditor({
             size={Math.max(4, Math.min(title.length || 4, 16))}
             className="h-8 min-w-0 max-w-40 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
+          {audience === 'teacher' && (
+            <button
+              type="button"
+              onClick={() => setTheoryOpen((open) => !open)}
+              className={`hidden h-8 items-center rounded-xl px-2 text-xs font-semibold min-[720px]:inline-flex ${theoryOpen ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
+            >
+              Теория
+            </button>
+          )}
           <PeerList peers={peers} compact />
           <LinkStatus link={link} />
         </div>
@@ -2618,8 +2663,8 @@ export default function BoardEditor({
         </div>
       )}
 
-      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-[4.5rem] right-2 z-30 flex min-w-0 flex-col-reverse items-stretch gap-2 min-[720px]:inset-x-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:inset-x-auto [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:right-auto [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
-        <div className="flex w-full min-w-0 flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
+      <div className="absolute inset-x-2 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex flex-col-reverse items-center gap-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:inset-x-auto [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:w-auto [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
+        <div className="flex w-max min-w-0 max-w-full flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:max-w-none [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
           {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand').map((item) => {
             const Icon = item.icon;
             const active = tool === item.id;
@@ -2651,6 +2696,12 @@ export default function BoardEditor({
         className="hidden"
         onChange={onImageFile}
       />
+      </div>
+      {theoryOpen && audience === 'teacher' && (
+        <aside className="hidden h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 dark:border-zinc-800 min-[720px]:block">
+          <BoardTheoryPane onCopy={placeTheoryBlock} />
+        </aside>
+      )}
     </div>
   );
 }

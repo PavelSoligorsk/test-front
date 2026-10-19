@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { uploadImage } from './api';
 
@@ -10,11 +10,23 @@ export default function ImageAwareTextarea({
   className = '',
   rows = 4,
   required = false,
+  autoGrow = false,
 }) {
   const textareaRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const isControlled = value !== undefined;
+
+  const fitHeight = () => {
+    const textarea = textareaRef.current;
+    if (!autoGrow || !textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    fitHeight();
+  }, [autoGrow, value, defaultValue, isUploading]);
 
   const readValue = () => (isControlled ? value : (textareaRef.current?.value ?? ''));
 
@@ -97,7 +109,10 @@ export default function ImageAwareTextarea({
       <textarea
         ref={textareaRef}
         {...(isControlled ? { value } : { defaultValue: defaultValue ?? '' })}
-        onChange={(e) => onChange?.(e.target.value)}
+        onChange={(e) => {
+          onChange?.(e.target.value);
+          fitHeight();
+        }}
         onPaste={handlePaste}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}

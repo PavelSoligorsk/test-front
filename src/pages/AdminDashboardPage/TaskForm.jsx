@@ -91,28 +91,28 @@ export default function TaskForm({ taskData, setTaskData, onSubmit, onCancel }) 
             </select>
           </label>
         </div>
-        <ImageAwareTextarea required value={taskData.content}
+        <ImageAwareTextarea required autoGrow value={taskData.content}
           onChange={(value) => setTaskData({ ...taskData, content: value })}
           placeholder="Текст задачи (можно вставить изображение)..."
-          className={`${fieldClass} min-h-[120px] font-mono resize-y`} rows={4} />
-        <ImageAwareTextarea value={taskData.solution}
+          className={`${fieldClass} min-h-[120px] font-mono resize-none overflow-hidden`} rows={4} />
+        <ImageAwareTextarea autoGrow value={taskData.solution}
           onChange={(value) => setTaskData({ ...taskData, solution: value })}
           placeholder="Решение (можно вставить изображение)..."
-          className={`${fieldClass} min-h-[100px] font-mono resize-y`} rows={3} />
+          className={`${fieldClass} min-h-[100px] font-mono resize-none overflow-hidden`} rows={3} />
         {!taskData.is_open_answer && (
-          <ImageAwareTextarea value={taskData.options}
+          <ImageAwareTextarea autoGrow value={taskData.options}
             onChange={(value) => setTaskData({ ...taskData, options: value })}
             placeholder="Вариант А; Вариант Б; Вариант В (можно вставить изображение)..."
-            className={`${fieldClass} min-h-[80px] resize-y border-dashed`} rows={2} />
+            className={`${fieldClass} min-h-[80px] resize-none overflow-hidden border-dashed`} rows={2} />
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <input required className={`${fieldClass} text-center font-semibold`}
             placeholder="Ответ" value={taskData.answer}
             onChange={e => setTaskData({ ...taskData, answer: e.target.value })} />
-          <ImageAwareTextarea value={taskData.hint}
+          <ImageAwareTextarea autoGrow value={taskData.hint}
             onChange={(value) => setTaskData({ ...taskData, hint: value })}
             placeholder="Подсказка (можно вставить изображение)..."
-            className={`${fieldClass} resize-y`} rows={2} />
+            className={`${fieldClass} resize-none overflow-hidden`} rows={2} />
         </div>
         <button type="submit" className={`${primaryBtnClass} w-full py-3`}>
           <Send size={16} /> {taskData.id ? 'Обновить' : 'Опубликовать'}

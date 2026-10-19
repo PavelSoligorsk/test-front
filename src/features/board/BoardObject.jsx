@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useRef } from 'react';
 import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
+import MarkdownBody from './MarkdownBody';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
@@ -183,6 +184,7 @@ function BoardObject({
   const geoApp = obj.type === 'geogebra' ? geogebraApp(obj.props.appName) : null;
   const appletBase64 = obj.type === 'geogebra' ? (obj.props.ggbBase64 || '') : '';
   const imageSrc = obj.type === 'image' ? boardImageSrc(obj.props) : '';
+  const markdown = obj.type === 'text' && obj.props.format === 'markdown';
   const outlineWidth = handles ? 2 : 1.5;
 
   return (
@@ -198,7 +200,9 @@ function BoardObject({
       )}
 
       {obj.type === 'text' && (
-        <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
+        markdown
+          ? <MarkdownBody text={obj.props.text} />
+          : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
       )}
 
       {obj.type === 'shape' && (
@@ -264,7 +268,7 @@ function BoardObject({
       )}
 
       {obj.type === 'geogebra' && (
-        <div className={`flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-md ${interactiveGeo ? 'border-blue-500' : 'border-zinc-200'}`}>
+        <div className={`flex h-full flex-col overflow-visible rounded-lg border bg-white shadow-md ${interactiveGeo ? 'border-blue-500' : 'border-zinc-200'}`}>
           <div data-chrome="true" className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-2.5">
             <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
               {geoApp?.title || 'Планиметрия'}
@@ -293,6 +297,9 @@ function BoardObject({
               ggbBase64={appletBase64}
               ggbXml={obj.props.ggbXml || ''}
               ggbPerspective={obj.props.ggbPerspective || ''}
+              setup={obj.props.setup || ''}
+              controls={obj.props.controls || []}
+              texts={obj.props.texts || []}
               interactive={interactiveGeo}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={() => onGeoChange(obj.id)}

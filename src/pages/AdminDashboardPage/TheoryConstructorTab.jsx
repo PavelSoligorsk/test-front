@@ -5,6 +5,7 @@ import ImageAwareTextarea from './ImageAwareTextarea';
 import { TheoryViewer } from '../../components/Theory';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC, THEORY_CLASSES } from './constants';
 import { Sheet, IconWell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { parallelScrollClass, useParallelScroll } from '../../shared/lib/parallelScroll';
 
 // ========== ПРОМПТ ДЛЯ AI-ГЕНЕРАЦИИ ТЕОРИИ ==========
 
@@ -200,6 +201,8 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
     onSubmit(e, next);
   };
 
+  const { leftRef, rightRef, onLeftScroll, onRightScroll } = useParallelScroll();
+
   const handleCopyPrompt = async () => {
     try {
       await navigator.clipboard.writeText(THEORY_GENERATION_PROMPT);
@@ -211,7 +214,8 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div ref={leftRef} onScroll={onLeftScroll} className={parallelScrollClass}>
       <Sheet className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -269,7 +273,8 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
               defaultValue={theoryData.content || ''}
               onChange={(value) => { contentRef.current = value; }}
               placeholder={`# Заголовок\n\n<Section id="sec1" title="Основные понятия">\n  <Def>Здесь будет определение...</Def>\n  <Important title="Обратите внимание">Ключевой нюанс...</Important>\n  <Formula title="Основное тождество">$\\sin^2 x + \\cos^2 x = 1$</Formula>\n  <Ex>Пример...</Ex>\n  <Explanation>Пояснение...</Explanation>\n  <Grid cols="2">\n    <Card title="Свойство 1">...</Card>\n    <Card title="Свойство 2">...</Card>\n  </Grid>\n  <Steps>\n    <div>Шаг 1...</div>\n    <div>Шаг 2...</div>\n  </Steps>\n  <Collapsible title="Доказательство">...</Collapsible>\n  <Html><p>Произвольный HTML</p></Html>\n</Section>`}
-              className={`${fieldClass} min-h-[400px] font-mono resize-y`}
+              autoGrow
+              className={`${fieldClass} min-h-[400px] font-mono resize-none overflow-hidden`}
               rows={15}
             />
           </label>
@@ -278,7 +283,8 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
           </button>
         </form>
       </Sheet>
-      <div className="sticky top-6 overflow-y-auto max-h-[calc(100vh-100px)]">
+      </div>
+      <div ref={rightRef} onScroll={onRightScroll} className={parallelScrollClass}>
         <Sheet className="p-6 md:p-8">
           <h3 className="mb-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">Предпросмотр теории</h3>
           {previewContent ? (

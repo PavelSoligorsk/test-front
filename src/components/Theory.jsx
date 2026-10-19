@@ -534,10 +534,57 @@ function parseTheorySections(content) {
   return sections;
 }
 
-const renderBlocks = (blocks) => {
+function theoryCopyPayload(block) {
+  if (!block || block.type === 'html') return null;
+  if (block.type === 'geogebra') {
+    return {
+      kind: 'geogebra',
+      setup: block.setup || '',
+      controls: block.controls || [],
+      texts: block.texts || [],
+      height: block.height || '400',
+    };
+  }
+  const text = blockMarkdown(block).trim();
+  if (!text) return null;
+  return { kind: 'markdown', text };
+}
+
+function blockMarkdown(block) {
+  if (!block || block.type === 'geogebra' || block.type === 'html') return '';
+  if (block.type === 'text') return block.content || '';
+  if (block.type === 'steps') {
+    return (block.steps || []).map((step, index) => `${index + 1}. ${step}`).join('\n');
+  }
+  const inner = (block.blocks || []).map(blockMarkdown).filter(Boolean).join('\n\n');
+  return block.title ? `**${block.title}**\n\n${inner}` : inner;
+}
+
+const renderBlocks = (blocks, onCopy) => {
   if (!blocks || !Array.isArray(blocks)) return null;
-  
+
   return blocks.map((block, idx) => {
+    const node = renderPlainBlock(block, idx, onCopy);
+    const payload = onCopy ? theoryCopyPayload(block) : null;
+    if (!payload) return node;
+    return (
+      <div key={idx} className="relative">
+        <div className="mb-1 flex justify-end">
+          <button
+            type="button"
+            onClick={() => onCopy(payload)}
+            className="rounded-lg bg-zinc-900 px-2.5 py-1 text-[11px] font-semibold text-white"
+          >
+            На доску
+          </button>
+        </div>
+        {node}
+      </div>
+    );
+  });
+};
+
+const renderPlainBlock = (block, idx, onCopy) => {
     if (block.type === 'text') {
       return (
         <ReactMarkdown 
@@ -553,56 +600,56 @@ const renderBlocks = (blocks) => {
     if (block.type === 'def') {
       return (
         <Def key={idx} title={block.title}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Def>
       );
     }
     if (block.type === 'ex') {
       return (
         <Ex key={idx} title={block.title} isHard={block.isHard}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Ex>
       );
     }
     if (block.type === 'explanation') {
       return (
         <Explanation key={idx}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Explanation>
       );
     }
     if (block.type === 'important') {
       return (
         <Important key={idx} title={block.title}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Important>
       );
     }
     if (block.type === 'formula') {
       return (
         <Formula key={idx} title={block.title}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Formula>
       );
     }
     if (block.type === 'collapsible') {
       return (
         <Collapsible key={idx} title={block.title}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Collapsible>
       );
     }
     if (block.type === 'grid') {
       return (
         <Grid key={idx} cols={block.cols}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Grid>
       );
     }
     if (block.type === 'card') {
       return (
         <Card key={idx} title={block.title}>
-          {renderBlocks(block.blocks)}
+          {renderBlocks(block.blocks, onCopy)}
         </Card>
       );
     }
@@ -611,7 +658,7 @@ const renderBlocks = (blocks) => {
         <Steps key={idx}>
           {(block.steps || []).map((step, i) => (
             <div key={i}>
-              {renderBlocks(parseBlocks(step))}
+              {renderBlocks(parseBlocks(step), onCopy)}
             </div>
           ))}
         </Steps>
@@ -633,12 +680,11 @@ const renderBlocks = (blocks) => {
       return <Html key={idx} html={block.html} />;
     }
     return null;
-  });
 };
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 
-export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded = false }) => {
+export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded = false, onCopyBlock = null }) => {
   const [components, setComponents] = useState([]);
   const [activeId, setActiveId] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -852,7 +898,7 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
         <div className={`min-w-0 ${isFullWidth || embedded ? 'w-full' : 'max-w-3xl mx-auto'} ${isFullWidth || embedded ? 'py-0' : 'py-12'} px-0 ${isLoading && !embedded ? 'opacity-50 pointer-events-none' : ''}`}>
           {components.map((section, idx) => (
             <SectionBlock key={idx} id={section.id} title={section.title} isHard={section.isHard}>
-              {renderBlocks(section.orderedBlocks)}  
+              {renderBlocks(section.orderedBlocks, onCopyBlock)}  
             </SectionBlock>
           ))} 
           {components.length === 0 && (

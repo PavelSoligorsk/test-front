@@ -48,6 +48,79 @@ export function readGeoGebraXml(api) {
   }
 }
 
+function hexToRgb(hex) {
+  const raw = String(hex || '').replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw;
+  return [
+    parseInt(full.slice(0, 2), 16) || 0,
+    parseInt(full.slice(2, 4), 16) || 0,
+    parseInt(full.slice(4, 6), 16) || 0,
+  ];
+}
+
+export function runTheorySetup(api, setup) {
+  if (!api || !setup) return;
+  const commands = String(setup)
+    .split('\n')
+    .map((cmd) => cmd.trim())
+    .filter((cmd) => cmd && !cmd.startsWith('//') && !cmd.startsWith('#'));
+  const delayed = [];
+  commands.forEach((cmd) => {
+    if (cmd.startsWith('view:')) {
+      const parts = cmd.slice(5).split(',').map((item) => item.trim());
+      if (parts.length >= 4) {
+        const box = parts.slice(0, 4).map((item) => parseFloat(item));
+        if (parts.length >= 6) api.setCoordSystem(...box, parseFloat(parts[4]) || -10, parseFloat(parts[5]) || 10);
+        else api.setCoordSystem(...box);
+        if (parts.includes('grid')) api.setGridVisible(true);
+        if (parts.includes('axes')) api.setAxesVisible(true, true);
+      }
+      return;
+    }
+    if (cmd.startsWith('perspective:')) {
+      try { api.setPerspective(cmd.slice(12).trim()); } catch { /* вид не сменился */ }
+      return;
+    }
+    if (cmd.startsWith('color:') || cmd.startsWith('size:') || cmd.startsWith('label:') || cmd.startsWith('show:') || cmd.startsWith('hide:') || cmd.startsWith('animate:')) {
+      delayed.push(cmd);
+      return;
+    }
+    try { api.evalCommand(cmd); } catch { /* команда не выполнилась */ }
+  });
+  if (!delayed.length) return;
+  window.setTimeout(() => {
+    delayed.forEach((cmd) => {
+      try {
+        if (cmd.startsWith('color:')) {
+          const match = cmd.match(/color:\s*(\w+)\s*,\s*([\w#]+)/);
+          if (match) api.setColor(match[1], ...hexToRgb(match[2]));
+        } else if (cmd.startsWith('size:')) {
+          const match = cmd.match(/size:\s*(\w+)\s*,\s*(\d+)/);
+          if (match) api.setPointSize(match[1], parseInt(match[2], 10));
+        } else if (cmd.startsWith('label:')) {
+          const match = cmd.match(/label:\s*(\w+)\s*,\s*"([^"]+)"/);
+          if (match) api.setCaption(match[1], match[2]);
+        } else if (cmd.startsWith('show:') || cmd.startsWith('hide:')) {
+          const visible = cmd.startsWith('show:');
+          cmd.slice(5).split(',').map((item) => item.trim()).forEach((item) => {
+            if (item === 'grid') api.setGridVisible(visible);
+            else if (item === 'axes') api.setAxesVisible(visible, visible);
+            else api.setVisible(item, visible);
+          });
+        } else if (cmd.startsWith('animate:')) {
+          const match = cmd.match(/animate:\s*(\w+)\s*,\s*(\w+)\s*,?\s*(\d+)?/);
+          if (!match) return;
+          const on = match[2] === 'true';
+          api.setAnimating(match[1], on);
+          if (on) api.startAnimation();
+          else api.stopAnimation();
+          if (match[3]) api.setAnimationSpeed(match[1], parseFloat(match[3]));
+        }
+      } catch { /* оформление не применилось */ }
+    });
+  }, 200);
+}
+
 export function readGeoGebraBase64(api) {
   if (!api?.getBase64) return Promise.resolve('');
   return new Promise((resolve) => {

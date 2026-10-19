@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { applyGeoGebraPerspective, loadGeoGebraScript } from './geogebraApi';
+import { applyGeoGebraPerspective, loadGeoGebraScript, runTheorySetup } from './geogebraApi';
+import TheoryControlPanel from './TheoryControlPanel';
 
 function appletKind(appName) {
   if (appName === 'graphing' || appName === '3d') return appName;
@@ -14,6 +15,9 @@ export default function GeoGebraWidget({
   ggbBase64,
   ggbXml = '',
   ggbPerspective = '',
+  setup = '',
+  controls = [],
+  texts = [],
   interactive,
   onReady,
   onConstructionChange,
@@ -24,6 +28,8 @@ export default function GeoGebraWidget({
   const fileRef = useRef(ggbBase64 || '');
   const xmlRef = useRef(ggbXml || '');
   const perspectiveRef = useRef(ggbPerspective || '');
+  const setupRef = useRef(setup || '');
+  const controlsRef = useRef(controls || []);
   const appliedRef = useRef('');
   const appliedXmlRef = useRef('');
   const appliedPerspectiveRef = useRef('');
@@ -39,41 +45,47 @@ export default function GeoGebraWidget({
     fileRef.current = ggbBase64 || '';
     xmlRef.current = ggbXml || '';
     perspectiveRef.current = ggbPerspective || '';
-  }, [ggbBase64, ggbXml, ggbPerspective]);
+    setupRef.current = setup || '';
+    controlsRef.current = controls || [];
+  }, [ggbBase64, ggbXml, ggbPerspective, setup, controls]);
 
-  function lockAppletBox() {
+  function frameBox() {
     const frame = frameRef.current;
-    const host = hostRef.current;
-    if (!frame || !host) return null;
+    if (!frame) return null;
     const w = Math.round(frame.clientWidth);
     const h = Math.round(frame.clientHeight);
     if (w < 2 || h < 2) return null;
-    const pin = (node) => {
-      if (!(node instanceof HTMLElement)) return;
-      node.style.setProperty('width', `${w}px`, 'important');
-      node.style.setProperty('height', `${h}px`, 'important');
-      node.style.setProperty('max-width', 'none', 'important');
-      node.style.setProperty('max-height', 'none', 'important');
-      node.style.setProperty('transform', 'none', 'important');
-    };
-    host.style.left = '0px';
-    host.style.top = '0px';
-    host.style.right = '0px';
-    host.style.bottom = '0px';
-    host.style.width = '100%';
-    host.style.height = '100%';
-    host.style.transform = 'none';
-    pin(host.firstElementChild);
     return { w, h };
   }
 
+  // Рамка объекта задаёт единственный размер апплета. Зум доски — это CSS-масштаб
+  // предка, и GeoGebra не должна учитывать его: иначе картинка и панель
+  // перестраиваются при каждом масштабе.
+  function pinApplet() {
+    const host = hostRef.current;
+    const box = frameBox();
+    if (!host || !box) return null;
+    const pin = (node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const style = node.style;
+      if (style.getPropertyValue('width') !== '100%') style.setProperty('width', '100%', 'important');
+      if (style.getPropertyValue('height') !== '100%') style.setProperty('height', '100%', 'important');
+      if (style.getPropertyValue('max-width') !== 'none') style.setProperty('max-width', 'none', 'important');
+      if (style.getPropertyValue('max-height') !== 'none') style.setProperty('max-height', 'none', 'important');
+      if (style.getPropertyValue('transform') !== 'none') style.setProperty('transform', 'none', 'important');
+    };
+    pin(host.firstElementChild);
+    host.querySelectorAll('.applet_scaler').forEach(pin);
+    return box;
+  }
+
   function fitToFrame(api) {
-    const box = lockAppletBox();
+    const box = pinApplet();
     if (!box) return;
     const prev = sharpRef.current;
-    const resized = !prev || prev.w !== box.w || prev.h !== box.h;
+    if (prev && prev.w === box.w && prev.h === box.h) return;
     sharpRef.current = box;
-    if (resized && api && typeof api.setSize === 'function') {
+    if (api && typeof api.setSize === 'function') {
       try {
         api.setSize(box.w, box.h);
       } catch {
@@ -81,7 +93,7 @@ export default function GeoGebraWidget({
       }
     }
     window.clearTimeout(fitTimerRef.current);
-    fitTimerRef.current = window.setTimeout(() => lockAppletBox(), 250);
+    fitTimerRef.current = window.setTimeout(() => pinApplet(), 50);
   }
 
   function applyFile(api) {
@@ -177,15 +189,23 @@ export default function GeoGebraWidget({
   useEffect(() => {
     let cancelled = false;
     const host = hostRef.current;
+    const frame = frameRef.current;
     const base64AtLoad = ggbBase64 || '';
     const kind = appletKind(appName);
-    const sizeAtStart = { width, height };
+    const sizeAtStart = {
+      width: frame && frame.clientWidth > 2 ? frame.clientWidth : width,
+      height: frame && frame.clientHeight > 2 ? frame.clientHeight : height,
+    };
 
     (async () => {
       try {
         await loadGeoGebraScript();
         if (cancelled || !host || !window.GGBApplet) return;
         host.innerHTML = '';
+        sharpRef.current = {
+          w: Math.max(40, Math.round(sizeAtStart.width)),
+          h: Math.max(40, Math.round(sizeAtStart.height)),
+        };
         const params = {
           id: appletId,
           appName: kind,
@@ -205,6 +225,8 @@ export default function GeoGebraWidget({
           errorDialogsActive: false,
           useBrowserForJS: false,
           borderColor: '#ffffff',
+          scale: 1,
+          disableAutoScale: true,
           appletOnLoad(api) {
             if (cancelled) return;
             apiRef.current = api;
@@ -215,8 +237,16 @@ export default function GeoGebraWidget({
             if (typeof api.registerUpdateListener === 'function') {
               api.registerUpdateListener(() => onChangeRef.current?.());
             }
-            applyConstruction(api);
             fitToFrame(api);
+            applyConstruction(api);
+            if (setupRef.current && !fileRef.current && !xmlRef.current) {
+              runTheorySetup(api, setupRef.current);
+              controlsRef.current.forEach((control) => {
+                if (control?.name == null || !Number.isFinite(control.value)) return;
+                try { api.setValue(control.name, control.value); } catch { /* значение ещё не к чему применить */ }
+              });
+            }
+            pinApplet();
             setStatus('ready');
           },
         };
@@ -250,19 +280,34 @@ export default function GeoGebraWidget({
     if (!frame || !host) return undefined;
     const fit = () => fitToFrame(apiRef.current);
     fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(frame);
+    const resizeObserver = new ResizeObserver(fit);
+    resizeObserver.observe(frame);
+    let pinScheduled = false;
+    const pinSoon = () => {
+      if (pinScheduled) return;
+      pinScheduled = true;
+      requestAnimationFrame(() => {
+        pinScheduled = false;
+        pinApplet();
+      });
+    };
+    const mutationObserver = new MutationObserver(pinSoon);
+    mutationObserver.observe(host, { attributes: true, subtree: true, attributeFilter: ['style', 'class'] });
     return () => {
-      observer.disconnect();
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
       window.clearTimeout(fitTimerRef.current);
     };
   }, [status]);
 
+  const hasPanel = (controls?.length || 0) + (texts?.length || 0) > 0;
+
   return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
     <div
       ref={frameRef}
       data-geo-frame="true"
-      className="relative h-full w-full bg-white"
+      className="relative min-h-0 w-full flex-1 overflow-hidden bg-white"
       data-geo-live={interactive ? 'true' : undefined}
     >
       <div ref={hostRef} className="absolute inset-0 z-0" />
@@ -289,6 +334,10 @@ export default function GeoGebraWidget({
           </button>
         </div>
       )}
+    </div>
+    {hasPanel && (
+      <TheoryControlPanel controls={controls} texts={texts} apiRef={apiRef} />
+    )}
     </div>
   );
 }
