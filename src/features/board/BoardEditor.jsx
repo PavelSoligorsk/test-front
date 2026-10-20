@@ -1082,6 +1082,17 @@ export default function BoardEditor({
     draftRef.current = draft;
     const host = draftHostRef.current;
     if (!host) return;
+    if (draft?.kind === 'pen' && draft.points.length) {
+      const origin = draft.origin || draft.points[0];
+      const wrap = host.firstChild;
+      const path = wrap?.dataset?.pen === `${origin.x},${origin.y}` ? wrap.querySelector('path') : null;
+      if (path) {
+        path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }))));
+        path.setAttribute('stroke', draft.color);
+        path.setAttribute('stroke-width', draft.width);
+        return;
+      }
+    }
     host.replaceChildren();
     if (!draft) return;
     const inv = 1 / cameraRef.current.zoom;
@@ -1133,6 +1144,7 @@ export default function BoardEditor({
       // Та же схема, что у зрителя: рамка в первой точке, точки от неё. Рамка по bbox раздувает холст и сдвигает уже нарисованное.
       const origin = draft.origin || draft.points[0];
       const wrap = document.createElement('div');
+      wrap.dataset.pen = `${origin.x},${origin.y}`;
       wrap.style.position = 'absolute';
       wrap.style.left = `${origin.x}px`;
       wrap.style.top = `${origin.y}px`;
@@ -2002,12 +2014,12 @@ export default function BoardEditor({
 
   function finishStroke(drag) {
     window.clearTimeout(drag.timer);
+    cancelAnimationFrame(drag.frame);
     drag.timer = 0;
     if (drag.points.length < 2) {
       if (drag.id) send({ type: 'delete', ids: [drag.id] });
       return;
     }
-    appendStroke(drag);
     const stroke = {
       id: drag.id || uid(),
       type: 'draw',
@@ -2019,8 +2031,9 @@ export default function BoardEditor({
       props: { points: strokePoints(drag, 0), color: drag.color, width: drag.width },
     };
     flushOps();
-    if (!drag.id) send({ type: 'upsert', object: stroke });
+    // Полный штрих отправляется всегда: append_points после обрыва связи не переотправляются.
     const upsert = { type: 'upsert', object: stroke };
+    send(upsert);
     const next = applyOp(objectsRef.current, upsert);
     sentRef.current = applyOp(sentRef.current, upsert);
     pushHistory(objectsRef.current, next);
@@ -2225,8 +2238,15 @@ export default function BoardEditor({
         drag.points.push(point);
         added = true;
       });
-      if (added) streamStroke(drag);
-      paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
+      if (!added) return;
+      streamStroke(drag);
+      if (!drag.frame) {
+        drag.frame = requestAnimationFrame(() => {
+          drag.frame = 0;
+          if (dragRef.current !== drag) return;
+          paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
+        });
+      }
       return;
     }
 

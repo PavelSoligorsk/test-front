@@ -245,7 +245,7 @@ function BoardObject({
       )}
 
       {obj.type === 'draw' && (
-        <svg width={obj.w} height={obj.h} className="overflow-visible">
+        <svg width={obj.w} height={obj.h} className="block overflow-visible">
           <path
             d={smoothPath(obj.props.points || [])}
             fill="none"
