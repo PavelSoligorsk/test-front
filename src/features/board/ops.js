@@ -96,13 +96,30 @@ export function diffOps(before, after) {
   return ops;
 }
 
+function pointCount(obj) {
+  return obj?.type === 'draw' && Array.isArray(obj.props?.points) ? obj.props.points.length : 0;
+}
+
+// Короткий повтор первого куска штриха не должен стирать уже дописанный хвост.
+export function keepLongerStrokes(local, remote) {
+  const byId = new Map((local || []).filter((obj) => obj.type === 'draw').map((obj) => [obj.id, obj]));
+  return (remote || []).map((obj) => {
+    const prev = byId.get(obj.id);
+    if (!prev || obj.type !== 'draw' || pointCount(prev) <= pointCount(obj)) return obj;
+    return { ...obj, props: { ...obj.props, points: prev.props.points } };
+  });
+}
+
 export function applyOp(list, op) {
   switch (op?.type) {
     case 'upsert': {
       const obj = op.object;
       if (!obj?.id) return list;
       const index = indexOfId(list, obj.id);
-      return index < 0 ? [...list, obj] : replaceAt(list, index, obj);
+      if (index < 0) return [...list, obj];
+      const current = list[index];
+      if (obj.type === 'draw' && current.type === 'draw' && pointCount(obj) < pointCount(current)) return list;
+      return replaceAt(list, index, obj);
     }
     case 'patch': {
       const index = indexOfId(list, op.id);

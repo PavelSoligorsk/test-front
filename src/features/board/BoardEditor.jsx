@@ -37,7 +37,7 @@ import {
 import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { setPenActive } from './penLock';
-import { applyOp, diffOps, encodePts, reorder } from './ops';
+import { applyOp, diffOps, encodePts, keepLongerStrokes, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
 import {
   arrowBounds,
@@ -426,7 +426,10 @@ export default function BoardEditor({
   function onSnapshot(message, readPending) {
     flushOps();
     const pendingOps = readPending();
-    let next = Array.isArray(message.board?.objects) ? message.board.objects : [];
+    let next = keepLongerStrokes(
+      objectsRef.current,
+      Array.isArray(message.board?.objects) ? message.board.objects : [],
+    );
     pendingOps.forEach((op) => {
       next = applyOp(next, op);
     });
@@ -1775,6 +1778,17 @@ export default function BoardEditor({
       const shown = objects.find((item) => item.id === obj.id);
       if ((obj.props?.points?.length || 0) > (shown?.props?.points?.length || 0)) paintStrokeDom(objectsRef.current, obj.id);
     });
+    // Предпросмотр своего штриха остаётся, пока объект с теми же точками не появился в DOM.
+    const ownDraft = draftRef.current;
+    if (ownDraft?.kind === 'pen' && dragRef.current?.kind !== 'pen') {
+      const shown = objects.find((obj) => (
+        obj.type === 'draw'
+        && obj.x === ownDraft.origin?.x
+        && obj.y === ownDraft.origin?.y
+        && (obj.props?.points?.length || 0) >= ownDraft.points.length
+      ));
+      if (shown) paintDraft(null);
+    }
     if (draftRef.current) paintDraft(draftRef.current);
     const drag = dragRef.current;
     if (drag?.kind === 'move') {
@@ -2057,7 +2071,6 @@ export default function BoardEditor({
 
   function finishStroke(drag) {
     window.clearTimeout(drag.timer);
-    cancelAnimationFrame(drag.frame);
     drag.timer = 0;
     if (drag.points.length < 2) {
       if (drag.id) send({ type: 'delete', ids: [drag.id] });
@@ -2172,7 +2185,7 @@ export default function BoardEditor({
     if (drag?.kind === 'pen') setPenActive(false);
     flushHeldLink();
     window.clearTimeout(cameraSyncRef.current);
-    paintDraft(null);
+    if (drag?.kind !== 'pen') paintDraft(null);
     paintGuides(null);
     paintCursor();
     if (hintRef.current) hintRef.current.style.display = '';
@@ -2285,13 +2298,7 @@ export default function BoardEditor({
       });
       if (!added) return;
       streamStroke(drag);
-      if (!drag.frame) {
-        drag.frame = requestAnimationFrame(() => {
-          drag.frame = 0;
-          if (dragRef.current !== drag) return;
-          paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
-        });
-      }
+      paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
       return;
     }
 
