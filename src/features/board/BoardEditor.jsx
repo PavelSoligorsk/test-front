@@ -69,6 +69,8 @@ import ShapeGlyph from './ShapeGlyph';
 import { SHAPE_GROUPS, defaultDepth, depthFromLocal, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
 import { isPagesMeta } from './pages';
 import BoardTheoryPane from './BoardTheoryPane';
+import BoardTasksPane from './BoardTasksPane';
+import { taskOptions } from './taskBankApi';
 
 const SURFACE_MARK = 'board-surface';
 const SURFACE_COLORS = ['#e7f4fb', '#ffffff', '#eceff1', '#2c2c2e', '#dff6fb', '#e4e8fb', '#fbf3d4', '#f3e8f6', '#e7f6e4', '#fde8e8'];
@@ -139,6 +141,8 @@ const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
 const SEND_MS = 50;
 const GEO_XML_MS = 200;
 const GEO_SAVE_MS = 4000;
+const TASK_CARD_W = 560;
+const TASK_CARD_GAP = 32;
 const PEER_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#9333ea', '#0891b2', '#db2777', '#4f46e5'];
 
 function boardTitle(value) {
@@ -259,6 +263,9 @@ export default function BoardEditor({
   const geoTimerRef = useRef(null);
   const geoXmlTimerRef = useRef(null);
   const geoLayoutTimerRef = useRef(0);
+  const pendingTaskHeightsRef = useRef(new Map());
+  const taskMeasureRafRef = useRef(0);
+  const stackRef = useRef(null);
   const geoDirtyRef = useRef(new Set());
   const shapeGlideRef = useRef({ items: new Map(), raf: 0, last: 0 });
   const readOnlyRef = useRef(readOnly);
@@ -280,7 +287,8 @@ export default function BoardEditor({
   const [notice, setNotice] = useState('');
   const [pagesOpen, setPagesOpen] = useState(false);
   const [surfaceOpen, setSurfaceOpen] = useState(false);
-  const [theoryOpen, setTheoryOpen] = useState(false);
+  const [sidePane, setSidePane] = useState(null);
+  const theoryOpen = sidePane !== null;
   const [surface, setSurface] = useState(() => readSurface(initialBoard.objects));
   const surfaceRef = useRef(surface);
   const [series, setSeries] = useState([]);
@@ -506,6 +514,82 @@ export default function BoardEditor({
       props: { text, format: 'markdown' },
     });
     if (addObjects([obj])) selectIds([obj.id]);
+  }
+
+  function estimateTaskHeight(props) {
+    const text = `${props.content}\n${props.options.join('\n')}`;
+    const lines = text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 42)), 0);
+    const images = (text.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
+    return 70 + lines * 30 + images * 430 + (props.openAnswer ? 50 : 0);
+  }
+
+  function placeTasks(items, source) {
+    if (!Array.isArray(items) || !items.length) return;
+    const point = viewportCenterWorld();
+    let y = point.y - 160;
+    const list = items.map(({ task, number }) => {
+      const teacherOnly = {};
+      if (task.answer != null && String(task.answer).trim()) teacherOnly.answer = String(task.answer);
+      if (task.solution && String(task.solution).trim()) teacherOnly.solution = String(task.solution);
+      const props = {
+        taskId: task.id,
+        number,
+        source: source?.title || '',
+        content: task.content || task.statement || '',
+        options: task.is_open_answer ? [] : taskOptions(task),
+        openAnswer: Boolean(task.is_open_answer),
+        ...(Object.keys(teacherOnly).length ? { teacherOnly } : {}),
+      };
+      const h = estimateTaskHeight(props);
+      const obj = createObject('task', { x: point.x - TASK_CARD_W / 2, y, w: TASK_CARD_W, h, props });
+      y += h + TASK_CARD_GAP;
+      return obj;
+    });
+    if (!addObjects(list)) return;
+    const ids = list.map((obj) => obj.id);
+    selectIds(ids);
+    const stack = { ids };
+    stackRef.current = stack;
+    window.setTimeout(() => {
+      if (stackRef.current === stack) stackRef.current = null;
+    }, 4000);
+  }
+
+  // Высоту карточки знает только DOM (формулы, картинки), поэтому её меряет
+  // сама карточка. Свежий столбик заодно перекладывается без зазоров.
+  function measureTask(id, height) {
+    if (audienceRef.current !== 'teacher' || readOnlyRef.current || dragRef.current) return;
+    const h = Math.max(80, Math.round(height));
+    const obj = objectsRef.current.find((item) => item.id === id);
+    if (!obj || obj.type !== 'task' || Math.abs(obj.h - h) <= 2) return;
+    pendingTaskHeightsRef.current.set(id, h);
+    if (taskMeasureRafRef.current) return;
+    taskMeasureRafRef.current = requestAnimationFrame(() => {
+      taskMeasureRafRef.current = 0;
+      liveRef.current.restackTasks?.();
+    });
+  }
+
+  function restackTasks() {
+    if (!mountedRef.current) return;
+    const heights = pendingTaskHeightsRef.current;
+    pendingTaskHeightsRef.current = new Map();
+    const updates = new Map();
+    heights.forEach((h, id) => updates.set(id, { h }));
+    const stack = stackRef.current;
+    if (stack) {
+      const placed = stack.ids.map((id) => objectsRef.current.find((obj) => obj.id === id)).filter(Boolean);
+      if (placed.length && placed.every((obj) => obj.x === placed[0].x)) {
+        let y = placed[0].y;
+        placed.forEach((obj) => {
+          const h = updates.get(obj.id)?.h ?? obj.h;
+          if (Math.abs(obj.y - y) > 1) updates.set(obj.id, { ...updates.get(obj.id), y });
+          y += h + TASK_CARD_GAP;
+        });
+      }
+    }
+    if (!updates.size) return;
+    live(objectsRef.current.map((obj) => (updates.has(obj.id) ? { ...obj, ...updates.get(obj.id) } : obj)));
   }
 
   function boardPath(id) {
@@ -1648,6 +1732,8 @@ export default function BoardEditor({
       saveGeoXml,
       saveGeoChanges,
       geoLayoutChanged,
+      restackTasks,
+      measureTask,
       onSnapshot,
       onAckObject,
       onOpError,
@@ -2568,6 +2654,7 @@ export default function BoardEditor({
               key={obj.id}
               obj={obj}
               zoom={camera.zoom}
+              teacher={audience === 'teacher'}
               selected={selectedSet.has(obj.id)}
               handles={selectedIds.length === 1 && selectedSet.has(obj.id)}
               editing={obj.id === editingId}
@@ -2583,6 +2670,7 @@ export default function BoardEditor({
                 scheduleGeoSave(id);
               }}
               onGeoLayout={(id) => liveRef.current.geoLayoutChanged?.(id)}
+              onTaskMeasure={(id, height) => liveRef.current.measureTask?.(id, height)}
               onGeoControls={changeGeoControls}
             />
           ))}
@@ -2667,15 +2755,16 @@ export default function BoardEditor({
             size={Math.max(4, Math.min(title.length || 4, 16))}
             className="h-8 min-w-0 max-w-40 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
-          {audience === 'teacher' && (
+          {audience === 'teacher' && [['theory', 'Теория'], ['tasks', 'Задания']].map(([pane, label]) => (
             <button
+              key={pane}
               type="button"
-              onClick={() => setTheoryOpen((open) => !open)}
-              className={`hidden h-8 items-center rounded-xl px-2 text-xs font-semibold min-[720px]:inline-flex ${theoryOpen ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
+              onClick={() => setSidePane((open) => (open === pane ? null : pane))}
+              className={`hidden h-8 items-center rounded-xl px-2 text-xs font-semibold min-[720px]:inline-flex ${sidePane === pane ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
             >
-              Теория
+              {label}
             </button>
-          )}
+          ))}
           <PeerList peers={peers} compact />
           <LinkStatus link={link} />
         </div>
@@ -2872,7 +2961,8 @@ export default function BoardEditor({
       </div>
       {theoryOpen && audience === 'teacher' && (
         <aside className="hidden h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 dark:border-zinc-800 min-[720px]:block">
-          <BoardTheoryPane onCopy={placeTheoryBlock} />
+          <div className={sidePane === 'theory' ? 'h-full' : 'hidden'}><BoardTheoryPane onCopy={placeTheoryBlock} /></div>
+          <div className={sidePane === 'tasks' ? 'h-full' : 'hidden'}><BoardTasksPane onCopy={placeTasks} /></div>
         </aside>
       )}
     </div>

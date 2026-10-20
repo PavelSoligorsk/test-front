@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
 import MarkdownBody from './MarkdownBody';
+import TaskCard from './TaskCard';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
@@ -179,9 +180,11 @@ function BoardObject({
   onGeoChange,
   onGeoLayout,
   onGeoControls,
+  onTaskMeasure,
+  teacher,
 }) {
   const locked = Boolean(obj.props?.locked);
-  const box = obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape' || obj.type === 'geogebra' || obj.type === 'image';
+  const box = obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape' || obj.type === 'geogebra' || obj.type === 'image' || obj.type === 'task';
   const interactiveGeo = obj.type === 'geogebra' && editing;
   const geoApp = obj.type === 'geogebra' ? geogebraApp(obj.props.appName) : null;
   const appletBase64 = obj.type === 'geogebra' ? (obj.props.ggbBase64 || '') : '';
@@ -205,6 +208,10 @@ function BoardObject({
         markdown
           ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} />
           : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
+      )}
+
+      {obj.type === 'task' && (
+        <TaskCard obj={obj} teacher={teacher} onMeasure={(height) => onTaskMeasure?.(obj.id, height)} />
       )}
 
       {obj.type === 'shape' && (
