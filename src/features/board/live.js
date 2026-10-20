@@ -42,10 +42,7 @@ export function connectBoard({ audience, boardId, handlers }) {
     switch (message?.type) {
       case 'snapshot': {
         attempt = 0;
-        // append_points после обрыва не повторяем: сервер мог уже принять их, а финальный patch штриха всё равно придёт.
-        pending.forEach((op, opId) => {
-          if (op.type === 'append_points') pending.delete(opId);
-        });
+        // append_points переотправляются вместе со всем остальным: по from сервер отбросит уже принятые точки.
         // Пока ready=false, всё, что клиент досылает внутри onSnapshot, только копится в pending.
         handlers.onSnapshot?.(message, () => [...pending.values()]);
         ready = true;

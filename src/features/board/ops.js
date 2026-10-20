@@ -14,6 +14,33 @@ function replaceAt(list, index, obj) {
   return next;
 }
 
+// Сжатые точки штриха: целые десятые доли, первая пара абсолютная, дальше разности.
+export function encodePts(points) {
+  const out = [];
+  let px = 0;
+  let py = 0;
+  points.forEach((point) => {
+    const x = Math.round(point.x * 10);
+    const y = Math.round(point.y * 10);
+    out.push(x - px, y - py);
+    px = x;
+    py = y;
+  });
+  return out;
+}
+
+export function decodePts(pts) {
+  const points = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    x += pts[i];
+    y += pts[i + 1];
+    points.push({ x: x / 10, y: y / 10 });
+  }
+  return points;
+}
+
 export function patchSet(prev, next) {
   const set = {};
   let changed = false;
@@ -88,9 +115,16 @@ export function applyOp(list, op) {
     }
     case 'append_points': {
       const index = indexOfId(list, op.id);
-      if (index < 0 || !Array.isArray(op.points) || !op.points.length) return list;
+      let incoming = Array.isArray(op.pts) ? decodePts(op.pts) : op.points;
+      if (index < 0 || !Array.isArray(incoming) || !incoming.length) return list;
       const current = list[index];
-      const points = [...(current.props?.points || []), ...op.points];
+      const existing = current.props?.points || [];
+      if (Number.isInteger(op.from)) {
+        if (op.from > existing.length) return list;
+        incoming = incoming.slice(existing.length - op.from);
+        if (!incoming.length) return list;
+      }
+      const points = [...existing, ...incoming];
       return replaceAt(list, index, { ...current, props: { ...current.props, points } });
     }
     case 'delete': {

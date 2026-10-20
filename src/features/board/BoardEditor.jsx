@@ -36,7 +36,8 @@ import {
 } from './api';
 import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
-import { applyOp, diffOps, reorder } from './ops';
+import { setPenActive } from './penLock';
+import { applyOp, diffOps, encodePts, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
 import {
   arrowBounds,
@@ -382,12 +383,31 @@ export default function BoardEditor({
     sendTimerRef.current = window.setTimeout(() => liveRef.current.flushOps(), SEND_MS);
   }
 
+  // Чужой штрих растёт мимо React: React увидит те же точки при следующей перерисовке или полном штрихе.
+  function paintStrokeDom(list, id) {
+    const obj = list.find((item) => item.id === id);
+    const path = obj && viewportRef.current?.querySelector(`[data-object="${CSS.escape(id)}"] path`);
+    if (!path) return false;
+    path.setAttribute('d', smoothPath(obj.props.points || []));
+    return true;
+  }
+
+  function movePeerToStroke(clientId, id) {
+    const obj = objectsRef.current.find((item) => item.id === id);
+    const points = obj?.type === 'draw' ? obj.props?.points : null;
+    if (!clientId || !points?.length) return;
+    const last = points[points.length - 1];
+    peerCursorsRef.current.set(clientId, { x: obj.x + last.x, y: obj.y + last.y });
+    paintPeerCursors();
+  }
+
   function applyIncoming(op) {
     const before = objectsRef.current;
     sentRef.current = applyOp(sentRef.current, op);
     const next = applyOp(before, op);
     if (next === before) return;
     objectsRef.current = next;
+    if (op.type === 'append_points' && paintStrokeDom(next, op.id)) return;
     // Пока кто-то рисует, операции идут десятками в секунду: React перерисовывается не чаще раза за кадр.
     const incoming = incomingRef.current;
     if (incoming.raf) return;
@@ -1457,6 +1477,7 @@ export default function BoardEditor({
       window.clearTimeout(geoTimerRef.current);
       window.clearTimeout(geoXmlTimerRef.current);
       window.clearTimeout(cursorTimerRef.current);
+      setPenActive(false);
       stopShapeGlide();
     };
   }, []);
@@ -1523,7 +1544,7 @@ export default function BoardEditor({
     stepHistory('redo');
   }
 
-  function applyRemote(op) {
+  function applyRemote(op, message) {
     if (op.type === 'title') {
       const nextTitle = boardTitle(op.title);
       sentTitleRef.current = nextTitle;
@@ -1533,6 +1554,9 @@ export default function BoardEditor({
     }
     if (op.type === 'camera') return;
     applyIncoming(op);
+    // Пока человек рисует, курсор он не шлёт: стрелка стоит на конце его штриха.
+    if (op.type === 'append_points') movePeerToStroke(message?.clientId, op.id);
+    else if (op.type === 'upsert' && op.object?.type === 'draw') movePeerToStroke(message?.clientId, op.object.id);
   }
 
   function deleteSelected() {
@@ -1745,6 +1769,12 @@ export default function BoardEditor({
     toolRef.current = tool;
     paintCamera(cameraRef.current);
     paintCursor();
+    // React рисует штрих по своему состоянию, а точки могли прийти позже и попасть только в DOM.
+    objectsRef.current.forEach((obj) => {
+      if (obj.type !== 'draw') return;
+      const shown = objects.find((item) => item.id === obj.id);
+      if ((obj.props?.points?.length || 0) > (shown?.props?.points?.length || 0)) paintStrokeDom(objectsRef.current, obj.id);
+    });
     if (draftRef.current) paintDraft(draftRef.current);
     const drag = dragRef.current;
     if (drag?.kind === 'move') {
@@ -1991,10 +2021,11 @@ export default function BoardEditor({
     window.clearTimeout(drag.timer);
     drag.timer = 0;
     if (!drag.id || drag.sent >= drag.points.length) return;
-    const points = strokePoints(drag, drag.sent);
+    const from = drag.sent;
+    const pts = encodePts(strokePoints(drag, from));
     drag.sent = drag.points.length;
     drag.lastSent = performance.now();
-    send({ type: 'append_points', id: drag.id, points });
+    send({ type: 'append_points', id: drag.id, from, pts });
   }
 
   // Штрих видят другие ещё во время рисования: upsert с первыми точками, затем append_points раз в 50 мс.
@@ -2043,7 +2074,7 @@ export default function BoardEditor({
       props: { points: strokePoints(drag, 0), color: drag.color, width: drag.width },
     };
     flushOps();
-    // Полный штрих отправляется всегда: append_points после обрыва связи не переотправляются.
+    // Полный штрих закрывает дыру, если кусок с большим from сервер отбросил.
     const upsert = { type: 'upsert', object: stroke };
     send(upsert);
     const next = applyOp(objectsRef.current, upsert);
@@ -2118,6 +2149,7 @@ export default function BoardEditor({
       });
     }
     if (drag.kind === 'pen') {
+      setPenActive(false);
       window.clearTimeout(drag.timer);
       if (drag.id) send({ type: 'delete', ids: [drag.id] });
     }
@@ -2137,6 +2169,7 @@ export default function BoardEditor({
   function finishDrag(event) {
     const drag = dragRef.current;
     dragRef.current = null;
+    if (drag?.kind === 'pen') setPenActive(false);
     flushHeldLink();
     window.clearTimeout(cameraSyncRef.current);
     paintDraft(null);
@@ -2217,7 +2250,7 @@ export default function BoardEditor({
   function moveDrag(event) {
     const drag = dragRef.current;
     if (!drag) return;
-    if (event.pointerType === 'touch') pointerClientRef.current = { x: event.clientX, y: event.clientY };
+    if (event.pointerType === 'touch' || drag.kind === 'pen') pointerClientRef.current = { x: event.clientX, y: event.clientY };
     else sendCursor(event.clientX, event.clientY);
 
     if (drag.kind === 'pan') {
@@ -2512,6 +2545,7 @@ export default function BoardEditor({
         lastSent: 0,
         timer: 0,
       };
+      setPenActive(true);
       if (hintRef.current) hintRef.current.style.display = 'none';
       paintDraft({ kind: 'pen', points: [world], origin: world, color: styleRef.current.pen, width: styleRef.current.penWidth });
       trackPointer(event);

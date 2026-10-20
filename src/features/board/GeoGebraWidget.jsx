@@ -20,6 +20,7 @@ import {
   writeGeoGebraView,
 } from './geogebraApi';
 import TheoryControlPanel from './TheoryControlPanel';
+import { penActive } from './penLock';
 
 function appletKind(appName) {
   if (appName === 'graphing' || appName === '3d') return appName;
@@ -626,6 +627,8 @@ export default function GeoGebraWidget({
     let lastXml = readGeoGebraXml(api);
     let lastLayout = layoutSignature(api);
     const timer = window.setInterval(() => {
+      // Пока на доске ведут кисть, опрос построения её тормозит.
+      if (penActive()) return;
       const current = apiRef.current;
       if (!current) return;
       const xml = readGeoGebraXml(current);
