@@ -14,6 +14,7 @@ import {
   MousePointer2,
   Pencil,
   Pi,
+  Pointer,
   Plus,
   Redo2,
   Square,
@@ -97,6 +98,14 @@ function readSurface(objects) {
 }
 import { deleteBoard } from './storage';
 
+const LASER_COLOR = '#fde047';
+const LASER_WIDTH = 18;
+const LASER_COLORS = [LASER_COLOR, '#18181b', '#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
+const LASER_WIDTHS = [10, 18, 32, 56];
+const LASER_FADE_MS = 2000;
+const LASER_MAX_POINTS = 2000;
+const INK_SPEED = 720;
+
 const TOOLS = [
   { id: 'select', label: 'Выбор', hint: 'V', icon: MousePointer2 },
   { id: 'hand', label: 'Рука', hint: 'H', icon: Hand },
@@ -105,6 +114,7 @@ const TOOLS = [
   { id: 'shape', label: 'Фигура', hint: 'R', icon: Square },
   { id: 'arrow', label: 'Отрезок', hint: 'L', icon: Minus },
   { id: 'pen', label: 'Кисть', hint: 'P', icon: Pencil },
+  { id: 'laser', label: 'Указка', hint: 'U', icon: Pointer },
   { id: 'eraser', label: 'Ластик', hint: 'E', icon: Eraser },
   { id: 'image', label: 'Изображение', hint: 'I', icon: Image },
   { id: 'geogebra', label: 'GeoGebra', hint: 'G', icon: Pi },
@@ -114,6 +124,8 @@ const INITIAL_STYLE = {
   sticky: STICKY_COLORS[0].bg,
   pen: PEN_COLORS[0],
   penWidth: 4,
+  laserColor: LASER_COLOR,
+  laserWidth: LASER_WIDTH,
   shape: 'cube',
   fill: SHAPE_FILLS[0],
   arrow: PEN_COLORS[0],
@@ -131,6 +143,7 @@ const TOOL_CODES = {
   KeyO: 'shape',
   KeyL: 'arrow',
   KeyP: 'pen',
+  KeyU: 'laser',
   KeyE: 'eraser',
   KeyI: 'image',
   KeyG: 'geogebra',
@@ -224,6 +237,8 @@ export default function BoardEditor({
   const viewportRef = useRef(null);
   const worldRef = useRef(null);
   const draftHostRef = useRef(null);
+  const laserHostRef = useRef(null);
+  const inkRef = useRef({ items: new Map(), raf: 0 });
   const guideHostRef = useRef(null);
   const groupBoxRef = useRef(null);
   const barRef = useRef(null);
@@ -448,6 +463,101 @@ export default function BoardEditor({
     setTitle(titleRef.current);
     setPeers(roster);
     pruneSelection();
+  }
+
+  function showLaser(message) {
+    const host = laserHostRef.current;
+    const points = Array.isArray(message?.points) ? message.points : [];
+    if (!host || points.length < 2) return;
+    if (message.clientId && message.clientId === clientIdRef.current) return;
+    const origin = points[0];
+    const wrap = document.createElement('div');
+    wrap.style.position = 'absolute';
+    wrap.style.left = `${origin.x}px`;
+    wrap.style.top = `${origin.y}px`;
+    wrap.style.width = '12px';
+    wrap.style.height = '12px';
+    wrap.style.overflow = 'visible';
+    wrap.style.pointerEvents = 'none';
+    wrap.style.opacity = '1';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '12');
+    svg.setAttribute('height', '12');
+    svg.style.display = 'block';
+    svg.style.overflow = 'visible';
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const local = points.map((point) => ({ x: Number(point.x) - origin.x, y: Number(point.y) - origin.y }));
+    path.setAttribute('d', smoothPath(local.slice(0, 2)));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', message.color || LASER_COLOR);
+    path.setAttribute('stroke-width', String(message.width || LASER_WIDTH));
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    wrap.appendChild(svg);
+    host.appendChild(wrap);
+    const drawMs = Math.min(1600, Math.max(400, local.length * 6));
+    const fadeMs = Math.max(1, Number(message.fadeMs) || LASER_FADE_MS);
+    let started = 0;
+    const tick = (now) => {
+      if (!wrap.isConnected) return;
+      if (!started) started = now;
+      const elapsed = now - started;
+      if (elapsed < drawMs) {
+        const count = Math.max(2, Math.ceil(local.length * (elapsed / drawMs)));
+        path.setAttribute('d', smoothPath(local.slice(0, count)));
+        requestAnimationFrame(tick);
+        return;
+      }
+      path.setAttribute('d', smoothPath(local));
+      const fade = Math.min(1, (elapsed - drawMs) / fadeMs);
+      wrap.style.opacity = String(1 - fade);
+      if (fade < 1) requestAnimationFrame(tick);
+      else wrap.remove();
+    };
+    requestAnimationFrame(tick);
+  }
+
+  function paintInk(now) {
+    const ink = inkRef.current;
+    const viewport = viewportRef.current;
+    let alive = false;
+    ink.items.forEach((item, id) => {
+      const path = viewport?.querySelector(`[data-object="${CSS.escape(id)}"] path`);
+      if (!path) {
+        alive = true;
+        return;
+      }
+      const length = path.getTotalLength();
+      if (!length) {
+        alive = true;
+        return;
+      }
+      if (!item.duration) item.duration = Math.min(4000, Math.max(280, (length / INK_SPEED) * 1000));
+      if (!item.at) item.at = now;
+      const progress = Math.min(1, (now - item.at) / item.duration);
+      path.style.strokeDasharray = String(length);
+      path.style.strokeDashoffset = String(length * (1 - progress));
+      if (progress < 1) alive = true;
+      else {
+        path.style.strokeDasharray = '';
+        path.style.strokeDashoffset = '';
+        ink.items.delete(id);
+      }
+    });
+    return alive;
+  }
+
+  function startInk(id) {
+    if (!id) return;
+    const ink = inkRef.current;
+    ink.items.set(id, { at: 0 });
+    if (ink.raf) return;
+    const tick = (now) => {
+      ink.last = now;
+      ink.raf = paintInk(now) ? requestAnimationFrame(tick) : 0;
+    };
+    ink.raf = requestAnimationFrame(tick);
   }
 
   function onAckObject(obj) {
@@ -1074,7 +1184,7 @@ export default function BoardEditor({
       ? 'grabbing'
       : (spaceRef.current || current === 'hand')
         ? 'grab'
-        : (current === 'pen' || current === 'eraser' || current === 'shape' || current === 'arrow' || current === 'sticky')
+        : (current === 'pen' || current === 'laser' || current === 'eraser' || current === 'shape' || current === 'arrow' || current === 'sticky')
           ? 'crosshair'
           : current === 'text'
             ? 'text'
@@ -1434,6 +1544,7 @@ export default function BoardEditor({
           peerCursorsRef.current.set(message.clientId, { x: Number(message.x) || 0, y: Number(message.y) || 0 });
           liveRef.current.paintPeerCursors?.();
         },
+        onLaser: call('showLaser'),
         onJoin: (peer) => {
           if (!peer?.clientId || peer.clientId === clientIdRef.current) return;
           setPeers((prev) => [...prev.filter((item) => item.clientId !== peer.clientId), peer]);
@@ -1473,6 +1584,7 @@ export default function BoardEditor({
 
   useEffect(() => {
     mountedRef.current = true;
+    const ink = inkRef.current;
     return () => {
       mountedRef.current = false;
       window.clearTimeout(noticeTimerRef.current);
@@ -1481,6 +1593,7 @@ export default function BoardEditor({
       window.clearTimeout(geoXmlTimerRef.current);
       window.clearTimeout(cursorTimerRef.current);
       setPenActive(false);
+      cancelAnimationFrame(ink.raf);
       stopShapeGlide();
     };
   }, []);
@@ -1559,7 +1672,12 @@ export default function BoardEditor({
     applyIncoming(op);
     // Пока человек рисует, курсор он не шлёт: стрелка стоит на конце его штриха.
     if (op.type === 'append_points') movePeerToStroke(message?.clientId, op.id);
-    else if (op.type === 'upsert' && op.object?.type === 'draw') movePeerToStroke(message?.clientId, op.object.id);
+    else if (op.type === 'upsert' && op.object?.type === 'draw') {
+      movePeerToStroke(message?.clientId, op.object.id);
+      const current = objectsRef.current.find((item) => item.id === op.object.id);
+      const incoming = op.object.props?.points?.length || 0;
+      if (current && (current.props?.points?.length || 0) === incoming) startInk(op.object.id);
+    }
   }
 
   function deleteSelected() {
@@ -1790,6 +1908,7 @@ export default function BoardEditor({
       if (shown) paintDraft(null);
     }
     if (draftRef.current) paintDraft(draftRef.current);
+    if (inkRef.current.last) paintInk(inkRef.current.last);
     const drag = dragRef.current;
     if (drag?.kind === 'move') {
       objectsRef.current.forEach((obj) => {
@@ -1821,6 +1940,7 @@ export default function BoardEditor({
       applyRemote,
       onClosed,
       paintPeerCursors,
+      showLaser,
     };
     actionsRef.current = {
       undo,
@@ -2031,8 +2151,22 @@ export default function BoardEditor({
     return drag.points.map((point) => roundPoint({ x: point.x - drag.origin.x, y: point.y - drag.origin.y }));
   }
 
+  function finishLaser(drag) {
+    if (drag.points.length < 2) return;
+    const points = drag.points.map(roundPoint);
+    const color = styleRef.current.laserColor || LASER_COLOR;
+    const width = styleRef.current.laserWidth || LASER_WIDTH;
+    if (!readOnlyRef.current) socketRef.current?.laser(points, color, width);
+    paintDraft(null);
+    showLaser({ points, color, width, fadeMs: LASER_FADE_MS });
+  }
+
   // Штрих живёт только на экране, пока перо не отпущено. В сеть уходит один раз, целиком.
   function finishStroke(drag) {
+    if (drag.laser) {
+      finishLaser(drag);
+      return;
+    }
     if (drag.points.length < 2) return;
     const stroke = {
       id: uid(),
@@ -2243,6 +2377,7 @@ export default function BoardEditor({
       const min = 0.35 / zoom;
       let added = false;
       samples.forEach((sample) => {
+        if (drag.laser && drag.points.length >= LASER_MAX_POINTS) return;
         const point = toWorld(sample);
         const last = drag.points[drag.points.length - 1];
         if (last && Math.hypot(point.x - last.x, point.y - last.y) < min) return;
@@ -2250,7 +2385,13 @@ export default function BoardEditor({
         added = true;
       });
       if (!added) return;
-      paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
+      paintDraft({
+        kind: 'pen',
+        points: drag.points,
+        origin: drag.origin,
+        color: drag.laser ? (styleRef.current.laserColor || LASER_COLOR) : currentStyle.pen,
+        width: drag.laser ? (styleRef.current.laserWidth || LASER_WIDTH) : currentStyle.penWidth,
+      });
       return;
     }
 
@@ -2487,22 +2628,30 @@ export default function BoardEditor({
 
     selectIds([]);
 
-    if (currentTool === 'pen') {
-      if (objectsRef.current.length >= MAX_OBJECTS) {
+    if (currentTool === 'pen' || currentTool === 'laser') {
+      if (currentTool === 'pen' && objectsRef.current.length >= MAX_OBJECTS) {
         notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
         return;
       }
+      const laser = currentTool === 'laser';
       dragRef.current = {
         kind: 'pen',
+        laser,
         pointerId: event.pointerId,
         points: [world],
         origin: world,
-        color: styleRef.current.pen,
-        width: styleRef.current.penWidth,
+        color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
+        width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
       };
       setPenActive(true);
       if (hintRef.current) hintRef.current.style.display = 'none';
-      paintDraft({ kind: 'pen', points: [world], origin: world, color: styleRef.current.pen, width: styleRef.current.penWidth });
+      paintDraft({
+        kind: 'pen',
+        points: [world],
+        origin: world,
+        color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
+        width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
+      });
       trackPointer(event);
       return;
     }
@@ -2669,7 +2818,7 @@ export default function BoardEditor({
       <div className="relative h-full min-w-0 flex-1 overflow-hidden">
       <div
         ref={viewportRef}
-        className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'eraser') ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
+        className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'laser' || tool === 'eraser') ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
         style={{ backgroundColor: surface.color }}
         onPointerDown={onPointerDown}
         onPointerMove={onViewportPointerMove}
@@ -2711,6 +2860,7 @@ export default function BoardEditor({
           <div ref={groupBoxRef} className="pointer-events-none absolute" style={{ display: 'none' }} />
           <div ref={guideHostRef} className="pointer-events-none absolute left-0 top-0" />
           <div ref={draftHostRef} className="pointer-events-none absolute left-0 top-0" />
+          <div ref={laserHostRef} className="pointer-events-none absolute left-0 top-0 z-10" />
         </div>
       </div>
 
@@ -3093,6 +3243,36 @@ function StyleTray({ context, style, onStyle }) {
               className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.textSize === item.size ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
             >
               {item.label}
+            </button>
+          ))}
+        </div>
+      </SwatchCard>
+    );
+  }
+
+  if (context === 'laser') {
+    return (
+      <SwatchCard label="Указка">
+        <div className="flex flex-wrap gap-1.5">
+          {LASER_COLORS.map((color) => (
+            <ColorDot
+              key={color}
+              color={color}
+              label={color}
+              active={style.laserColor === color}
+              onClick={() => onStyle((prev) => ({ ...prev, laserColor: color }))}
+            />
+          ))}
+        </div>
+        <div className="mt-2 flex gap-1">
+          {LASER_WIDTHS.map((width) => (
+            <button
+              key={width}
+              type="button"
+              onClick={() => onStyle((prev) => ({ ...prev, laserWidth: width }))}
+              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.laserWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+            >
+              {width}
             </button>
           ))}
         </div>

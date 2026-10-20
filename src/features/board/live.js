@@ -67,6 +67,9 @@ export function connectBoard({ audience, boardId, handlers }) {
       case 'cursor':
         handlers.onCursor?.(message);
         break;
+      case 'laser':
+        handlers.onLaser?.(message);
+        break;
       case 'join':
         if (message.peer) handlers.onJoin?.(message.peer);
         break;
@@ -137,6 +140,9 @@ export function connectBoard({ audience, boardId, handlers }) {
     },
     cursor(x, y) {
       raw({ type: 'cursor', x, y });
+    },
+    laser(points, color, width) {
+      raw({ type: 'laser', points, color, width });
     },
     pendingCount: () => pending.size,
     close() {
