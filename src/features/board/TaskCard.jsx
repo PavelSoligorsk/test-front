@@ -1,4 +1,4 @@
-﻿import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -8,7 +8,7 @@ import { continueOrderedListNumbers, normalizeDisplayMath } from '../../componen
 
 const markdownParts = {
   img: ({ src, alt }) => (
-    <img src={src} alt={alt || 'РР·РѕР±СЂР°Р¶РµРЅРёРµ'} draggable={false} className="my-2 block max-h-[420px] max-w-full rounded-md object-contain" />
+    <img src={src} alt={alt || 'Изображение'} draggable={false} className="my-2 block max-h-[420px] max-w-full rounded-md object-contain" />
   ),
 };
 
@@ -69,7 +69,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
         style={{ fontSize }}
       >
         <div className="mb-[0.8em] flex items-baseline leading-snug gap-[0.6em] text-[0.6em] font-medium text-zinc-500 dark:text-zinc-400">
-          <span className="shrink-0 whitespace-nowrap">Р—Р°РґР°РЅРёРµ в„–{props.number || ''}</span>
+          <span className="shrink-0 whitespace-nowrap">Задание №{props.number || ''}</span>
           {props.source && <span className="min-w-0 truncate text-zinc-400 dark:text-zinc-500">{props.source}</span>}
         </div>
         <div className="theory-html leading-relaxed [&_.katex-display]:my-[0.6em] [&_img]:mx-auto [&_img]:rounded-[0.8em] [&_p]:my-[0.3em]">
@@ -78,7 +78,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
 
         {(options.length > 0 || props.openAnswer) && (
           <div className="mb-[0.6em] ml-[0.2em] mt-[1.1em] leading-snug text-[0.6em] font-medium text-zinc-500 dark:text-zinc-400">
-            {props.openAnswer ? 'РћС‚РІРµС‚' : 'Р’Р°СЂРёР°РЅС‚С‹ РѕС‚РІРµС‚Р°'}
+            {props.openAnswer ? 'Ответ' : 'Варианты ответа'}
           </div>
         )}
         {options.length > 0 && (
@@ -97,7 +97,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
         )}
         {props.openAnswer && (
           <div className="flex h-[2.6em] items-center rounded-[1em] border border-zinc-200 px-[0.9em] text-[0.8em] text-zinc-400 dark:border-zinc-800">
-            Р’РІРµРґРёС‚Рµ Р·РЅР°С‡РµРЅРёРµвЂ¦
+            Введите значение…
           </div>
         )}
       </div>
@@ -105,7 +105,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
       {studentAnswers.length > 0 && (
         <div data-chrome="true" className="mt-[0.5em] rounded-[0.9em] leading-snug border border-rose-200 bg-rose-50 px-[0.9em] py-[0.6em] text-rose-950 dark:border-rose-900/70 dark:bg-rose-950/50 dark:text-rose-100" style={{ fontSize: fontSize * 0.7 }}>
           <div className="text-[0.85em] font-medium text-rose-700 dark:text-rose-300">
-            {studentAnswers.length === 1 ? 'РћС‚РІРµС‚ СѓС‡РµРЅРёРєР°' : 'РћС‚РІРµС‚С‹ СѓС‡РµРЅРёРєРѕРІ'} В· РІРёРґРёС‚Рµ С‚РѕР»СЊРєРѕ РІС‹
+            {studentAnswers.length === 1 ? 'Ответ ученика' : 'Ответы учеников'} · видите только вы
           </div>
           <ul className="m-0 mt-[0.2em] list-none space-y-[0.2em] p-0">
             {studentAnswers.map((item, index) => (
@@ -123,7 +123,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
           <div className="flex items-center gap-[0.6em]">
             {answer && (
               <span className="min-w-0 flex-1">
-                <span className="block text-[0.85em] font-medium text-emerald-700 dark:text-emerald-300">РџСЂР°РІРёР»СЊРЅС‹Р№ РѕС‚РІРµС‚ В· РІРёРґРёС‚Рµ С‚РѕР»СЊРєРѕ РІС‹</span>
+                <span className="block text-[0.85em] font-medium text-emerald-700 dark:text-emerald-300">Правильный ответ · видите только вы</span>
                 <span className="font-semibold">{answer}</span>
               </span>
             )}
@@ -138,7 +138,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
                 }}
                 className="ml-auto shrink-0 rounded-[0.6em] bg-emerald-700 px-[0.8em] py-[0.4em] text-[0.85em] font-semibold text-white hover:bg-emerald-800"
               >
-                {solutionOpen ? 'РЎРєСЂС‹С‚СЊ СЂРµС€РµРЅРёРµ' : 'Р РµС€РµРЅРёРµ'}
+                {solutionOpen ? 'Скрыть решение' : 'Решение'}
               </button>
             )}
           </div>
