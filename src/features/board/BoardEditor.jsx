@@ -34,7 +34,7 @@ import {
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { readGeoGebraBase64, readGeoGebraPerspective, readGeoGebraXml } from './geogebraApi';
+import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { applyOp, diffOps, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
@@ -259,6 +259,7 @@ export default function BoardEditor({
   const geoTimerRef = useRef(null);
   const geoXmlTimerRef = useRef(null);
   const geoDirtyRef = useRef(new Set());
+  const shapeGlideRef = useRef({ items: new Map(), raf: 0, last: 0 });
   const readOnlyRef = useRef(readOnly);
   const audienceRef = useRef(audience);
   const fileRef = useRef(null);
@@ -375,6 +376,7 @@ export default function BoardEditor({
     const next = applyOp(before, op);
     if (next === before) return;
     objectsRef.current = next;
+    noteShapeGlide(before, next);
     setObjects(next);
     pruneSelection();
   }
@@ -597,7 +599,7 @@ export default function BoardEditor({
   function paintSelectionUi() {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const list = selectedList();
+    const list = selectedList().map(displayedObject);
     const bounds = boundsOf(list);
     const cam = cameraRef.current;
     const group = groupBoxRef.current;
@@ -759,6 +761,137 @@ export default function BoardEditor({
         knob.style.top = `${point.y}%`;
       }
     }
+  }
+
+  function shapeDepthOf(obj) {
+    const value = Number(obj?.props?.depth);
+    return Number.isFinite(value) ? value : defaultDepth(obj?.props?.shape);
+  }
+
+  function draggedShapeIds() {
+    const drag = dragRef.current;
+    if (!drag) return new Set();
+    if (drag.starts instanceof Set && drag.starts.size) return drag.starts;
+    return new Set(drag.id ? [drag.id] : []);
+  }
+
+  function displayedObject(obj) {
+    const pose = shapeGlideRef.current.items.get(obj.id);
+    if (!pose) return obj;
+    const props = { ...obj.props };
+    if (obj.type === 'shape') props.depth = pose.depth;
+    if (obj.type === 'arrow') {
+      props.x1 = pose.x1;
+      props.y1 = pose.y1;
+      props.x2 = pose.x2;
+      props.y2 = pose.y2;
+    }
+    return { ...obj, x: pose.x, y: pose.y, w: pose.w, h: pose.h, props };
+  }
+
+  function paintShapeGlide() {
+    const busy = draggedShapeIds();
+    shapeGlideRef.current.items.forEach((_, id) => {
+      if (busy.has(id)) return;
+      const obj = objectsRef.current.find((item) => item.id === id);
+      if (obj) paintObject(displayedObject(obj));
+    });
+  }
+
+  function stopShapeGlide() {
+    const glide = shapeGlideRef.current;
+    if (glide.raf) cancelAnimationFrame(glide.raf);
+    glide.raf = 0;
+    glide.items.clear();
+  }
+
+  function tickShapeGlide(now) {
+    const glide = shapeGlideRef.current;
+    const elapsed = Math.min(48, now - glide.last);
+    glide.last = now;
+    const blend = 1 - Math.exp(-elapsed / 90);
+    const busy = draggedShapeIds();
+    let moving = false;
+    glide.items.forEach((pose, id) => {
+      if (busy.has(id)) {
+        glide.items.delete(id);
+        return;
+      }
+      const target = objectsRef.current.find((item) => item.id === id);
+      if (!target || target.type !== pose.type || (target.type === 'shape' && target.props?.shape !== pose.shape)) {
+        glide.items.delete(id);
+        return;
+      }
+      const depth = target.type === 'shape' ? shapeDepthOf(target) : pose.depth;
+      pose.x += (target.x - pose.x) * blend;
+      pose.y += (target.y - pose.y) * blend;
+      pose.w += (target.w - pose.w) * blend;
+      pose.h += (target.h - pose.h) * blend;
+      if (target.type === 'shape') pose.depth += (depth - pose.depth) * blend;
+      if (target.type === 'arrow') {
+        pose.x1 += (target.props.x1 - pose.x1) * blend;
+        pose.y1 += (target.props.y1 - pose.y1) * blend;
+        pose.x2 += (target.props.x2 - pose.x2) * blend;
+        pose.y2 += (target.props.y2 - pose.y2) * blend;
+      }
+      const arrived = Math.abs(target.x - pose.x) < 0.2
+        && Math.abs(target.y - pose.y) < 0.2
+        && Math.abs(target.w - pose.w) < 0.2
+        && Math.abs(target.h - pose.h) < 0.2
+        && (target.type !== 'shape' || Math.abs(depth - pose.depth) < 0.05)
+        && (target.type !== 'arrow' || (
+          Math.abs(target.props.x1 - pose.x1) < 0.2
+          && Math.abs(target.props.y1 - pose.y1) < 0.2
+          && Math.abs(target.props.x2 - pose.x2) < 0.2
+          && Math.abs(target.props.y2 - pose.y2) < 0.2
+        ));
+      if (arrived) {
+        glide.items.delete(id);
+        paintObject(target);
+        return;
+      }
+      moving = true;
+      paintObject(displayedObject(target));
+    });
+    glide.raf = moving ? requestAnimationFrame(tickShapeGlide) : 0;
+    paintSelectionUi();
+  }
+
+  function noteShapeGlide(before, next) {
+    const busy = draggedShapeIds();
+    const glide = shapeGlideRef.current;
+    const previous = new Map(before.map((obj) => [obj.id, obj]));
+    next.forEach((obj) => {
+      if (busy.has(obj.id)) return;
+      const prev = previous.get(obj.id);
+      if (!prev || prev.type !== obj.type) return;
+      if (obj.type === 'shape' && prev.props?.shape !== obj.props?.shape) return;
+      const moved = prev.x !== obj.x || prev.y !== obj.y || prev.w !== obj.w || prev.h !== obj.h
+        || (obj.type === 'shape' && shapeDepthOf(prev) !== shapeDepthOf(obj))
+        || (obj.type === 'arrow' && (
+          prev.props.x1 !== obj.props.x1 || prev.props.y1 !== obj.props.y1
+          || prev.props.x2 !== obj.props.x2 || prev.props.y2 !== obj.props.y2
+        ));
+      if (!moved) return;
+      if (!glide.items.has(obj.id)) {
+        glide.items.set(obj.id, {
+          type: obj.type,
+          shape: obj.props?.shape,
+          x: prev.x,
+          y: prev.y,
+          w: prev.w,
+          h: prev.h,
+          depth: shapeDepthOf(prev),
+          x1: prev.props?.x1,
+          y1: prev.props?.y1,
+          x2: prev.props?.x2,
+          y2: prev.props?.y2,
+        });
+      }
+    });
+    if (!glide.items.size || glide.raf) return;
+    glide.last = performance.now();
+    glide.raf = requestAnimationFrame(tickShapeGlide);
   }
 
   function live(next) {
@@ -1039,6 +1172,16 @@ export default function BoardEditor({
     live(next);
   }
 
+  function sameGeoView(prev, next) {
+    if (!prev || !next) return false;
+    return ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].every((key) => {
+      const left = prev[key];
+      const right = next[key];
+      if (left == null && right == null) return true;
+      return typeof left === 'number' && typeof right === 'number' && Math.abs(left - right) < 1e-4;
+    });
+  }
+
   async function saveGeoXml() {
     const ids = new Set(geoDirtyRef.current);
     if (editingIdRef.current) ids.add(editingIdRef.current);
@@ -1048,39 +1191,31 @@ export default function BoardEditor({
       const api = apiMap.current.get(id);
       if (!obj || obj.type !== 'geogebra' || !api) return;
       const xml = readGeoGebraXml(api);
-      const perspective = readGeoGebraPerspective(api);
+      const view = readGeoGebraView(api);
       const prevXml = obj.props.ggbXml || '';
-      const prevPerspective = obj.props.ggbPerspective || '';
+      const prevView = obj.props.ggbView || null;
       const nextXml = xml || prevXml;
-      const nextPerspective = perspective || prevPerspective;
-      if (nextXml === prevXml && nextPerspective === prevPerspective) return;
+      const viewChanged = Boolean(view) && !sameGeoView(prevView, view);
+      if (nextXml === prevXml && !viewChanged) return;
       pending.push({
         id,
-        api,
         ggbXml: nextXml,
-        ggbPerspective: nextPerspective,
-        layoutChanged: Boolean(nextPerspective) && nextPerspective !== prevPerspective,
+        ggbView: view || prevView,
       });
     });
     if (!pending.length) return;
-    const ready = [];
-    for (const item of pending) {
-      const ggbBase64 = item.layoutChanged ? await readGeoGebraBase64(item.api) : '';
-      ready.push({ ...item, ggbBase64 });
-    }
     if (!mountedRef.current) return;
-    const byId = new Map(ready.map((item) => [item.id, item]));
+    const byId = new Map(pending.map((item) => [item.id, item]));
     const current = objectsRef.current;
     let changed = false;
     const next = current.map((obj) => {
       const update = byId.get(obj.id);
       if (!update) return obj;
-      if ((obj.props.ggbPerspective || '') === update.ggbPerspective && (obj.props.ggbXml || '') === update.ggbXml && (!update.ggbBase64 || obj.props.ggbBase64 === update.ggbBase64)) {
-        return obj;
-      }
+      if ((obj.props.ggbXml || '') === update.ggbXml && sameGeoView(obj.props.ggbView, update.ggbView)) return obj;
       changed = true;
-      const props = { ...obj.props, ggbXml: update.ggbXml, ggbPerspective: update.ggbPerspective };
-      if (update.ggbBase64) props.ggbBase64 = update.ggbBase64;
+      const props = { ...obj.props, ggbXml: update.ggbXml };
+      if (update.ggbView) props.ggbView = update.ggbView;
+      if (String(props.ggbPerspective || '').trim().startsWith('<')) props.ggbPerspective = '';
       return { ...obj, props };
     });
     if (changed) live(next);
@@ -1193,6 +1328,7 @@ export default function BoardEditor({
       window.clearTimeout(geoTimerRef.current);
       window.clearTimeout(geoXmlTimerRef.current);
       window.clearTimeout(cursorTimerRef.current);
+      stopShapeGlide();
     };
   }, []);
 
@@ -1483,6 +1619,7 @@ export default function BoardEditor({
       const obj = objectsRef.current.find((item) => item.id === drag.id);
       if (obj) paintObject(obj);
     }
+    paintShapeGlide();
   });
 
   useEffect(() => {

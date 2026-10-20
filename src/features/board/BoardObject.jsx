@@ -298,6 +298,7 @@ function BoardObject({
               ggbBase64={appletBase64}
               ggbXml={obj.props.ggbXml || ''}
               ggbPerspective={obj.props.ggbPerspective || ''}
+              ggbView={obj.props.ggbView || null}
               setup={obj.props.setup || ''}
               controls={obj.props.controls || []}
               texts={obj.props.texts || []}

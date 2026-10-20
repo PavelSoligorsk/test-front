@@ -38,6 +38,92 @@ export function applyGeoGebraPerspective(api, xml) {
   }
 }
 
+function elementLabels(xml) {
+  const labels = [];
+  const re = /<element\b[^>]*\blabel="([^"]+)"/g;
+  let match = re.exec(xml);
+  while (match) {
+    labels.push(match[1]);
+    match = re.exec(xml);
+  }
+  labels.sort();
+  return labels;
+}
+
+export function readConstructionTargets(xml) {
+  const targets = [];
+  const elementRe = /<element\b([^>]*)>([\s\S]*?)<\/element>/g;
+  let match = elementRe.exec(xml);
+  while (match) {
+    const attrs = match[1];
+    const body = match[2];
+    const type = /type="([^"]+)"/.exec(attrs)?.[1];
+    const label = /label="([^"]+)"/.exec(attrs)?.[1];
+    if (label && (type === 'numeric' || type === 'angle')) {
+      const raw = /<value\b[^>]*\bval="([^"]+)"/.exec(body)?.[1];
+      const value = raw == null ? NaN : parseFloat(raw);
+      if (Number.isFinite(value)) targets.push({ name: label, kind: 'number', value });
+    } else if (label && (type === 'point' || type === 'point3d')) {
+      const coords = /<coords\b([^>]*?)\/?>/.exec(body)?.[1] || '';
+      const x = parseFloat(/\bx="([^"]+)"/.exec(coords)?.[1]);
+      const y = parseFloat(/\by="([^"]+)"/.exec(coords)?.[1]);
+      const z = parseFloat(/\bz="([^"]+)"/.exec(coords)?.[1] ?? '1');
+      const w = parseFloat(/\bw="([^"]+)"/.exec(coords)?.[1] ?? '');
+      if (Number.isFinite(x) && Number.isFinite(y) && type === 'point3d') {
+        const scale = Number.isFinite(w) && Math.abs(w) > 1e-8 ? w : 1;
+        targets.push({ name: label, kind: 'point3', x: x / scale, y: y / scale, z: (Number.isFinite(z) ? z : 0) / scale });
+      } else if (Number.isFinite(w) && Math.abs(w) > 1e-8) {
+        targets.push({ name: label, kind: 'point3', x: x / w, y: y / w, z: (Number.isFinite(z) ? z : 0) / w });
+      } else if (Number.isFinite(z) && Math.abs(z) > 1e-8) {
+        targets.push({ name: label, kind: 'point', x: x / z, y: y / z });
+      }
+    }
+    match = elementRe.exec(xml);
+  }
+  return targets;
+}
+
+export function sameConstruction(api, xml) {
+  if (!api || !xml || typeof api.exists !== 'function') return false;
+  const labels = elementLabels(xml);
+  if (!labels.length) return false;
+  return !labels.some((name) => !api.exists(name));
+}
+
+export function theoryPerspectiveCode(setup) {
+  const lines = String(setup || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  for (const cmd of lines) {
+    const call = cmd.match(/^SetPerspective\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)$/i);
+    if (call) return (call[1] || call[2] || call[3] || '').trim();
+    if (cmd.startsWith('perspective:')) return cmd.slice(12).trim();
+  }
+  return '';
+}
+
+export function readGeoGebraView(api) {
+  if (!api || typeof api.getXmin !== 'function') return null;
+  try {
+    const xmin = api.getXmin();
+    const xmax = api.getXmax();
+    const ymin = api.getYmin();
+    const ymax = api.getYmax();
+    if (![xmin, xmax, ymin, ymax].every((value) => typeof value === 'number' && Number.isFinite(value))) return null;
+    if (!(xmax > xmin) || !(ymax > ymin)) return null;
+    const view = { xmin, xmax, ymin, ymax };
+    if (typeof api.getZmin === 'function' && typeof api.getZmax === 'function') {
+      const zmin = api.getZmin();
+      const zmax = api.getZmax();
+      if (typeof zmin === 'number' && typeof zmax === 'number' && Number.isFinite(zmin) && Number.isFinite(zmax) && zmax > zmin) {
+        view.zmin = zmin;
+        view.zmax = zmax;
+      }
+    }
+    return view;
+  } catch {
+    return null;
+  }
+}
+
 export function readGeoGebraXml(api) {
   if (typeof api?.getXML !== 'function') return '';
   try {
