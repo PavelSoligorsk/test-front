@@ -42,7 +42,7 @@ export function connectBoard({ audience, boardId, handlers }) {
     switch (message?.type) {
       case 'snapshot': {
         attempt = 0;
-        // append_points переотправляются вместе со всем остальным: по from сервер отбросит уже принятые точки.
+        // Незаконченный штрих в очередь не попадает: в сеть уходит только готовая линия.
         // Пока ready=false, всё, что клиент досылает внутри onSnapshot, только копится в pending.
         handlers.onSnapshot?.(message, () => [...pending.values()]);
         ready = true;

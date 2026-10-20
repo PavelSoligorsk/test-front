@@ -37,7 +37,7 @@ import {
 import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { setPenActive } from './penLock';
-import { applyOp, diffOps, encodePts, keepLongerStrokes, reorder } from './ops';
+import { applyOp, diffOps, keepLongerStrokes, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
 import {
   arrowBounds,
@@ -2027,67 +2027,24 @@ export default function BoardEditor({
     };
   }, []);
 
-  function strokePoints(drag, from) {
-    return drag.points.slice(from).map((point) => roundPoint({ x: point.x - drag.origin.x, y: point.y - drag.origin.y }));
+  function strokePoints(drag) {
+    return drag.points.map((point) => roundPoint({ x: point.x - drag.origin.x, y: point.y - drag.origin.y }));
   }
 
-  function appendStroke(drag) {
-    window.clearTimeout(drag.timer);
-    drag.timer = 0;
-    if (!drag.id || drag.sent >= drag.points.length) return;
-    const from = drag.sent;
-    const pts = encodePts(strokePoints(drag, from));
-    drag.sent = drag.points.length;
-    drag.lastSent = performance.now();
-    send({ type: 'append_points', id: drag.id, from, pts });
-  }
-
-  // Штрих видят другие ещё во время рисования: upsert с первыми точками, затем append_points раз в 50 мс.
-  function streamStroke(drag) {
-    if (readOnlyRef.current || !socketRef.current) return;
-    if (!drag.id) {
-      if (drag.points.length < 2) return;
-      drag.id = uid();
-      drag.sent = drag.points.length;
-      drag.lastSent = performance.now();
-      send({
-        type: 'upsert',
-        object: {
-          id: drag.id,
-          type: 'draw',
-          x: drag.origin.x,
-          y: drag.origin.y,
-          w: 12,
-          h: 12,
-          rotation: 0,
-          props: { points: strokePoints(drag, 0), color: drag.color, width: drag.width },
-        },
-      });
-      return;
-    }
-    if (performance.now() - drag.lastSent >= SEND_MS) appendStroke(drag);
-    else if (!drag.timer) drag.timer = window.setTimeout(() => appendStroke(drag), SEND_MS);
-  }
-
+  // Штрих живёт только на экране, пока перо не отпущено. В сеть уходит один раз, целиком.
   function finishStroke(drag) {
-    window.clearTimeout(drag.timer);
-    drag.timer = 0;
-    if (drag.points.length < 2) {
-      if (drag.id) send({ type: 'delete', ids: [drag.id] });
-      return;
-    }
+    if (drag.points.length < 2) return;
     const stroke = {
-      id: drag.id || uid(),
+      id: uid(),
       type: 'draw',
       x: drag.origin.x,
       y: drag.origin.y,
       w: 12,
       h: 12,
       rotation: 0,
-      props: { points: strokePoints(drag, 0), color: drag.color, width: drag.width },
+      props: { points: strokePoints(drag), color: drag.color, width: drag.width },
     };
     flushOps();
-    // Полный штрих закрывает дыру, если кусок с большим from сервер отбросил.
     const upsert = { type: 'upsert', object: stroke };
     send(upsert);
     const next = applyOp(objectsRef.current, upsert);
@@ -2161,11 +2118,7 @@ export default function BoardEditor({
         if (drag.starts?.has(obj.id) || obj.id === drag.id) paintObject(obj);
       });
     }
-    if (drag.kind === 'pen') {
-      setPenActive(false);
-      window.clearTimeout(drag.timer);
-      if (drag.id) send({ type: 'delete', ids: [drag.id] });
-    }
+    if (drag.kind === 'pen') setPenActive(false);
     if (drag.kind === 'eraser' && drag.origin) {
       objectsRef.current = drag.origin;
       viewportRef.current?.querySelectorAll('[data-object]').forEach((el) => {
@@ -2263,7 +2216,7 @@ export default function BoardEditor({
   function moveDrag(event) {
     const drag = dragRef.current;
     if (!drag) return;
-    if (event.pointerType === 'touch' || drag.kind === 'pen') pointerClientRef.current = { x: event.clientX, y: event.clientY };
+    if (event.pointerType === 'touch') pointerClientRef.current = { x: event.clientX, y: event.clientY };
     else sendCursor(event.clientX, event.clientY);
 
     if (drag.kind === 'pan') {
@@ -2297,7 +2250,6 @@ export default function BoardEditor({
         added = true;
       });
       if (!added) return;
-      streamStroke(drag);
       paintDraft({ kind: 'pen', points: drag.points, origin: drag.origin, color: currentStyle.pen, width: currentStyle.penWidth });
       return;
     }
@@ -2544,13 +2496,9 @@ export default function BoardEditor({
         kind: 'pen',
         pointerId: event.pointerId,
         points: [world],
-        id: null,
         origin: world,
         color: styleRef.current.pen,
         width: styleRef.current.penWidth,
-        sent: 0,
-        lastSent: 0,
-        timer: 0,
       };
       setPenActive(true);
       if (hintRef.current) hintRef.current.style.display = 'none';
