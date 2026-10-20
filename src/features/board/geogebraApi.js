@@ -100,28 +100,161 @@ export function theoryPerspectiveCode(setup) {
   return '';
 }
 
-export function readGeoGebraView(api) {
-  if (!api || typeof api.getXmin !== 'function') return null;
+function viewProperties(api) {
+  if (typeof api?.getViewProperties !== 'function') return null;
   try {
-    const xmin = api.getXmin();
-    const xmax = api.getXmax();
-    const ymin = api.getYmin();
-    const ymax = api.getYmax();
-    if (![xmin, xmax, ymin, ymax].every((value) => typeof value === 'number' && Number.isFinite(value))) return null;
-    if (!(xmax > xmin) || !(ymax > ymin)) return null;
-    const view = { xmin, xmax, ymin, ymax };
-    if (typeof api.getZmin === 'function' && typeof api.getZmax === 'function') {
-      const zmin = api.getZmin();
-      const zmax = api.getZmax();
-      if (typeof zmin === 'number' && typeof zmax === 'number' && Number.isFinite(zmin) && Number.isFinite(zmax) && zmax > zmin) {
-        view.zmin = zmin;
-        view.zmax = zmax;
-      }
-    }
-    return view;
+    const raw = api.getViewProperties(1);
+    const props = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const { xMin, yMin, invXscale, invYscale, width, height } = props || {};
+    if (![xMin, yMin, invXscale, invYscale, width, height].every(Number.isFinite)) return null;
+    if (!(invXscale > 0) || !(invYscale > 0) || !(width > 0) || !(height > 0)) return null;
+    return { xMin, yMin, invXscale, invYscale, width, height };
   } catch {
     return null;
   }
+}
+
+// Вид графики — центр и единица на пиксель. Так GeoGebra сама держит вид при
+// смене ширины области, и копия совпадает при любой раскладке панелей.
+export function readGeoGebraView(api) {
+  const props = viewProperties(api);
+  if (!props) return null;
+  return {
+    cx: props.xMin + (props.width * props.invXscale) / 2,
+    cy: props.yMin + (props.height * props.invYscale) / 2,
+    sx: props.invXscale,
+    sy: props.invYscale,
+  };
+}
+
+export function isGeoGebraView(view) {
+  return Boolean(view) && ['cx', 'cy', 'sx', 'sy'].every((key) => Number.isFinite(view[key])) && view.sx > 0 && view.sy > 0;
+}
+
+export function sameGeoGebraView(a, b) {
+  if (!isGeoGebraView(a) || !isGeoGebraView(b)) return false;
+  return Math.abs(a.cx - b.cx) <= 1e-6 * Math.max(1, Math.abs(a.cx))
+    && Math.abs(a.cy - b.cy) <= 1e-6 * Math.max(1, Math.abs(a.cy))
+    && Math.abs(a.sx / b.sx - 1) <= 1e-6
+    && Math.abs(a.sy / b.sy - 1) <= 1e-6;
+}
+
+export function writeGeoGebraView(api, view) {
+  const props = viewProperties(api);
+  if (!props || !isGeoGebraView(view) || typeof api.setCoordSystem !== 'function') return false;
+  const halfW = (props.width * view.sx) / 2;
+  const halfH = (props.height * view.sy) / 2;
+  api.setCoordSystem(view.cx - halfW, view.cx + halfW, view.cy - halfH, view.cy + halfH);
+  return true;
+}
+
+const CAMERA_KEYS = ['xZero', 'yZero', 'zZero', 'scale', 'xAngle', 'zAngle'];
+
+export function readCamera3d(xml) {
+  const view = /<euclidianView3D\b[^>]*>([\s\S]*?)<\/euclidianView3D>/.exec(String(xml || ''))?.[1];
+  const attrs = view && /<coordSystem\b([^>]*)\/?>/.exec(view)?.[1];
+  if (!attrs) return null;
+  const camera = {};
+  for (const key of CAMERA_KEYS) {
+    const value = parseFloat(new RegExp(`\\b${key}="([^"]+)"`).exec(attrs)?.[1]);
+    if (!Number.isFinite(value)) return null;
+    camera[key] = value;
+  }
+  return camera.scale > 0 ? camera : null;
+}
+
+export function angleGap(from, to) {
+  return ((((to - from) % 360) + 540) % 360) - 180;
+}
+
+export function sameCamera(a, b, tolerance = 1e-3) {
+  if (!a || !b) return false;
+  return CAMERA_KEYS.every((key) => (
+    key === 'xAngle' || key === 'zAngle'
+      ? Math.abs(angleGap(a[key], b[key])) < tolerance
+      : Math.abs(a[key] - b[key]) < tolerance * Math.max(1, Math.abs(a[key]))
+  ));
+}
+
+export function readGeoGebraCamera(api) {
+  return readCamera3d(readGeoGebraXml(api));
+}
+
+// Поворот — точной командой, центр и масштаб — кубом вокруг центра: у куба
+// масштаб обратно пропорционален половине ребра, коэффициент уточняется по факту.
+export function writeGeoGebraCamera(api, camera, fit) {
+  if (!api || !camera || !(fit > 0)) return 0;
+  const azimuth = camera.zAngle + 180;
+  const elevation = -camera.xAngle;
+  api.evalCommand(`SetViewDirection(Vector((1; ${azimuth.toFixed(4)}°; ${elevation.toFixed(4)}°)), false)`);
+  const half = fit / camera.scale;
+  const x = -camera.xZero;
+  const y = -camera.yZero;
+  const z = -camera.zZero;
+  api.setCoordSystem(x - half, x + half, y - half, y + half, z - half, z + half);
+  return half;
+}
+
+export function elementStates(xml) {
+  const states = new Map();
+  const re = /<element\b([^>]*)>([\s\S]*?)<\/element>/g;
+  let match = re.exec(String(xml || ''));
+  while (match) {
+    const label = /label="([^"]+)"/.exec(match[1])?.[1];
+    if (label) {
+      const body = match[2];
+      const coords = /<coords\b[^>]*\/?>/.exec(body)?.[0] || '';
+      const value = /<value\b[^>]*\/?>/.exec(body)?.[0] || '';
+      states.set(label, coords + value);
+    }
+    match = re.exec(String(xml || ''));
+  }
+  return states;
+}
+
+export function layoutSignature(api) {
+  const xml = readGeoGebraPerspective(api);
+  if (!xml) return '';
+  const views = [];
+  const re = /<view\b([^>]*)\/?>/g;
+  let match = re.exec(xml);
+  while (match) {
+    const attr = (name) => new RegExp(`\\b${name}="([^"]*)"`).exec(match[1])?.[1] || '';
+    if (attr('id')) views.push(`${attr('id')}:${attr('visible')}:${attr('tab')}:${attr('location')}`);
+    match = re.exec(xml);
+  }
+  const panes = [];
+  const paneRe = /<pane\b([^>]*)\/?>/g;
+  let pane = paneRe.exec(xml);
+  while (pane) {
+    const divider = parseFloat(/\bdivider="([^"]+)"/.exec(pane[1])?.[1]);
+    const orientation = /\borientation="([^"]+)"/.exec(pane[1])?.[1] || '';
+    panes.push(`${orientation}:${Number.isFinite(divider) ? divider.toFixed(2) : ''}`);
+    pane = paneRe.exec(xml);
+  }
+  const toolbar = /<toolbar\b([^>]*)\/?>/.exec(xml)?.[1] || '';
+  const input = /<input\b([^>]*)\/?>/.exec(xml)?.[1] || '';
+  return `${views.sort().join(',')}|${panes.join(',')}|${toolbar.replace(/\s+/g, ' ')}|${input.replace(/\s+/g, ' ')}`;
+}
+
+const SOLID_COMMAND = /\b(Cube|Pyramid|Prism|Sphere|Cone|Cylinder|Tetrahedron|Octahedron|Dodecahedron|Icosahedron|Plane|PerpendicularPlane|Surface|Net|SetViewDirection)\s*\(/i;
+const SPACE_POINT = /(^|[^\w\s])\s*\(\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\)/m;
+const GRAPH_COMMAND = /(^|\n)\s*[a-zA-Z]\w*\s*\(\s*x\s*\)\s*=|(^|\n)\s*y\s*=|\b(ShowAxes|AxesVisible|ShowGrid|Function|Derivative|Integral|Asymptote|Extremum|Root)\s*\(/i;
+
+export function theoryAppKind(setup) {
+  const text = String(setup || '');
+  const code = theoryPerspectiveCode(text).toUpperCase();
+  if (code.includes('T') || SOLID_COMMAND.test(text) || SPACE_POINT.test(text)) return '3d';
+  if (GRAPH_COMMAND.test(text)) return 'graphing';
+  return 'geometry';
+}
+
+export function graphStructure(xml) {
+  return String(xml || '')
+    .replace(/<coords\b[^>]*\/?>/g, '')
+    .replace(/<value\b[^>]*\/?>/g, '')
+    .replace(/<coordSystem\b[^>]*\/?>/g, '')
+    .replace(/\s+/g, '');
 }
 
 export function readGeoGebraXml(api) {
@@ -144,6 +277,144 @@ function hexToRgb(hex) {
   ];
 }
 
+function splitCallArgs(source) {
+  const args = [];
+  let current = '';
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (quote) {
+      current += ch;
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === '(') {
+      depth += 1;
+      current += ch;
+      continue;
+    }
+    if (ch === ')') {
+      if (depth === 0) break;
+      depth -= 1;
+      current += ch;
+      continue;
+    }
+    if (ch === ',' && depth === 0) {
+      args.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) args.push(current.trim());
+  return args;
+}
+
+function parseCall(cmd) {
+  const match = String(cmd).match(/^([A-Za-z_][\w]*)\s*\((.*)\)\s*$/);
+  if (!match) return null;
+  return { name: match[1].toLowerCase(), args: splitCallArgs(match[2]) };
+}
+
+function parseBool(text) {
+  const value = String(text || '').trim().toLowerCase();
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return null;
+}
+
+function parsePoint(text) {
+  const match = String(text || '').trim().match(/^\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s*,\s*(-?\d+(?:\.\d+)?))?\s*\)$/);
+  if (!match) return null;
+  return {
+    x: parseFloat(match[1]),
+    y: parseFloat(match[2]),
+    z: match[3] == null ? null : parseFloat(match[3]),
+  };
+}
+
+function applyCenterView(api, point) {
+  const view = point.z == null ? readGeoGebraView(api) : null;
+  if (view && writeGeoGebraView(api, { ...view, cx: point.x, cy: point.y })) return;
+  const coords = point.z == null ? `${point.x},${point.y}` : `${point.x},${point.y},${point.z}`;
+  api.evalCommand(`CenterView((${coords}))`);
+}
+
+function applyZoomIn(api, args) {
+  const numbers = args.map((item) => Number(String(item).trim()));
+  if (numbers.length === 4 && numbers.every(Number.isFinite)) {
+    const [xmin, ymin, xmax, ymax] = numbers;
+    api.setCoordSystem(xmin, xmax, ymin, ymax);
+    return;
+  }
+  if (numbers.length === 6 && numbers.every(Number.isFinite)) {
+    const [xmin, ymin, zmin, xmax, ymax, zmax] = numbers;
+    api.setCoordSystem(xmin, xmax, ymin, ymax, zmin, zmax);
+    return;
+  }
+  api.evalCommand(`ZoomIn(${args.join(',')})`);
+}
+
+function applyTheoryCommand(api, cmd) {
+  if (cmd.startsWith('view:')) {
+    const parts = cmd.slice(5).split(',').map((item) => item.trim());
+    if (parts.length >= 4 && typeof api.setCoordSystem === 'function') {
+      const box = parts.slice(0, 4).map((item) => parseFloat(item));
+      if (parts.length >= 6) api.setCoordSystem(...box, parseFloat(parts[4]) || -10, parseFloat(parts[5]) || 10);
+      else api.setCoordSystem(...box);
+      if (parts.includes('grid') && typeof api.setGridVisible === 'function') api.setGridVisible(true);
+      if (parts.includes('axes') && typeof api.setAxesVisible === 'function') api.setAxesVisible(true, true);
+    }
+    return true;
+  }
+  if (cmd.startsWith('perspective:')) {
+    const code = cmd.slice(12).trim();
+    if (code) api.setPerspective(code);
+    return true;
+  }
+  const call = parseCall(cmd);
+  if (!call) return false;
+  if (call.name === 'setperspective') {
+    const code = (call.args[0] || '').replace(/^["']|["']$/g, '').trim();
+    if (code) api.setPerspective(code);
+    return true;
+  }
+  if (call.name === 'showaxes' || call.name === 'axesvisible') {
+    const flags = call.args.map(parseBool);
+    if (flags[0] == null) return false;
+    const xAxis = flags[0];
+    const yAxis = flags[1] == null ? flags[0] : flags[1];
+    api.setAxesVisible(xAxis, yAxis);
+    if (flags[2] != null) {
+      try { api.setAxesVisible(-1, xAxis, yAxis, flags[2]); } catch { /* плоский вид осей уже выставлен */ }
+    }
+    return true;
+  }
+  if (call.name === 'showgrid') {
+    const flag = parseBool(call.args[0]);
+    if (flag == null) return false;
+    api.setGridVisible(flag);
+    return true;
+  }
+  if (call.name === 'zoomin') {
+    applyZoomIn(api, call.args);
+    return true;
+  }
+  if (call.name === 'centerview' || call.name === 'setcenterview') {
+    const point = parsePoint(call.args[0]);
+    if (!point) return false;
+    applyCenterView(api, point);
+    return true;
+  }
+  return false;
+}
+
 export function runTheorySetup(api, setup) {
   if (!api || !setup) return;
   const commands = String(setup)
@@ -152,27 +423,9 @@ export function runTheorySetup(api, setup) {
     .filter((cmd) => cmd && !cmd.startsWith('//') && !cmd.startsWith('#'));
   const delayed = [];
   commands.forEach((cmd) => {
-    if (cmd.startsWith('view:')) {
-      const parts = cmd.slice(5).split(',').map((item) => item.trim());
-      if (parts.length >= 4) {
-        const box = parts.slice(0, 4).map((item) => parseFloat(item));
-        if (parts.length >= 6) api.setCoordSystem(...box, parseFloat(parts[4]) || -10, parseFloat(parts[5]) || 10);
-        else api.setCoordSystem(...box);
-        if (parts.includes('grid')) api.setGridVisible(true);
-        if (parts.includes('axes')) api.setAxesVisible(true, true);
-      }
-      return;
-    }
-    const perspectiveCall = cmd.match(/^SetPerspective\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)$/i);
-    if (perspectiveCall || cmd.startsWith('perspective:')) {
-      const code = perspectiveCall
-        ? (perspectiveCall[1] || perspectiveCall[2] || perspectiveCall[3] || '').trim()
-        : cmd.slice(12).trim();
-      if (code) {
-        try { api.setPerspective(code); } catch { /* вид не сменился */ }
-      }
-      return;
-    }
+    try {
+      if (applyTheoryCommand(api, cmd)) return;
+    } catch { /* команда вида не применилась, ниже обычный eval */ }
     if (cmd.startsWith('color:') || cmd.startsWith('size:') || cmd.startsWith('label:') || cmd.startsWith('show:') || cmd.startsWith('hide:') || cmd.startsWith('animate:')) {
       delayed.push(cmd);
       return;

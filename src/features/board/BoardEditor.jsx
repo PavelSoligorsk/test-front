@@ -34,7 +34,7 @@ import {
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml } from './geogebraApi';
+import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { applyOp, diffOps, reorder } from './ops';
 import { applyHistory, historyEntry } from './history';
@@ -258,6 +258,7 @@ export default function BoardEditor({
   const spaceRef = useRef(false);
   const geoTimerRef = useRef(null);
   const geoXmlTimerRef = useRef(null);
+  const geoLayoutTimerRef = useRef(0);
   const geoDirtyRef = useRef(new Set());
   const shapeGlideRef = useRef({ items: new Map(), raf: 0, last: 0 });
   const readOnlyRef = useRef(readOnly);
@@ -484,7 +485,7 @@ export default function BoardEditor({
         w: 440,
         h: height + 160,
         props: {
-          appName: 'geometry',
+          appName: theoryAppKind(payload.setup),
           theory: true,
           setup: payload.setup || '',
           controls: payload.controls || [],
@@ -1173,13 +1174,7 @@ export default function BoardEditor({
   }
 
   function sameGeoView(prev, next) {
-    if (!prev || !next) return false;
-    return ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'].every((key) => {
-      const left = prev[key];
-      const right = next[key];
-      if (left == null && right == null) return true;
-      return typeof left === 'number' && typeof right === 'number' && Math.abs(left - right) < 1e-4;
-    });
+    return sameGeoGebraView(prev, next);
   }
 
   async function saveGeoXml() {
@@ -1237,6 +1232,26 @@ export default function BoardEditor({
     next[index] = { ...obj, props: { ...obj.props, controls } };
     live(next);
     scheduleGeoSave(id);
+  }
+
+  // Открытые панели и набор инструментов живут только в файле апплета, поэтому
+  // смена раскладки отправляется файлом с меткой, по которой его перечитают.
+  function geoLayoutChanged(id) {
+    if (editingIdRef.current !== id || readOnlyRef.current) return;
+    window.clearTimeout(geoLayoutTimerRef.current);
+    geoLayoutTimerRef.current = window.setTimeout(async () => {
+      const api = apiMap.current.get(id);
+      if (!api || !mountedRef.current) return;
+      const base64 = await readGeoGebraBase64(api);
+      if (!base64 || !mountedRef.current) return;
+      const xml = readGeoGebraXml(api);
+      const next = objectsRef.current.map((obj) => (
+        obj.id === id && obj.type === 'geogebra'
+          ? { ...obj, props: { ...obj.props, ggbBase64: base64, ggbLayout: uid(), ...(xml ? { ggbXml: xml } : {}) } }
+          : obj
+      ));
+      live(next);
+    }, 400);
   }
 
   function scheduleGeoSave(id) {
@@ -1632,6 +1647,7 @@ export default function BoardEditor({
       flushOps,
       saveGeoXml,
       saveGeoChanges,
+      geoLayoutChanged,
       onSnapshot,
       onAckObject,
       onOpError,
@@ -2566,6 +2582,7 @@ export default function BoardEditor({
                 if (editingIdRef.current !== id || readOnlyRef.current) return;
                 scheduleGeoSave(id);
               }}
+              onGeoLayout={(id) => liveRef.current.geoLayoutChanged?.(id)}
               onGeoControls={changeGeoControls}
             />
           ))}

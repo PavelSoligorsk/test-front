@@ -177,6 +177,7 @@ function BoardObject({
   onToggleGeo,
   onGeoReady,
   onGeoChange,
+  onGeoLayout,
   onGeoControls,
 }) {
   const locked = Boolean(obj.props?.locked);
@@ -299,12 +300,14 @@ function BoardObject({
               ggbXml={obj.props.ggbXml || ''}
               ggbPerspective={obj.props.ggbPerspective || ''}
               ggbView={obj.props.ggbView || null}
+              ggbLayout={obj.props.ggbLayout || ''}
               setup={obj.props.setup || ''}
               controls={obj.props.controls || []}
               texts={obj.props.texts || []}
               interactive={interactiveGeo}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={() => onGeoChange(obj.id)}
+              onLayoutChange={() => onGeoLayout?.(obj.id)}
               onControls={locked ? undefined : (controls) => onGeoControls?.(obj.id, controls)}
             />
           </div>

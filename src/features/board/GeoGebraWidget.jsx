@@ -1,5 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadGeoGebraScript, readConstructionTargets, runTheorySetup, sameConstruction, theoryPerspectiveCode } from './geogebraApi';
+import {
+  angleGap,
+  elementStates,
+  graphStructure,
+  isGeoGebraView,
+  layoutSignature,
+  loadGeoGebraScript,
+  readCamera3d,
+  readConstructionTargets,
+  readGeoGebraCamera,
+  readGeoGebraView,
+  readGeoGebraXml,
+  runTheorySetup,
+  sameCamera,
+  sameConstruction,
+  sameGeoGebraView,
+  theoryPerspectiveCode,
+  writeGeoGebraCamera,
+  writeGeoGebraView,
+} from './geogebraApi';
 import TheoryControlPanel from './TheoryControlPanel';
 
 function appletKind(appName) {
@@ -16,12 +35,14 @@ export default function GeoGebraWidget({
   ggbXml = '',
   ggbPerspective = '',
   ggbView = null,
+  ggbLayout = '',
   setup = '',
   controls = [],
   texts = [],
   interactive,
   onReady,
   onConstructionChange,
+  onLayoutChange,
   onControls,
 }) {
   const frameRef = useRef(null);
@@ -31,19 +52,29 @@ export default function GeoGebraWidget({
   const xmlRef = useRef(ggbXml || '');
   const perspectiveRef = useRef(ggbPerspective || '');
   const viewRef = useRef(ggbView || null);
+  const layoutRef = useRef(ggbLayout || '');
+  const appliedLayoutRef = useRef(ggbLayout || '');
+  const appliedStatesRef = useRef(new Map());
   const perspectiveRestoredRef = useRef(false);
   const setupRef = useRef(setup || '');
   const controlsRef = useRef(controls || []);
   const appliedRef = useRef('');
   const appliedXmlRef = useRef('');
-  const appliedPerspectiveRef = useRef('');
+  const appliedStructureRef = useRef('');
   const appliedControlsRef = useRef(new Map());
-  const glideRef = useRef({ items: new Map(), raf: 0, last: 0 });
+  const glideRef = useRef({
+    items: new Map(),
+    raf: 0,
+    last: 0,
+    view: null,
+    camera: { now: null, to: null, fit: 0, half: 0, check: 0 },
+  });
   const fitTimerRef = useRef(0);
   const sharpRef = useRef(null);
   const interactiveRef = useRef(interactive);
   const onReadyRef = useRef(onReady);
   const onChangeRef = useRef(onConstructionChange);
+  const onLayoutRef = useRef(onLayoutChange);
   const [status, setStatus] = useState('loading');
   const [attempt, setAttempt] = useState(0);
 
@@ -52,9 +83,10 @@ export default function GeoGebraWidget({
     xmlRef.current = ggbXml || '';
     perspectiveRef.current = ggbPerspective || '';
     viewRef.current = ggbView || null;
+    layoutRef.current = ggbLayout || '';
     setupRef.current = setup || '';
     controlsRef.current = controls || [];
-  }, [ggbBase64, ggbXml, ggbPerspective, ggbView, setup, controls]);
+  }, [ggbBase64, ggbXml, ggbPerspective, ggbView, ggbLayout, setup, controls]);
 
   function frameBox() {
     const frame = frameRef.current;
@@ -92,6 +124,7 @@ export default function GeoGebraWidget({
     const prev = sharpRef.current;
     if (prev && prev.w === box.w && prev.h === box.h) return;
     sharpRef.current = box;
+    glideRef.current.camera.fit = 0;
     if (api && typeof api.setSize === 'function') {
       try {
         api.setSize(box.w, box.h);
@@ -109,34 +142,100 @@ export default function GeoGebraWidget({
     glide.raf = 0;
     glide.items.clear();
     glide.view = null;
+    glide.camera.to = null;
+    window.clearTimeout(glide.camera.check);
   }
 
+  function cameraFit() {
+    const camera = glideRef.current.camera;
+    if (camera.fit > 0) return camera.fit;
+    const box = frameBox() || sharpRef.current || { w: width, h: height };
+    return Math.max(40, Math.min(box.w, box.h)) / 3.1;
+  }
+
+  function stepCamera(api, blend) {
+    const camera = glideRef.current.camera;
+    const from = camera.now;
+    const to = camera.to;
+    if (!from || !to) return true;
+    const next = {
+      xZero: from.xZero + (to.xZero - from.xZero) * blend,
+      yZero: from.yZero + (to.yZero - from.yZero) * blend,
+      zZero: from.zZero + (to.zZero - from.zZero) * blend,
+      scale: from.scale * (to.scale / from.scale) ** blend,
+      xAngle: from.xAngle + angleGap(from.xAngle, to.xAngle) * blend,
+      zAngle: from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
+    };
+    const arrived = sameCamera(next, to, 0.01);
+    const value = arrived ? to : next;
+    camera.half = writeGeoGebraCamera(api, value, cameraFit());
+    camera.now = value;
+    if (!arrived) return false;
+    camera.to = null;
+    checkCamera(api, 0);
+    return true;
+  }
+
+  // Камера применяется со следующей перерисовкой GeoGebra, поэтому сверка идёт
+  // с паузой: совпали углы и центр — уточняем коэффициент масштаба и доводим.
+  function checkCamera(api, tries) {
+    const camera = glideRef.current.camera;
+    window.clearTimeout(camera.check);
+    camera.check = window.setTimeout(() => {
+      if (camera.to || apiRef.current !== api || interactiveRef.current) return;
+      const expected = camera.now;
+      const actual = readGeoGebraCamera(api);
+      if (!expected || !actual) return;
+      const placed = Math.abs(angleGap(actual.xAngle, expected.xAngle)) < 0.5
+        && Math.abs(angleGap(actual.zAngle, expected.zAngle)) < 0.5
+        && ['xZero', 'yZero', 'zZero'].every((key) => Math.abs(actual[key] - expected[key]) < 0.01 * Math.max(1, Math.abs(expected[key])));
+      if (!placed) {
+        if (tries < 4) checkCamera(api, tries + 1);
+        return;
+      }
+      if (Math.abs(actual.scale / expected.scale - 1) < 0.005 || !(camera.half > 0)) return;
+      camera.fit = actual.scale * camera.half;
+      camera.now = actual;
+      camera.to = expected;
+      kickGlide(api);
+    }, 450);
+  }
+
+  function glideCamera(api, target) {
+    if (!api || !target) return;
+    const camera = glideRef.current.camera;
+    if (!camera.now) camera.now = readGeoGebraCamera(api);
+    if (!camera.now) return;
+    if (sameCamera(camera.to || camera.now, target)) return;
+    if (sameCamera(camera.now, target)) {
+      camera.to = null;
+      return;
+    }
+    camera.to = target;
+    kickGlide(api);
+  }
+
+  // Центр сдвигается линейно, масштаб — в геометрической прогрессии, чтобы
+  // приближение и отдаление шли с одинаковой скоростью.
   function writeView(api, view, blend) {
-    if (!view || typeof api.getXmin !== 'function' || typeof api.setCoordSystem !== 'function') return true;
-    const xmin = api.getXmin();
-    const xmax = api.getXmax();
-    const ymin = api.getYmin();
-    const ymax = api.getYmax();
-    if (![xmin, xmax, ymin, ymax].every((value) => typeof value === 'number' && Number.isFinite(value))) return true;
-    const nextXmin = xmin + (view.xmin - xmin) * blend;
-    const nextXmax = xmax + (view.xmax - xmax) * blend;
-    const nextYmin = ymin + (view.ymin - ymin) * blend;
-    const nextYmax = ymax + (view.ymax - ymax) * blend;
-    const hasZ = Number.isFinite(view.zmin) && Number.isFinite(view.zmax) && typeof api.getZmin === 'function';
-    const zmin = hasZ ? api.getZmin() : view.zmin;
-    const zmax = hasZ ? api.getZmax() : view.zmax;
-    const nextZmin = hasZ ? zmin + (view.zmin - zmin) * blend : view.zmin;
-    const nextZmax = hasZ ? zmax + (view.zmax - zmax) * blend : view.zmax;
-    const arrived = Math.abs(view.xmin - nextXmin) < 1e-3
-      && Math.abs(view.xmax - nextXmax) < 1e-3
-      && Math.abs(view.ymin - nextYmin) < 1e-3
-      && Math.abs(view.ymax - nextYmax) < 1e-3
-      && (!hasZ || (Math.abs(view.zmin - nextZmin) < 1e-3 && Math.abs(view.zmax - nextZmax) < 1e-3));
-    const box = arrived
-      ? [view.xmin, view.xmax, view.ymin, view.ymax]
-      : [nextXmin, nextXmax, nextYmin, nextYmax];
-    if (hasZ) box.push(arrived ? view.zmin : nextZmin, arrived ? view.zmax : nextZmax);
-    try { api.setCoordSystem(...box); } catch { return true; }
+    const now = readGeoGebraView(api);
+    if (!now) return true;
+    const pixel = Math.max(now.sx, view.sx);
+    const next = {
+      cx: now.cx + (view.cx - now.cx) * blend,
+      cy: now.cy + (view.cy - now.cy) * blend,
+      sx: now.sx * (view.sx / now.sx) ** blend,
+      sy: now.sy * (view.sy / now.sy) ** blend,
+    };
+    const arrived = Math.abs(view.cx - next.cx) < pixel * 0.25
+      && Math.abs(view.cy - next.cy) < pixel * 0.25
+      && Math.abs(next.sx / view.sx - 1) < 1e-3
+      && Math.abs(next.sy / view.sy - 1) < 1e-3;
+    try {
+      writeGeoGebraView(api, arrived ? view : next);
+    } catch {
+      return true;
+    }
     return arrived;
   }
 
@@ -144,7 +243,7 @@ export default function GeoGebraWidget({
     const glide = glideRef.current;
     glide.api = api;
     if (glide.raf) return;
-    if (!glide.items.size && !glide.view) return;
+    if (!glide.items.size && !glide.view && !glide.camera.to) return;
     glide.last = performance.now();
     const tick = (now) => {
       const current = glide.api;
@@ -154,7 +253,7 @@ export default function GeoGebraWidget({
       }
       const elapsed = Math.min(48, now - glide.last);
       glide.last = now;
-      const blend = 1 - Math.exp(-elapsed / 90);
+      const blend = 1 - Math.exp(-elapsed / 110);
       let moving = false;
       glide.items.forEach((target, name) => {
         try {
@@ -169,6 +268,15 @@ export default function GeoGebraWidget({
         const arrived = writeView(current, glide.view, blend);
         if (arrived) glide.view = null;
         else moving = true;
+      }
+      if (glide.camera.to) {
+        let arrived = true;
+        try {
+          arrived = stepCamera(current, blend);
+        } catch {
+          glide.camera.to = null;
+        }
+        if (!arrived) moving = true;
       }
       glide.raf = moving ? requestAnimationFrame(tick) : 0;
     };
@@ -212,26 +320,82 @@ export default function GeoGebraWidget({
     return false;
   }
 
+  // Свободные объекты и точки на пути двигаются сами, остальное GeoGebra
+  // пересчитывает от них.
+  function isMovable(api, name) {
+    try {
+      if (typeof api.isIndependent === 'function' && api.isIndependent(name)) return true;
+      if (typeof api.isMoveable === 'function' && api.isMoveable(name)) return true;
+      return typeof api.isIndependent !== 'function';
+    } catch {
+      return false;
+    }
+  }
+
   function glideToward(api, targets) {
     if (!api || !targets?.length) return;
     const glide = glideRef.current;
     targets.forEach((target) => {
       if (!target?.name) return;
       if (typeof api.exists === 'function' && !api.exists(target.name)) return;
-      if (typeof api.isIndependent === 'function') {
-        try {
-          if (!api.isIndependent(target.name)) return;
-        } catch {
-          /* зависимое построение само пересчитается от свободных */
-        }
-      }
+      if (!isMovable(api, target.name)) return;
       glide.items.set(target.name, target);
     });
     kickGlide(api);
   }
 
+  // Что изменилось у свободных объектов: точки и числа доводятся плавно, а
+  // свободная прямая, вектор или коника без числового представления — только
+  // полной заменой построения (null).
+  function glidePlan(api, xml, states) {
+    if (!sameConstruction(api, xml)) return null;
+    const prev = appliedStatesRef.current;
+    const targets = new Map(readConstructionTargets(xml).map((target) => [target.name, target]));
+    const moves = [];
+    for (const [label, state] of states) {
+      if (prev.get(label) === state) continue;
+      if (!isMovable(api, label)) continue;
+      const target = targets.get(label);
+      if (!target) return null;
+      moves.push(target);
+    }
+    return moves;
+  }
+
+  function rememberApplied(xml) {
+    appliedXmlRef.current = xml;
+    appliedStructureRef.current = xml ? graphStructure(xml) : '';
+    appliedStatesRef.current = xml ? elementStates(xml) : new Map();
+  }
+
+  function reloadLayout(api) {
+    const file = fileRef.current;
+    appliedLayoutRef.current = layoutRef.current;
+    if (!file || typeof api.setBase64 !== 'function') return;
+    appliedRef.current = file;
+    stopGlide();
+    try {
+      api.setBase64(file, () => {
+        fitToFrame(api);
+        rememberApplied('');
+        glideRef.current.camera.now = null;
+        try {
+          applyConstruction(api);
+        } catch {
+          /* построение догонит следующим обновлением */
+        }
+      });
+    } catch {
+      appliedRef.current = '';
+    }
+  }
+
   function glideView(api, view) {
-    if (!api || !view || !Number.isFinite(view.xmin) || !Number.isFinite(view.xmax)) return;
+    if (!api || !isGeoGebraView(view)) return;
+    if (sameGeoGebraView(readGeoGebraView(api), view)) {
+      glideRef.current.view = null;
+      return;
+    }
     glideRef.current.view = view;
     kickGlide(api);
   }
@@ -239,7 +403,7 @@ export default function GeoGebraWidget({
   function restoreTheoryPerspective(api) {
     if (!api || perspectiveRestoredRef.current || interactiveRef.current) return;
     perspectiveRestoredRef.current = true;
-    if (fileRef.current || xmlRef.current) return;
+    if (fileRef.current) return;
     const code = theoryPerspectiveCode(setupRef.current);
     if (!code || code.startsWith('<')) return;
     try { api.setPerspective(code); } catch { /* код вида из теории не применился */ }
@@ -268,30 +432,42 @@ export default function GeoGebraWidget({
     if (!api) return;
     const xml = xmlRef.current;
     if (interactiveRef.current) {
-      if (xml) appliedXmlRef.current = xml;
+      if (xml) rememberApplied(xml);
       if (fileRef.current) appliedRef.current = fileRef.current;
+      appliedLayoutRef.current = layoutRef.current;
+      glideRef.current.camera.now = null;
       return;
     }
     const file = fileRef.current;
+    if (file && layoutRef.current && layoutRef.current !== appliedLayoutRef.current) {
+      reloadLayout(api);
+      return;
+    }
     if (xml && xml !== appliedXmlRef.current && typeof api.setXML === 'function') {
-      const targets = readConstructionTargets(xml);
       const view = viewRef.current;
-      if (sameConstruction(api, xml) && (targets.length || view)) {
-        appliedXmlRef.current = xml;
-        if (targets.length) glideToward(api, targets);
+      const structure = graphStructure(xml);
+      const states = elementStates(xml);
+      const plan = structure === appliedStructureRef.current ? glidePlan(api, xml, states) : null;
+      if (plan) {
+        rememberApplied(xml);
+        glideToward(api, plan);
         if (view) glideView(api, view);
+        glideCamera(api, readCamera3d(xml));
         return;
       }
       stopGlide();
-      appliedXmlRef.current = xml;
       try {
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(false);
         api.setXML(xml);
-        if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
-        if (view) glideView(api, view);
       } catch {
-        appliedXmlRef.current = '';
+        rememberApplied('');
+        return;
+      } finally {
+        if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
       }
+      rememberApplied(xml);
+      glideRef.current.camera.now = readCamera3d(xml);
+      if (view) glideView(api, view);
       return;
     }
     if (viewRef.current) {
@@ -304,7 +480,8 @@ export default function GeoGebraWidget({
   useEffect(() => {
     onReadyRef.current = onReady;
     onChangeRef.current = onConstructionChange;
-  }, [onReady, onConstructionChange]);
+    onLayoutRef.current = onLayoutChange;
+  }, [onReady, onConstructionChange, onLayoutChange]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -323,8 +500,8 @@ export default function GeoGebraWidget({
     const host = hostRef.current;
     const frame = frameRef.current;
     const base64AtLoad = ggbBase64 || '';
-        const kind = appletKind(appName);
-        const sizeAtStart = {
+    const kind = appletKind(appName);
+    const sizeAtStart = {
       width: frame && frame.clientWidth > 2 ? frame.clientWidth : width,
       height: frame && frame.clientHeight > 2 ? frame.clientHeight : height,
     };
@@ -338,7 +515,9 @@ export default function GeoGebraWidget({
           w: Math.max(40, Math.round(sizeAtStart.width)),
           h: Math.max(40, Math.round(sizeAtStart.height)),
         };
-        const fromTheory = Boolean(String(setupRef.current || '').trim()) && !base64AtLoad;
+        // Набор панелей зависит только от объекта, а не от того, успел ли
+        // сохраниться файл: иначе у участников разные инструменты.
+        const fromTheory = Boolean(String(setupRef.current || '').trim());
         const params = {
           id: appletId,
           ...(fromTheory ? {} : { appName: kind }),
@@ -367,14 +546,22 @@ export default function GeoGebraWidget({
             onReadyRef.current?.(api);
             host.inert = !interactiveRef.current;
             host.style.pointerEvents = interactiveRef.current ? 'auto' : 'none';
+            const notifyChange = () => {
+              if (glideRef.current.raf) return;
+              onChangeRef.current?.();
+            };
             if (typeof api.registerUpdateListener === 'function') {
-              api.registerUpdateListener(() => {
-                if (glideRef.current.raf) return;
-                onChangeRef.current?.();
+              api.registerUpdateListener(notifyChange);
+            }
+            if (typeof api.registerClientListener === 'function') {
+              api.registerClientListener((event) => {
+                const type = event?.type;
+                if (type === 'viewChanged2D' || type === 'viewChanged3D' || type === 'movingGeos' || type === 'movedGeos' || type === 'dragEnd') {
+                  notifyChange();
+                }
               });
             }
             fitToFrame(api);
-            applyConstruction(api);
             if (setupRef.current && !fileRef.current && !xmlRef.current) {
               runTheorySetup(api, setupRef.current);
               controlsRef.current.forEach((control) => {
@@ -382,8 +569,10 @@ export default function GeoGebraWidget({
                 appliedControlsRef.current.set(control.name, control.value);
                 try { api.setValue(control.name, control.value); } catch { /* значение ещё не к чему применить */ }
               });
+            } else {
+              restoreTheoryPerspective(api);
+              applyConstruction(api);
             }
-            restoreTheoryPerspective(api);
             pinApplet();
             setStatus('ready');
           },
@@ -426,7 +615,32 @@ export default function GeoGebraWidget({
     }
     // Ссылки на файл обновляются в эффекте выше, до этого применения.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ggbBase64, ggbXml, ggbPerspective, ggbView]);
+  }, [ggbBase64, ggbXml, ggbPerspective, ggbView, ggbLayout]);
+
+  // Не все действия GeoGebra сообщают о себе событиями (поворот 3D, стили,
+  // панели), поэтому у редактирующего построение сверяется по таймеру.
+  useEffect(() => {
+    if (!interactive || status !== 'ready') return undefined;
+    const api = apiRef.current;
+    if (!api) return undefined;
+    let lastXml = readGeoGebraXml(api);
+    let lastLayout = layoutSignature(api);
+    const timer = window.setInterval(() => {
+      const current = apiRef.current;
+      if (!current) return;
+      const xml = readGeoGebraXml(current);
+      if (xml && xml !== lastXml) {
+        lastXml = xml;
+        onChangeRef.current?.();
+      }
+      const layout = layoutSignature(current);
+      if (layout !== lastLayout) {
+        lastLayout = layout;
+        onLayoutRef.current?.();
+      }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [interactive, status]);
 
   useEffect(() => {
     const frame = frameRef.current;
