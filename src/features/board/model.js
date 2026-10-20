@@ -98,6 +98,15 @@ export const TEXT_SIZES = [
   { id: 'xl', label: 'XL', size: 48 },
 ];
 
+export const TASK_SIZES = [
+  { id: 's', label: 'S', size: 16 },
+  { id: 'm', label: 'M', size: 20 },
+  { id: 'l', label: 'L', size: 26 },
+  { id: 'xl', label: 'XL', size: 34 },
+];
+
+export const TASK_FONT = 20;
+
 export const SELECTION_COLOR = '#4262ff';
 
 export const SHAPE_FILLS = [

@@ -62,6 +62,7 @@ import {
   TEXT_SIZES,
   createObject,
   geogebraApp,
+  TASK_FONT,
   uid,
 } from './model';
 import { boardImageSrc } from './images';
@@ -70,6 +71,7 @@ import { SHAPE_GROUPS, defaultDepth, depthFromLocal, shapeFigures, shapeHandle, 
 import { isPagesMeta } from './pages';
 import BoardTheoryPane from './BoardTheoryPane';
 import BoardTasksPane from './BoardTasksPane';
+import BoardStudentsPane from './BoardStudentsPane';
 import { taskOptions } from './taskBankApi';
 
 const SURFACE_MARK = 'board-surface';
@@ -520,7 +522,8 @@ export default function BoardEditor({
     const text = `${props.content}\n${props.options.join('\n')}`;
     const lines = text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 42)), 0);
     const images = (text.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
-    return 70 + lines * 30 + images * 430 + (props.openAnswer ? 50 : 0);
+    const answers = props.options.length || props.openAnswer ? 40 + props.options.length * 24 : 0;
+    return 90 + lines * 30 + images * 430 + answers + (props.openAnswer ? 52 : 0);
   }
 
   function placeTasks(items, source) {
@@ -531,6 +534,9 @@ export default function BoardEditor({
       const teacherOnly = {};
       if (task.answer != null && String(task.answer).trim()) teacherOnly.answer = String(task.answer);
       if (task.solution && String(task.solution).trim()) teacherOnly.solution = String(task.solution);
+      if (Array.isArray(task.studentAnswers) && task.studentAnswers.length) {
+        teacherOnly.studentAnswers = task.studentAnswers.map(({ name, answer }) => ({ name: String(name || ''), answer: String(answer ?? '') }));
+      }
       const props = {
         taskId: task.id,
         number,
@@ -1517,9 +1523,16 @@ export default function BoardEditor({
   function patchSelected(type, patch) {
     const set = new Set(selectedList().filter((obj) => obj.type === type && canEdit(obj)).map((obj) => obj.id));
     if (!set.size) return;
-    commit(objectsRef.current.map((obj) => (
-      set.has(obj.id) ? { ...obj, props: { ...obj.props, ...patch } } : obj
-    )));
+    commit(objectsRef.current.map((obj) => {
+      if (!set.has(obj.id)) return obj;
+      const next = { ...obj, props: { ...obj.props, ...patch } };
+      if (type === 'task' && patch.fontSize) {
+        const w = Math.round(TASK_CARD_W * (patch.fontSize / TASK_FONT));
+        next.x = obj.x + (obj.w - w) / 2;
+        next.w = w;
+      }
+      return next;
+    }));
   }
 
   function reorderSelected(toFront) {
@@ -2755,7 +2768,7 @@ export default function BoardEditor({
             size={Math.max(4, Math.min(title.length || 4, 16))}
             className="h-8 min-w-0 max-w-40 truncate bg-transparent px-1 text-sm font-semibold outline-none"
           />
-          {audience === 'teacher' && [['theory', 'Теория'], ['tasks', 'Задания']].map(([pane, label]) => (
+          {audience === 'teacher' && [['theory', 'Теория'], ['tasks', 'Задания'], ['students', 'Ученики']].map(([pane, label]) => (
             <button
               key={pane}
               type="button"
@@ -2963,6 +2976,13 @@ export default function BoardEditor({
         <aside className="hidden h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 dark:border-zinc-800 min-[720px]:block">
           <div className={sidePane === 'theory' ? 'h-full' : 'hidden'}><BoardTheoryPane onCopy={placeTheoryBlock} /></div>
           <div className={sidePane === 'tasks' ? 'h-full' : 'hidden'}><BoardTasksPane onCopy={placeTasks} /></div>
+          {sidePane === 'students' && (
+            <BoardStudentsPane
+              groupId={initialBoard.groupId ?? null}
+              studentIds={initialBoard.studentIds || []}
+              onCopy={placeTasks}
+            />
+          )}
         </aside>
       )}
     </div>

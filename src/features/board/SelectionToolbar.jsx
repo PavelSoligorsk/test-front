@@ -9,7 +9,7 @@ import {
   SendToBack,
   Trash2,
 } from 'lucide-react';
-import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TEXT_SIZES } from './model';
+import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TASK_FONT, TASK_SIZES, TEXT_SIZES } from './model';
 import ShapeGlyph from './ShapeGlyph';
 import { SHAPE_KINDS, defaultDepth } from './shapes';
 
@@ -199,6 +199,17 @@ export default function SelectionToolbar({
         label={`Размер ${item.label}`}
         active={(first.props.fontSize || 22) === item.size}
         onClick={() => onPatch('text', { fontSize: item.size })}
+      >
+        {item.label}
+      </ToolButton>
+    ));
+  } else if (only === 'task') {
+    specific = TASK_SIZES.map((item) => (
+      <ToolButton
+        key={item.id}
+        label={`Размер ${item.label}`}
+        active={(first.props.fontSize || TASK_FONT) === item.size}
+        onClick={() => onPatch('task', { fontSize: item.size })}
       >
         {item.label}
       </ToolButton>
