@@ -242,6 +242,7 @@ export default function BoardEditor({
   const cursorTimerRef = useRef(0);
   const cursorNodesRef = useRef(new Map());
   const peerCursorsRef = useRef(new Map());
+  const incomingRef = useRef({ raf: 0, before: null });
   const clientIdRef = useRef(null);
   const lastErrorRef = useRef({ text: '', at: 0 });
   const apiMap = useRef(new Map());
@@ -387,9 +388,19 @@ export default function BoardEditor({
     const next = applyOp(before, op);
     if (next === before) return;
     objectsRef.current = next;
-    noteShapeGlide(before, next);
-    setObjects(next);
-    pruneSelection();
+    // Пока кто-то рисует, операции идут десятками в секунду: React перерисовывается не чаще раза за кадр.
+    const incoming = incomingRef.current;
+    if (incoming.raf) return;
+    incoming.before = before;
+    incoming.raf = requestAnimationFrame(() => {
+      incoming.raf = 0;
+      const from = incoming.before;
+      incoming.before = null;
+      if (!mountedRef.current) return;
+      if (from && from !== objectsRef.current) noteShapeGlide(from, objectsRef.current);
+      setObjects(objectsRef.current);
+      pruneSelection();
+    });
   }
 
   function onSnapshot(message, readPending) {
@@ -403,6 +414,7 @@ export default function BoardEditor({
     const pendingTitle = [...pendingOps].reverse().find((op) => op.type === 'title');
     sentRef.current = next;
     objectsRef.current = next;
+    incomingRef.current.before = null;
     sentTitleRef.current = pendingTitle ? pendingTitle.title : remoteTitle;
     titleRef.current = sentTitleRef.current;
     clientIdRef.current = message.clientId || null;
