@@ -693,7 +693,11 @@ export default function BoardEditor({
       if (task.answer != null && String(task.answer).trim()) teacherOnly.answer = String(task.answer);
       if (task.solution && String(task.solution).trim()) teacherOnly.solution = String(task.solution);
       if (Array.isArray(task.studentAnswers) && task.studentAnswers.length) {
-        teacherOnly.studentAnswers = task.studentAnswers.map(({ name, answer }) => ({ name: String(name || ''), answer: String(answer ?? '') }));
+        teacherOnly.studentAnswers = task.studentAnswers.map(({ name, answer, correct }) => ({
+          name: String(name || ''),
+          answer: String(answer ?? ''),
+          ...(correct === 'right' || correct === 'wrong' || correct === 'empty' ? { correct } : {}),
+        }));
       }
       const props = {
         taskId: task.id,

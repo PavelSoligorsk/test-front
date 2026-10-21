@@ -236,7 +236,11 @@ function ResultView({ resultId, name, onCopy }) {
   if (loading || error || !details.length) return status;
   const who = name || studentName(data.user);
   const source = [who, data.test_title].filter(Boolean).join(' · ');
-  const itemFor = (detail, index) => boardItem(detail, index + 1, [{ name: who, answer: rawAnswer(detail.user_answer) }]);
+  const itemFor = (detail, index) => boardItem(detail, index + 1, [{
+    name: who,
+    answer: rawAnswer(detail.user_answer),
+    correct: verdict(detail),
+  }]);
   const wrong = details.map((detail, index) => ({ detail, index })).filter(({ detail }) => verdict(detail) !== 'right');
   const percent = percentOf(data.total_points, data.max_points);
 
@@ -325,8 +329,12 @@ function MatrixView({ groupId, testId, title, onOpenResult, onCopy }) {
     .map((row) => ({ row, answer: row.cells.get(task.id) }))
     .filter(({ answer }) => cellState(answer) !== 'right');
   const itemFor = (task, index) => {
-    const misses = wrongFor(task).map(({ row, answer }) => ({ name: row.name, answer: rawAnswer(answer?.user_answer) }));
-    return boardItem({ ...task, task_id: task.id }, index + 1, misses);
+    const submitted = rows.map((row) => {
+      const answer = row.cells.get(task.id);
+      return { name: row.name, answer: rawAnswer(answer?.user_answer), correct: cellState(answer) };
+    });
+    const missing = (data?.not_submitted || []).map((student) => ({ name: studentName(student), answer: NO_ANSWER, correct: 'empty' }));
+    return boardItem({ ...task, task_id: task.id }, index + 1, [...submitted, ...missing]);
   };
   const wrongTasks = tasks.map((task, index) => ({ task, index })).filter(({ task }) => rows.length && wrongFor(task).length);
 

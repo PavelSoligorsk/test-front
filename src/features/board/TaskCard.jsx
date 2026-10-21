@@ -28,6 +28,12 @@ function answerLabel(answer, options) {
   return picks.join(', ');
 }
 
+const STUDENT_MARK = {
+  right: { label: 'Верно', className: 'text-emerald-700 dark:text-emerald-300' },
+  wrong: { label: 'Ошибка', className: 'text-rose-700 dark:text-rose-300' },
+  empty: { label: 'Нет ответа', className: 'text-zinc-500' },
+};
+
 function twoColumns(options) {
   return options.length > 1 && options.every((option) => {
     const text = String(option);
@@ -103,17 +109,21 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
       </div>
 
       {studentAnswers.length > 0 && (
-        <div data-chrome="true" className="mt-[0.5em] rounded-[0.9em] leading-snug border border-rose-200 bg-rose-50 px-[0.9em] py-[0.6em] text-rose-950 dark:border-rose-900/70 dark:bg-rose-950/50 dark:text-rose-100" style={{ fontSize: fontSize * 0.7 }}>
-          <div className="text-[0.85em] font-medium text-rose-700 dark:text-rose-300">
+        <div data-chrome="true" className="mt-[0.5em] rounded-[0.9em] leading-snug border border-zinc-200 bg-zinc-50 px-[0.9em] py-[0.6em] text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" style={{ fontSize: fontSize * 0.7 }}>
+          <div className="text-[0.85em] font-medium text-zinc-500">
             {studentAnswers.length === 1 ? 'Ответ ученика' : 'Ответы учеников'} · видите только вы
           </div>
-          <ul className="m-0 mt-[0.2em] list-none space-y-[0.2em] p-0">
-            {studentAnswers.map((item, index) => (
-              <li key={index} className="flex gap-[0.5em]">
-                {studentAnswers.length > 1 && <span className="min-w-0 truncate text-rose-700/80 dark:text-rose-300/80">{item.name}:</span>}
-                <span className="font-semibold">{answerLabel(item.answer, options)}</span>
-              </li>
-            ))}
+          <ul className="m-0 mt-[0.3em] list-none space-y-[0.25em] p-0">
+            {studentAnswers.map((item, index) => {
+              const mark = STUDENT_MARK[item.correct] || null;
+              return (
+                <li key={index} className="flex items-baseline gap-[0.5em]">
+                  {mark && <span className={`shrink-0 text-[0.85em] font-semibold ${mark.className}`}>{mark.label}</span>}
+                  {item.name && <span className="min-w-0 truncate text-zinc-500">{item.name}</span>}
+                  {item.correct !== 'empty' && <span className="font-semibold">{answerLabel(item.answer, options)}</span>}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
