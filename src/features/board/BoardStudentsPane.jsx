@@ -4,6 +4,7 @@ import { MarkdownRenderer } from '../../shared/ui';
 import {
   NO_ANSWER,
   answerText,
+  answerVerdict,
   fetchGroupAssignments,
   fetchGroupReview,
   fetchGroupStudents,
@@ -181,9 +182,7 @@ function StudentView({ student, onOpenResult }) {
 }
 
 function verdict(detail) {
-  const answer = String(detail.user_answer ?? '').trim();
-  if (!answer || answer === NO_ANSWER) return 'empty';
-  return detail.is_correct ? 'right' : 'wrong';
+  return answerVerdict(detail);
 }
 
 const VERDICT = {
@@ -285,12 +284,14 @@ function ResultView({ resultId, name, onCopy }) {
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
                 <dt className="text-zinc-400">Ответ ученика</dt>
                 <dd className={state === 'right' ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'font-semibold text-rose-700 dark:text-rose-300'}>
-                  {answerText(detail.user_answer, options) || NO_ANSWER}
+                  <MarkdownRenderer className="prose-sm [&_p]:my-0">{answerText(detail.user_answer, options) || NO_ANSWER}</MarkdownRenderer>
                 </dd>
                 {state !== 'right' && (
                   <>
                     <dt className="text-zinc-400">Правильный</dt>
-                    <dd className="font-semibold text-zinc-800 dark:text-zinc-200">{answerText(detail.correct_answer, options) || String(detail.correct_answer ?? '—')}</dd>
+                    <dd className="font-semibold text-zinc-800 dark:text-zinc-200">
+                      <MarkdownRenderer className="prose-sm [&_p]:my-0">{answerText(detail.correct_answer, options) || String(detail.correct_answer ?? '—')}</MarkdownRenderer>
+                    </dd>
                   </>
                 )}
               </dl>
@@ -324,14 +325,19 @@ function MatrixView({ groupId, testId, title, onOpenResult, onCopy }) {
   const status = <Status loading={loading} error={error} empty={data && !tasks.length ? 'В тесте нет заданий' : ''} />;
   if (loading || error || !tasks.length) return status;
 
-  const cellState = (answer) => (answer ? verdict(answer) : 'empty');
+  const cellState = (answer, task) => (answer ? answerVerdict({
+    user_answer: answer.user_answer,
+    correct_answer: answer.correct_answer ?? task?.answer ?? task?.correct_answer,
+    options: task?.options ?? answer.options,
+    is_correct: answer.is_correct,
+  }) : 'empty');
   const wrongFor = (task) => rows
     .map((row) => ({ row, answer: row.cells.get(task.id) }))
-    .filter(({ answer }) => cellState(answer) !== 'right');
+    .filter(({ answer }) => cellState(answer, task) !== 'right');
   const itemFor = (task, index) => {
     const submitted = rows.map((row) => {
       const answer = row.cells.get(task.id);
-      return { name: row.name, answer: rawAnswer(answer?.user_answer), correct: cellState(answer) };
+      return { name: row.name, answer: rawAnswer(answer?.user_answer), correct: cellState(answer, task) };
     });
     const missing = (data?.not_submitted || []).map((student) => ({ name: studentName(student), answer: NO_ANSWER, correct: 'empty' }));
     return boardItem({ ...task, task_id: task.id }, index + 1, [...submitted, ...missing]);
@@ -353,7 +359,7 @@ function MatrixView({ groupId, testId, title, onOpenResult, onCopy }) {
             </thead>
             <tbody>
               {rows.map((row) => {
-                const right = tasks.filter((task) => cellState(row.cells.get(task.id)) === 'right').length;
+                const right = tasks.filter((task) => cellState(row.cells.get(task.id), task) === 'right').length;
                 return (
                   <tr key={row.id} className="border-t border-zinc-100 dark:border-zinc-900">
                     <td className="sticky left-0 max-w-[140px] bg-white px-2 py-1 dark:bg-zinc-950">
@@ -363,7 +369,7 @@ function MatrixView({ groupId, testId, title, onOpenResult, onCopy }) {
                     </td>
                     {tasks.map((task) => {
                       const answer = row.cells.get(task.id);
-                      const state = cellState(answer);
+                      const state = cellState(answer, task);
                       return (
                         <td key={task.id} className="px-0.5 py-1 text-center">
                           <span title={answerText(answer?.user_answer, optionList(task.options)) || NO_ANSWER} className={`inline-flex h-5 w-5 items-center justify-center rounded ${CELL[state]}`}>

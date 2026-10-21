@@ -120,7 +120,9 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
                 <li key={index} className="flex items-baseline gap-[0.5em]">
                   {mark && <span className={`shrink-0 text-[0.85em] font-semibold ${mark.className}`}>{mark.label}</span>}
                   {item.name && <span className="min-w-0 truncate text-zinc-500">{item.name}</span>}
-                  {item.correct !== 'empty' && <span className="font-semibold">{answerLabel(item.answer, options)}</span>}
+                  {item.correct !== 'empty' && (
+                    <span className="min-w-0 font-semibold [&_p]:my-0"><Markdown>{answerLabel(item.answer, options)}</Markdown></span>
+                  )}
                 </li>
               );
             })}
@@ -134,7 +136,7 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
             {answer && (
               <span className="min-w-0 flex-1">
                 <span className="block text-[0.85em] font-medium text-emerald-700 dark:text-emerald-300">Правильный ответ · видите только вы</span>
-                <span className="font-semibold">{answer}</span>
+                <span className="font-semibold [&_p]:my-0"><Markdown>{answer}</Markdown></span>
               </span>
             )}
             {solution && (

@@ -1924,7 +1924,7 @@ export default function BoardEditor({
       ));
       if (shown) paintDraft(null);
     }
-    if (draftRef.current) paintDraft(draftRef.current);
+    if (draftRef.current && dragRef.current?.kind !== 'pen') paintDraft(draftRef.current);
     if (inkRef.current.last) paintInk(inkRef.current.last);
     const drag = dragRef.current;
     if (drag?.kind === 'move') {
@@ -3161,9 +3161,9 @@ export default function BoardEditor({
       />
       </div>
       {theoryOpen && audience === 'teacher' && (
-        <aside className="hidden h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 dark:border-zinc-800 min-[720px]:block">
-          <div className={sidePane === 'theory' ? 'h-full' : 'hidden'}><BoardTheoryPane onCopy={placeTheoryBlock} /></div>
-          <div className={sidePane === 'tasks' ? 'h-full' : 'hidden'}><BoardTasksPane onCopy={placeTasks} /></div>
+        <aside className="hidden h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 [contain:layout_paint] dark:border-zinc-800 min-[720px]:block">
+          {sidePane === 'theory' && <div className="h-full"><BoardTheoryPane onCopy={placeTheoryBlock} /></div>}
+          {sidePane === 'tasks' && <div className="h-full"><BoardTasksPane onCopy={placeTasks} /></div>}
           {sidePane === 'students' && (
             <BoardStudentsPane
               groupId={initialBoard.groupId ?? null}

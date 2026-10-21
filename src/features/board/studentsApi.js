@@ -46,6 +46,53 @@ export function answerText(raw, options) {
   return text;
 }
 
+function normAnswer(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function indexKey(raw, options) {
+  const text = String(raw ?? '').trim();
+  if (!text || text === NO_ANSWER) return '';
+  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) return '';
+  if (options.length && parts.every((part) => /^\d+$/.test(part) && Number(part) >= 1 && Number(part) <= options.length)) {
+    return parts.map((part) => String(Number(part))).sort().join(',');
+  }
+  if (options.length) {
+    const found = parts.map((part) => {
+      const index = options.findIndex((option) => normAnswer(option) === normAnswer(part));
+      return index >= 0 ? String(index + 1) : '';
+    });
+    if (found.every(Boolean)) return found.sort().join(',');
+  }
+  return '';
+}
+
+// Незавершённый тест помечает ответы как неверные. Сверяем текст и номера вариантов сами.
+export function answersMatch(user, correct, options = []) {
+  const userText = String(user ?? '').trim();
+  const correctText = String(correct ?? '').trim();
+  if (!userText || userText === NO_ANSWER || !correctText || correctText === NO_ANSWER) return false;
+  const userKey = indexKey(userText, options);
+  const correctKey = indexKey(correctText, options);
+  if (userKey && correctKey) return userKey === correctKey;
+  if (userKey && options.length) {
+    const chosen = userKey.split(',').map((part) => normAnswer(options[Number(part) - 1])).sort().join('|');
+    const expected = correctText.split(/[;,]/).map((part) => normAnswer(part)).filter(Boolean).sort().join('|');
+    if (chosen && chosen === expected) return true;
+  }
+  return normAnswer(userText) === normAnswer(correctText);
+}
+
+export function answerVerdict(detail) {
+  const user = String(detail?.user_answer ?? '').trim();
+  if (!user || user === NO_ANSWER) return 'empty';
+  const options = optionList(detail?.options);
+  const correct = detail?.correct_answer ?? detail?.answer;
+  if (answersMatch(user, correct, options) || detail?.is_correct === true) return 'right';
+  return 'wrong';
+}
+
 export function formatDate(value) {
   if (!value) return '';
   const date = new Date(value);
