@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -534,8 +534,86 @@ function parseTheorySections(content) {
   return sections;
 }
 
+function cloneBoardBlock(block) {
+  if (!block || block.type === 'geogebra') return null;
+  if (block.type === 'text') return block.content ? { type: 'text', content: block.content } : null;
+  if (block.type === 'html') return block.html ? { type: 'html', html: block.html } : null;
+  if (block.type === 'steps') {
+    const steps = (block.steps || []).map((step) => String(step || '').trim()).filter(Boolean);
+    return steps.length ? { type: 'steps', steps } : null;
+  }
+  const blocks = (block.blocks || []).map(cloneBoardBlock).filter(Boolean);
+  if (!blocks.length) return null;
+  const copy = { type: block.type, blocks };
+  if (block.title) copy.title = block.title;
+  if (block.isHard) copy.isHard = true;
+  if (block.cols) copy.cols = block.cols;
+  return copy;
+}
+
+function boardBlocks(blocks) {
+  return (blocks || []).map((block, index) => boardBlockNode(block, index));
+}
+
+function boardBlockNode(block, key) {
+  if (!block || block.type === 'geogebra') return null;
+  if (block.type === 'text') {
+    return (
+      <ReactMarkdown key={key} remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+        {continueOrderedListNumbers(normalizeDisplayMath(block.content))}
+      </ReactMarkdown>
+    );
+  }
+  if (block.type === 'def') return <Def key={key} title={block.title}>{boardBlocks(block.blocks)}</Def>;
+  if (block.type === 'ex') return <Ex key={key} title={block.title} isHard={block.isHard}>{boardBlocks(block.blocks)}</Ex>;
+  if (block.type === 'explanation') return <Explanation key={key}>{boardBlocks(block.blocks)}</Explanation>;
+  if (block.type === 'important') return <Important key={key} title={block.title}>{boardBlocks(block.blocks)}</Important>;
+  if (block.type === 'formula') return <Formula key={key} title={block.title}>{boardBlocks(block.blocks)}</Formula>;
+  if (block.type === 'collapsible') return <Collapsible key={key} title={block.title}>{boardBlocks(block.blocks)}</Collapsible>;
+  if (block.type === 'grid') return <Grid key={key} cols={block.cols}>{boardBlocks(block.blocks)}</Grid>;
+  if (block.type === 'card') return <Card key={key} title={block.title}>{boardBlocks(block.blocks)}</Card>;
+  if (block.type === 'steps') {
+    return (
+      <Steps key={key}>
+        {(block.steps || []).map((step, index) => (
+          <div key={index}>{boardBlocks(parseBlocks(step))}</div>
+        ))}
+      </Steps>
+    );
+  }
+  if (block.type === 'html') return <Html key={key} html={block.html} />;
+  return null;
+}
+
+export function TheoryBoardBlock({ block }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const body = ref.current;
+    const wrap = body?.parentElement;
+    const object = wrap?.parentElement;
+    if (!body || !wrap || !object) return;
+    const next = Math.max(80, body.scrollHeight);
+    if (Math.abs(wrap.offsetHeight - next) > 2) wrap.style.height = `${next}px`;
+    const zoom = Math.max(Number(object.dataset.theoryZoom) || 1, 0.05);
+    const box = next / zoom;
+    if (Math.abs(object.offsetHeight - box) > 2) object.style.height = `${box}px`;
+  });
+  if (!block) return null;
+  return (
+    <div
+      ref={ref}
+      className="bg-white px-3 py-2 text-zinc-800 [&>*]:my-0 dark:bg-zinc-950 dark:text-zinc-200"
+      onPointerDown={(event) => {
+        if (event.target instanceof Element && event.target.closest('button')) event.stopPropagation();
+      }}
+    >
+      {boardBlockNode(block, 'root')}
+    </div>
+  );
+}
+
 function theoryCopyPayload(block) {
-  if (!block || block.type === 'html') return null;
+  if (!block) return null;
   if (block.type === 'geogebra') {
     return {
       kind: 'geogebra',
@@ -545,9 +623,9 @@ function theoryCopyPayload(block) {
       height: block.height || '400',
     };
   }
-  const text = blockMarkdown(block).trim();
-  if (!text) return null;
-  return { kind: 'markdown', text };
+  const copy = cloneBoardBlock(block);
+  if (!copy) return null;
+  return { kind: 'theory', block: copy };
 }
 
 function blockMarkdown(block) {

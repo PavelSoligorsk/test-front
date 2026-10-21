@@ -4,6 +4,7 @@ import {
   elementStates,
   graphStructure,
   isGeoGebraView,
+  geoPixelScale,
   layoutSignature,
   loadGeoGebraScript,
   readCamera3d,
@@ -40,6 +41,7 @@ export default function GeoGebraWidget({
   setup = '',
   controls = [],
   texts = [],
+  zoom = 1,
   interactive,
   onReady,
   onConstructionChange,
@@ -72,6 +74,9 @@ export default function GeoGebraWidget({
   });
   const fitTimerRef = useRef(0);
   const sharpRef = useRef(null);
+  const appletObjRef = useRef(null);
+  const zoomRef = useRef(zoom || 1);
+  zoomRef.current = zoom || 1;
   const interactiveRef = useRef(interactive);
   const onReadyRef = useRef(onReady);
   const onChangeRef = useRef(onConstructionChange);
@@ -98,15 +103,15 @@ export default function GeoGebraWidget({
     return { w, h };
   }
 
-  // Рамка объекта задаёт единственный размер апплета. Зум доски — это CSS-масштаб
-  // предка, и GeoGebra не должна учитывать его: иначе картинка и панель
-  // перестраиваются при каждом масштабе.
+  // Холст рисуется в zoom × плотность экрана. Скейлер уменьшает его обратно в рамку,
+  // поэтому зум доски не растягивает график как картинку.
   function pinApplet() {
     const host = hostRef.current;
     const box = frameBox();
     if (!host || !box) return null;
+    const scale = geoPixelScale(zoomRef.current);
     const pin = (node) => {
-      if (!(node instanceof HTMLElement)) return;
+      if (!(node instanceof HTMLElement) || node.classList.contains('applet_scaler')) return;
       const style = node.style;
       if (style.getPropertyValue('width') !== '100%') style.setProperty('width', '100%', 'important');
       if (style.getPropertyValue('height') !== '100%') style.setProperty('height', '100%', 'important');
@@ -115,20 +120,38 @@ export default function GeoGebraWidget({
       if (style.getPropertyValue('transform') !== 'none') style.setProperty('transform', 'none', 'important');
     };
     pin(host.firstElementChild);
-    host.querySelectorAll('.applet_scaler').forEach(pin);
+    const mark = String(scale);
+    const width = `${Math.round(box.w * scale)}px`;
+    const height = `${Math.round(box.h * scale)}px`;
+    const transform = `scale(${1 / scale})`;
+    host.querySelectorAll('.applet_scaler').forEach((node) => {
+      const current = node.style.getPropertyValue('transform');
+      if (node.dataset.sharp === mark && current && current !== 'none') return;
+      node.dataset.sharp = mark;
+      node.style.setProperty('width', width, 'important');
+      node.style.setProperty('height', height, 'important');
+      node.style.setProperty('max-width', 'none', 'important');
+      node.style.setProperty('max-height', 'none', 'important');
+      node.style.setProperty('transform', transform, 'important');
+      node.style.setProperty('transform-origin', '0 0', 'important');
+    });
+    if (appletObjRef.current) appletObjRef.current.scale = scale;
     return box;
   }
 
   function fitToFrame(api) {
-    const box = pinApplet();
+    const box = frameBox();
     if (!box) return;
+    const scale = geoPixelScale(zoomRef.current);
     const prev = sharpRef.current;
-    if (prev && prev.w === box.w && prev.h === box.h) return;
-    sharpRef.current = box;
+    const same = prev && prev.w === box.w && prev.h === box.h && prev.scale === scale;
+    pinApplet();
+    if (same) return;
+    sharpRef.current = { w: box.w, h: box.h, scale };
     glideRef.current.camera.fit = 0;
     if (api && typeof api.setSize === 'function') {
       try {
-        api.setSize(box.w, box.h);
+        api.setSize(Math.round(box.w * scale), Math.round(box.h * scale));
       } catch {
         /* апплет ещё не готов к смене размера */
       }
@@ -512,9 +535,11 @@ export default function GeoGebraWidget({
         await loadGeoGebraScript();
         if (cancelled || !host || !window.GGBApplet) return;
         host.innerHTML = '';
+        const pixelScale = geoPixelScale(zoomRef.current);
         sharpRef.current = {
           w: Math.max(40, Math.round(sizeAtStart.width)),
           h: Math.max(40, Math.round(sizeAtStart.height)),
+          scale: pixelScale,
         };
         // Набор панелей зависит только от объекта, а не от того, успел ли
         // сохраниться файл: иначе у участников разные инструменты.
@@ -538,7 +563,7 @@ export default function GeoGebraWidget({
           errorDialogsActive: false,
           useBrowserForJS: false,
           borderColor: '#ffffff',
-          scale: 1,
+          scale: pixelScale,
           disableAutoScale: true,
           appletOnLoad(api) {
             if (cancelled) return;
@@ -580,6 +605,7 @@ export default function GeoGebraWidget({
         };
         if (base64AtLoad) params.ggbBase64 = base64AtLoad;
         const applet = new window.GGBApplet(params, true);
+        appletObjRef.current = applet;
         applet.inject(host);
       } catch {
         if (!cancelled) setStatus('error');
@@ -590,6 +616,7 @@ export default function GeoGebraWidget({
       cancelled = true;
       stopGlide();
       apiRef.current = null;
+      appletObjRef.current = null;
       onReadyRef.current?.(null);
       if (host) host.innerHTML = '';
     };
@@ -670,6 +697,14 @@ export default function GeoGebraWidget({
       window.clearTimeout(fitTimerRef.current);
     };
   }, [status]);
+
+  const pixelScale = geoPixelScale(zoom || 1);
+  useEffect(() => {
+    if (status !== 'ready') return;
+    fitToFrame(apiRef.current);
+    // Размер холста зависит только от шага pixelScale, не от каждого промежуточного зума.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixelScale, status]);
 
   const hasPanel = (controls?.length || 0) + (texts?.length || 0) > 0;
 

@@ -1,3 +1,11 @@
+// Холст GeoGebra — картинка. Рисуем его в пикселях экрана, не крупнее 3× рамки.
+export function geoPixelScale(zoom = 1) {
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+  const raw = Math.min(3, Math.max(0.25, zoom) * dpr);
+  const stepped = Math.round(raw * 4) / 4;
+  return Math.min(3, Math.max(1, stepped));
+}
+
 let scriptPromise = null;
 
 export function loadGeoGebraScript() {

@@ -5,6 +5,7 @@ import rehypeKatex from 'rehype-katex';
 import { AlertCircle, Bookmark, ChevronDown, ChevronUp, Lightbulb, Pencil } from 'lucide-react';
 import remarkGfm from 'remark-gfm';
 import { continueOrderedListNumbers, normalizeDisplayMath } from './theoryMath';
+import { geoPixelScale } from '../features/board/geogebraApi';
 
 export function MathText({ text }) {
   if (text == null || text === '') return null;
@@ -365,6 +366,8 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
         enableShiftDragZoom: true,
         language: 'ru',
         useBrowserForJS: false,
+        scale: geoPixelScale(1),
+        disableAutoScale: true,
         ...(id ? { material_id: id } : {}),
         appletOnLoad: (api) => {
           apiRef.current = api;

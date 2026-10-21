@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
 import MarkdownBody from './MarkdownBody';
+import { TheoryBoardBlock } from '../../components/Theory';
 import TaskCard from './TaskCard';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
@@ -190,13 +191,20 @@ function BoardObject({
   const appletBase64 = obj.type === 'geogebra' ? (obj.props.ggbBase64 || '') : '';
   const imageSrc = obj.type === 'image' ? boardImageSrc(obj.props) : '';
   const markdown = obj.type === 'text' && obj.props.format === 'markdown';
+  const theoryBlock = obj.type === 'text' && obj.props.format === 'theory' ? obj.props.theoryBlock : null;
   const outlineWidth = handles ? 2 : 1.5;
 
   return (
     <div
       data-object={obj.id}
       className="absolute"
-      style={{ left: obj.x, top: obj.y, width: obj.w, height: obj.h }}
+      data-theory-zoom={theoryBlock ? zoom || 1 : undefined}
+      style={{
+        left: obj.x,
+        top: obj.y,
+        width: theoryBlock ? 768 / Math.max(zoom || 1, 0.05) : obj.w,
+        height: theoryBlock ? obj.h / Math.max(zoom || 1, 0.05) : obj.h,
+      }}
     >
       {obj.type === 'sticky' && (
         <div className="absolute inset-0 rounded-[3px] shadow-[0_2px_6px_rgba(0,0,0,0.18)]" style={{ background: obj.props.color || '#fde68a' }}>
@@ -205,9 +213,15 @@ function BoardObject({
       )}
 
       {obj.type === 'text' && (
-        markdown
-          ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} />
-          : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
+        theoryBlock
+          ? (
+            <div style={{ width: 768, transform: `scale(${1 / Math.max(zoom || 1, 0.05)})`, transformOrigin: 'top left' }}>
+              <TheoryBoardBlock block={theoryBlock} />
+            </div>
+          )
+          : markdown
+            ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} />
+            : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
       )}
 
       {obj.type === 'task' && (
@@ -311,6 +325,7 @@ function BoardObject({
               setup={obj.props.setup || ''}
               controls={obj.props.controls || []}
               texts={obj.props.texts || []}
+              zoom={zoom}
               interactive={interactiveGeo}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={() => onGeoChange(obj.id)}

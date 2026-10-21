@@ -651,6 +651,19 @@ export default function BoardEditor({
       if (addObjects([obj])) selectIds([obj.id]);
       return;
     }
+    if (payload?.kind === 'theory' && payload.block) {
+      const rect = viewportRef.current.getBoundingClientRect();
+      const origin = clientToWorld(rect.left + 16, rect.top + 96);
+      const obj = createObject('text', {
+        x: origin.x,
+        y: origin.y,
+        w: 768,
+        h: 320,
+        props: { format: 'theory', theoryBlock: payload.block, text: '' },
+      });
+      if (addObjects([obj])) selectIds([obj.id]);
+      return;
+    }
     const text = String(payload?.text || '').trim();
     if (!text) return;
     const obj = createObject('text', {
@@ -2063,7 +2076,7 @@ export default function BoardEditor({
       }
       if (event.key === 'Enter' && selectedIdsRef.current.length === 1) {
         const obj = objectsRef.current.find((item) => item.id === selectedIdsRef.current[0]);
-        if (obj && !obj.props?.locked && obj.props?.format !== 'markdown' && (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape')) {
+        if (obj && !obj.props?.locked && obj.props?.format !== 'markdown' && obj.props?.format !== 'theory' && (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape')) {
           event.preventDefault();
           actions.beginEdit(obj.id);
         }
@@ -2762,7 +2775,7 @@ export default function BoardEditor({
     const world = toWorld(event);
     const hit = topHit(canvasList().filter(canSelect), world, cameraRef.current.zoom);
     if (hit) {
-      if (canEdit(hit) && hit.props?.format !== 'markdown' && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
+      if (canEdit(hit) && hit.props?.format !== 'markdown' && hit.props?.format !== 'theory' && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
       return;
     }
     const obj = createObject('text', {
@@ -2926,7 +2939,7 @@ export default function BoardEditor({
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1 rounded-xl text-sm font-medium text-zinc-600 hover:bg-zinc-100 min-[720px]:w-auto min-[720px]:px-2 dark:text-zinc-300 dark:hover:bg-zinc-900"
           >
             <ChevronLeft size={16} />
-            <span className="hidden sm:inline">{backLabel}</span>
+            {sidePane !== 'theory' && <span className="hidden sm:inline">{backLabel}</span>}
           </button>
           <input
             value={title}
@@ -3109,7 +3122,7 @@ export default function BoardEditor({
         </div>
       )}
 
-      <div className="absolute inset-x-2 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex flex-col-reverse items-center gap-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:inset-x-auto [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:w-auto [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
+      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-56 right-2 z-30 flex flex-col-reverse items-center gap-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:right-auto [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:w-auto [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
         <div className="flex w-max min-w-0 max-w-full flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:max-w-none [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
           {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand').map((item) => {
             const Icon = item.icon;

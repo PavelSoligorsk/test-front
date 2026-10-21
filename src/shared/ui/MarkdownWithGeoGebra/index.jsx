@@ -4,6 +4,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import 'katex/dist/katex.min.css';
+import { geoPixelScale } from '../../../features/board/geogebraApi';
 
 // Вспомогательные функции
 function hexToRgb(hex) {
@@ -92,6 +93,8 @@ export function GeoGebraFigureApplet({ figure }) {
           showToolBar: true,
           showResetIcon: true,
           enable3d: appName === '3d',
+          scale: geoPixelScale(1),
+          disableAutoScale: true,
           appletOnLoad(api) {
             for (const cmd of commands) api.evalCommand(cmd);
           },
@@ -165,6 +168,8 @@ export const GeoGebraEmbed = ({
         enableShiftDragZoom: true,
         enable3d: resolvedApp === '3d',
         errorDialogsActive: false,
+        scale: geoPixelScale(1),
+        disableAutoScale: true,
         ...(materialId ? { material_id: materialId } : {}),
         appletOnLoad: (api) => {
           if (useRawCommands) {
