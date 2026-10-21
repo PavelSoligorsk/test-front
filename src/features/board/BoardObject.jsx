@@ -198,13 +198,7 @@ function BoardObject({
     <div
       data-object={obj.id}
       className="absolute"
-      data-theory-zoom={theoryBlock ? zoom || 1 : undefined}
-      style={{
-        left: obj.x,
-        top: obj.y,
-        width: theoryBlock ? 768 / Math.max(zoom || 1, 0.05) : obj.w,
-        height: theoryBlock ? obj.h / Math.max(zoom || 1, 0.05) : obj.h,
-      }}
+      style={{ left: obj.x, top: obj.y, width: obj.w, height: obj.h }}
     >
       {obj.type === 'sticky' && (
         <div className="absolute inset-0 rounded-[3px] shadow-[0_2px_6px_rgba(0,0,0,0.18)]" style={{ background: obj.props.color || '#fde68a' }}>
@@ -214,11 +208,7 @@ function BoardObject({
 
       {obj.type === 'text' && (
         theoryBlock
-          ? (
-            <div style={{ width: 768, transform: `scale(${1 / Math.max(zoom || 1, 0.05)})`, transformOrigin: 'top left' }}>
-              <TheoryBoardBlock block={theoryBlock} />
-            </div>
-          )
+          ? <TheoryBoardBlock block={theoryBlock} />
           : markdown
             ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} />
             : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />

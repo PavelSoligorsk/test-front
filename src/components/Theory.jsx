@@ -589,14 +589,10 @@ export function TheoryBoardBlock({ block }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     const body = ref.current;
-    const wrap = body?.parentElement;
-    const object = wrap?.parentElement;
-    if (!body || !wrap || !object) return;
+    const box = body?.parentElement;
+    if (!body || !box) return;
     const next = Math.max(80, body.scrollHeight);
-    if (Math.abs(wrap.offsetHeight - next) > 2) wrap.style.height = `${next}px`;
-    const zoom = Math.max(Number(object.dataset.theoryZoom) || 1, 0.05);
-    const box = next / zoom;
-    if (Math.abs(object.offsetHeight - box) > 2) object.style.height = `${box}px`;
+    if (Math.abs(box.offsetHeight - next) > 2) box.style.height = `${next}px`;
   });
   if (!block) return null;
   return (
