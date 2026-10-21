@@ -3079,7 +3079,7 @@ export default function BoardEditor({
         </div>
       )}
 
-      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-2 z-40 min-[720px]:bottom-4 [@media(min-width:720px)_and_(min-height:760px)]:bottom-4 [@media(min-width:720px)_and_(min-height:760px)]:left-4">
+      <div className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-2 z-40 [@media(min-width:720px)_and_(min-height:760px)]:bottom-4 [@media(min-width:720px)_and_(min-height:760px)]:left-4">
         <div className="flex items-center gap-0.5 rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
           <button
             type="button"
