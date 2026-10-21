@@ -15,6 +15,7 @@ export default function ShapeGlyph({ id, size = 16 }) {
         if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
         if (fig.d) return <path key={index} d={fig.d} {...props} />;
         return <polygon key={index} points={fig.points} {...props} />;
+
         
       })}
     </svg>
