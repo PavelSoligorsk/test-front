@@ -317,8 +317,9 @@ function renderGeogebraText(text, scope, cache) {
 
 function theoryAppletBox(container, requestedHeight) {
   const width = Math.max(260, Math.round(container?.clientWidth || 320));
-  const asked = Math.max(220, parseInt(requestedHeight, 10) || 400);
-  return { width, height: Math.min(asked, width) };
+  const asked = Math.max(280, parseInt(requestedHeight, 10) || 400);
+  const height = width < 640 ? Math.max(asked, Math.round(width * 1.15)) : Math.min(asked, 520);
+  return { width, height };
 }
 
 function applyControlValue(api, control, value) {
@@ -609,10 +610,35 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
       {hasPanel && (
         <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
           {controls.map((control, index) => (
-            <div key={`${control.kind}-${control.name}-${index}`} className="flex min-w-0 items-center gap-3">
-              <span className="w-24 shrink-0 text-sm text-zinc-700 sm:w-28 dark:text-zinc-300">
-                <MathText text={control.label} />
-              </span>
+            <div key={`${control.kind}-${control.name}-${index}`} className="flex min-w-0 flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 text-sm text-zinc-700 dark:text-zinc-300">
+                  <MathText text={control.label} />
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={control.min}
+                  max={control.max}
+                  step={control.step || 'any'}
+                  value={drafts[index] ?? ''}
+                  aria-label={control.label.replace(/\$/g, '')}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setDrafts((prev) => {
+                      const copy = [...prev];
+                      copy[index] = raw;
+                      return copy;
+                    });
+                    previewTypedValue(index, raw);
+                  }}
+                  onBlur={(event) => commitValue(index, event.target.value, control.kind === 'slider')}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
+                  className="w-24 shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-600"
+                />
+              </div>
               {control.kind === 'slider' && (
                 <input
                   type="range"
@@ -622,34 +648,9 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
                   value={values[index] ?? control.value}
                   aria-label={control.label.replace(/\$/g, '')}
                   onChange={(event) => commitValue(index, event.target.value, true)}
-                  className="h-1.5 min-w-0 flex-1 accent-zinc-900 dark:accent-zinc-100"
+                  className="h-2 w-full accent-zinc-900 dark:accent-zinc-100"
                 />
               )}
-              <input
-                type="number"
-                inputMode="decimal"
-                min={control.min}
-                max={control.max}
-                step={control.step || 'any'}
-                value={drafts[index] ?? ''}
-                aria-label={control.label.replace(/\$/g, '')}
-                onChange={(event) => {
-                  const raw = event.target.value;
-                  setDrafts((prev) => {
-                    const copy = [...prev];
-                    copy[index] = raw;
-                    return copy;
-                  });
-                  previewTypedValue(index, raw);
-                }}
-                onBlur={(event) => commitValue(index, event.target.value, control.kind === 'slider')}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur();
-                }}
-                className={`rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-600 ${
-                  control.kind === 'slider' ? 'w-24 shrink-0' : 'min-w-0 flex-1'
-                }`}
-              />
             </div>
           ))}
           {texts.map((text, index) => (
