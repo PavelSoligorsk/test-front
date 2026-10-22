@@ -6,7 +6,7 @@ const MAX_BACKOFF = 30000;
 
 // Одно соединение на открытую доску: snapshot один раз, дальше мелкие операции.
 // Неподтверждённые операции живут в pending и переотправляются после нового snapshot.
-export function connectBoard({ audience, boardId, handlers }) {
+export function connectBoard({ audience, boardId, shareToken = null, handlers }) {
   const pending = new Map();
   const prefix = Math.random().toString(36).slice(2, 8);
   let socket = null;
@@ -70,6 +70,12 @@ export function connectBoard({ audience, boardId, handlers }) {
       case 'laser':
         handlers.onLaser?.(message);
         break;
+      case 'cursors':
+        handlers.onCursors?.(message.enabled !== false);
+        break;
+      case 'pull':
+        handlers.onPull?.(message);
+        break;
       case 'join':
         if (message.peer) handlers.onJoin?.(message.peer);
         break;
@@ -96,7 +102,7 @@ export function connectBoard({ audience, boardId, handlers }) {
     }
     let ws;
     try {
-      ws = new WebSocket(boardSocketUrl(audience, boardId, token));
+      ws = new WebSocket(boardSocketUrl(audience, boardId, token, shareToken));
     } catch {
       reconnect();
       return;
@@ -143,6 +149,12 @@ export function connectBoard({ audience, boardId, handlers }) {
     },
     laser(points, color, width) {
       raw({ type: 'laser', points, color, width });
+    },
+    cursors(enabled) {
+      raw({ type: 'cursors', enabled: Boolean(enabled) });
+    },
+    pull(camera) {
+      raw({ type: 'pull', camera });
     },
     pendingCount: () => pending.size,
     close() {

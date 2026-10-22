@@ -24,7 +24,7 @@ function audienceLabel(board, students, groups) {
     return group?.name || `Группа ${board.groupId}`;
   }
   const ids = board.studentIds || [];
-  if (!ids.length) return 'Без учеников';
+  if (!ids.length) return board.title || 'Доска';
   const names = ids.map((id) => {
     const person = (students || []).find((item) => String(item.id) === String(id));
     return person ? personName(person) : null;
@@ -121,7 +121,7 @@ export default function TeacherBoardListPage() {
         <div className="rounded-3xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
           <p className="text-base font-medium text-zinc-900 dark:text-zinc-100">Пока нет досок</p>
           <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">
-            Новая доска — это пустой холст для выбранных учеников или одной группы.
+            Новая доска может быть только вашей, для учеников или для одной группы.
           </p>
         </div>
       ) : (
@@ -167,7 +167,7 @@ export default function TeacherBoardListPage() {
 function CreateBoardDialog({ students, groups, onClose, onCreate }) {
   const [title, setTitle] = useState('');
   const [titleTouched, setTitleTouched] = useState(false);
-  const [mode, setMode] = useState('student');
+  const [mode, setMode] = useState('solo');
   const [studentId, setStudentId] = useState('');
   const [groupId, setGroupId] = useState('');
   const [query, setQuery] = useState('');
@@ -210,7 +210,9 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
     try {
       await onCreate(mode === 'group'
         ? { title: nextTitle, groupId: Number(groupId) }
-        : { title: nextTitle, studentIds: [Number(studentId)] });
+        : mode === 'student'
+          ? { title: nextTitle, studentIds: [Number(studentId)] }
+          : { title: nextTitle });
     } catch (err) {
       setError(boardErrorMessage(err, 'Не удалось создать доску'));
       setSaving(false);
@@ -226,7 +228,7 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Новая доска</h2>
-            <p className="mt-1 text-sm text-zinc-500">Доска для одного ученика или одной группы. Страницы добавляются на холсте.</p>
+            <p className="mt-1 text-sm text-zinc-500">Только для вас, для ученика или для одной группы. Страницы добавляются на холсте.</p>
           </div>
           <button
             type="button"
@@ -253,8 +255,9 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {[
+              ['solo', 'Только я'],
               ['student', 'Ученик'],
               ['group', 'Группа'],
             ].map(([id, label]) => (
@@ -272,14 +275,14 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
             ))}
           </div>
 
-          <input
+          {mode !== 'solo' && <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={mode === 'group' ? 'Поиск группы' : 'Поиск ученика'}
             className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100"
-          />
+          />}
 
-          <div className="max-h-64 space-y-1 overflow-y-auto">
+          {mode !== 'solo' && <div className="max-h-64 space-y-1 overflow-y-auto">
             {mode === 'group' ? (filteredGroups.length === 0 ? (
               <p className="px-1 py-6 text-center text-sm text-zinc-500">Нет групп</p>
             ) : filteredGroups.map((group) => (
@@ -321,7 +324,7 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
                 <span className="min-w-0 truncate text-sm text-zinc-800 dark:text-zinc-200">{personName(person)}</span>
               </label>
             ))}
-          </div>
+          </div>}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>

@@ -48,6 +48,14 @@ export function getTeacherBoard(id) {
   return apiClient.get(ENDPOINTS.TEACHER_BOARD(id)).then((response) => response.data);
 }
 
+export function updateTeacherBoardShare(id, body) {
+  return apiClient.patch(ENDPOINTS.TEACHER_BOARD_SHARE(id), body).then((response) => response.data);
+}
+
+export function getSharedBoard(shareToken) {
+  return apiClient.get(ENDPOINTS.BOARD_SHARED(shareToken)).then((response) => response.data);
+}
+
 export function deleteTeacherBoard(id) {
   return apiClient.delete(ENDPOINTS.TEACHER_BOARD(id)).then((response) => response.data);
 }
@@ -89,8 +97,12 @@ export function deleteTeacherGeoGebraTemplate(id) {
   return apiClient.delete(ENDPOINTS.TEACHER_GEOGEBRA_TEMPLATE(id)).then((response) => response.data);
 }
 
-export function boardSocketUrl(audience, boardId, token) {
-  const path = audience === 'teacher' ? ENDPOINTS.TEACHER_BOARD_WS(boardId) : ENDPOINTS.STUDENT_BOARD_WS(boardId);
+export function boardSocketUrl(audience, boardId, token, shareToken) {
+  const path = audience === 'teacher'
+    ? ENDPOINTS.TEACHER_BOARD_WS(boardId)
+    : audience === 'shared'
+      ? ENDPOINTS.BOARD_SHARED_WS(shareToken)
+      : ENDPOINTS.STUDENT_BOARD_WS(boardId);
   const base = API_URL.replace(/\/+$/, '').replace(/^http/i, 'ws');
   return `${base}${path}?token=${encodeURIComponent(token)}`;
 }

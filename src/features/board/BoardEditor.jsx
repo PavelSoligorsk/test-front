@@ -5,8 +5,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Eraser,
+  Eye,
+  EyeOff,
   Hand,
   Image,
+  Link2,
+  LocateFixed,
   Maximize2,
   Grid3x3,
   Menu,
@@ -29,6 +33,7 @@ import SelectionToolbar from './SelectionToolbar';
 import {
   boardErrorMessage,
   createTeacherBoard,
+  updateTeacherBoardShare,
   deleteTeacherBoard,
   listStudentBoards,
   listTeacherBoards,
@@ -230,6 +235,7 @@ export default function BoardEditor({
   audience = 'student',
   backTo = '/student/board',
   backLabel = 'Доски',
+  shareToken = null,
 }) {
   const navigate = useNavigate();
   const [savedCamera] = useState(() => loadLocalCamera(initialBoard.id));
@@ -258,6 +264,7 @@ export default function BoardEditor({
   const cursorTimerRef = useRef(0);
   const cursorNodesRef = useRef(new Map());
   const peerCursorsRef = useRef(new Map());
+  const cursorsOnRef = useRef(true);
   const incomingRef = useRef({ raf: 0, before: null });
   const clientIdRef = useRef(null);
   const lastErrorRef = useRef({ text: '', at: 0 });
@@ -307,6 +314,10 @@ export default function BoardEditor({
   const [pagesOpen, setPagesOpen] = useState(false);
   const [surfaceOpen, setSurfaceOpen] = useState(false);
   const [sidePane, setSidePane] = useState(null);
+  const [cursorsOn, setCursorsOn] = useState(true);
+  const [shareAccess, setShareAccess] = useState(initialBoard.shareAccess || 'off');
+  const [shareTokenState, setShareTokenState] = useState(initialBoard.shareToken || null);
+  const [shareOpen, setShareOpen] = useState(false);
   const theoryOpen = sidePane !== null;
   const [surface, setSurface] = useState(() => readSurface(initialBoard.objects));
   const surfaceRef = useRef(surface);
@@ -456,6 +467,10 @@ export default function BoardEditor({
     sentTitleRef.current = pendingTitle ? pendingTitle.title : remoteTitle;
     titleRef.current = sentTitleRef.current;
     clientIdRef.current = message.clientId || null;
+    if (typeof message.cursors === 'boolean') {
+      cursorsOnRef.current = message.cursors;
+      setCursorsOn(message.cursors);
+    }
     const roster = (message.peers || []).filter((peer) => peer.clientId !== message.clientId);
     peerCursorsRef.current = new Map([...peerCursorsRef.current].filter(([id]) => roster.some((peer) => peer.clientId === id)));
     if (!mountedRef.current) return;
@@ -586,6 +601,10 @@ export default function BoardEditor({
   }
 
   function paintPeerCursors() {
+    if (!cursorsOnRef.current) {
+      cursorNodesRef.current.forEach((node) => { node.style.display = 'none'; });
+      return;
+    }
     const cam = cameraRef.current;
     cursorNodesRef.current.forEach((node, clientId) => {
       const point = peerCursorsRef.current.get(clientId);
@@ -600,7 +619,7 @@ export default function BoardEditor({
 
   function sendCursor(clientX, clientY) {
     const socket = socketRef.current;
-    if (!socket || !viewportRef.current) return;
+    if (!socket || !viewportRef.current || !cursorsOnRef.current) return;
     const now = performance.now();
     const wait = SEND_MS - (now - lastCursorRef.current);
     const push = () => {
@@ -773,9 +792,12 @@ export default function BoardEditor({
     if (audienceRef.current !== 'teacher') return;
     const meta = boardMetaRef.current;
     const title = freshPageTitle(series.length ? series : [meta]);
+    const students = (meta.studentIds || []).map((id) => Number(id));
     const body = meta.groupId != null
       ? { title, groupId: Number(meta.groupId) }
-      : { title, studentIds: (meta.studentIds || []).map((id) => Number(id)) };
+      : students.length
+        ? { title, studentIds: students }
+        : { title };
     try {
       const created = await createTeacherBoard(body);
       navigate(boardPath(created.id));
@@ -1541,6 +1563,7 @@ export default function BoardEditor({
     const socket = connectBoard({
       audience,
       boardId,
+      shareToken,
       handlers: {
         onStatus: (state, pending) => {
           if (!mountedRef.current) return;
@@ -1562,6 +1585,24 @@ export default function BoardEditor({
           liveRef.current.paintPeerCursors?.();
         },
         onLaser: call('showLaser'),
+        onCursors: (enabled) => {
+          cursorsOnRef.current = enabled;
+          if (!enabled) peerCursorsRef.current.clear();
+          setCursorsOn(enabled);
+          liveRef.current.paintPeerCursors?.();
+        },
+        onPull: (message) => {
+          if (!message?.camera || message.clientId === clientIdRef.current) return;
+          const next = {
+            x: Number(message.camera.x) || 0,
+            y: Number(message.camera.y) || 0,
+            zoom: clamp(Number(message.camera.zoom) || 1, MIN_ZOOM, MAX_ZOOM),
+          };
+          paintCamera(next);
+          setCamera(next);
+          saveLocalCamera(boardIdRef.current, next);
+          notify(`${message.name || 'Участник'} притянул вас к своему виду`);
+        },
         onJoin: (peer) => {
           if (!peer?.clientId || peer.clientId === clientIdRef.current) return;
           setPeers((prev) => [...prev.filter((item) => item.clientId !== peer.clientId), peer]);
@@ -1588,7 +1629,7 @@ export default function BoardEditor({
       socket.close();
       if (socketRef.current === socket) socketRef.current = null;
     };
-  }, [initialBoard.id, audience]);
+  }, [initialBoard.id, audience, shareToken]);
 
   useEffect(() => {
     const next = readSurface(objects);
@@ -2173,7 +2214,7 @@ export default function BoardEditor({
     const points = drag.points.map(roundPoint);
     const color = styleRef.current.laserColor || LASER_COLOR;
     const width = styleRef.current.laserWidth || LASER_WIDTH;
-    if (!readOnlyRef.current) socketRef.current?.laser(points, color, width);
+    socketRef.current?.laser(points, color, width);
     paintDraft(null);
     showLaser({ points, color, width, fadeMs: LASER_FADE_MS });
   }
@@ -2972,6 +3013,52 @@ export default function BoardEditor({
 
         <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
           {!readOnly && (
+            <button
+              type="button"
+              title="Притянуть участников к своему виду"
+              onClick={() => {
+                const cam = cameraRef.current;
+                socketRef.current?.pull({ x: cam.x, y: cam.y, zoom: cam.zoom });
+                notify('Участники видят ваш кадр');
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/95 text-zinc-600 shadow-sm hover:bg-zinc-50 min-[720px]:h-8 dark:border-zinc-800 dark:bg-zinc-950/95 dark:text-zinc-300"
+            >
+              <LocateFixed size={16} />
+            </button>
+          )}
+          {audience === 'teacher' && (
+            <button
+              type="button"
+              title={cursorsOn ? 'Выключить курсоры участников' : 'Включить курсоры участников'}
+              aria-pressed={!cursorsOn}
+              onClick={() => {
+                const next = !cursorsOnRef.current;
+                cursorsOnRef.current = next;
+                if (!next) peerCursorsRef.current.clear();
+                setCursorsOn(next);
+                paintPeerCursors();
+                socketRef.current?.cursors(next);
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/95 shadow-sm hover:bg-zinc-50 min-[720px]:h-8 dark:border-zinc-800 dark:bg-zinc-950/95 ${cursorsOn ? 'text-zinc-600 dark:text-zinc-300' : 'text-zinc-400'}`}
+            >
+              {cursorsOn ? <Eye size={16} /> : <EyeOff size={16} />}
+            </button>
+          )}
+          {audience === 'teacher' && (
+            <ShareButton
+              open={shareOpen}
+              access={shareAccess}
+              token={shareTokenState}
+              onToggle={() => setShareOpen((open) => !open)}
+              onClose={() => setShareOpen(false)}
+              onApply={async (access, resetLink) => {
+                const data = await updateTeacherBoardShare(initialBoard.id, { access, resetLink });
+                setShareAccess(data.shareAccess || 'off');
+                setShareTokenState(data.shareToken || null);
+              }}
+            />
+          )}
+          {!readOnly && (
             <div className="relative">
               <button
                 type="button"
@@ -3128,7 +3215,7 @@ export default function BoardEditor({
 
       <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 flex-col-reverse items-center gap-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:w-auto [@media(min-width:720px)_and_(min-height:760px)]:translate-x-0 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
         <div className="flex w-max min-w-0 max-w-full flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:max-w-none [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
-          {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand').map((item) => {
+          {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand' || item.id === 'laser').map((item) => {
             const Icon = item.icon;
             const active = tool === item.id;
             const divider = item.id === 'sticky' || item.id === 'image';
@@ -3172,6 +3259,73 @@ export default function BoardEditor({
             />
           )}
         </aside>
+      )}
+    </div>
+  );
+}
+
+function ShareButton({ open, access, token, onToggle, onClose, onApply }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const link = token ? `${window.location.origin}/board/shared/${token}` : '';
+  async function apply(next, resetLink = false) {
+    setBusy(true);
+    setNote('');
+    try {
+      await onApply(next, resetLink);
+      setNote(resetLink ? 'Новая ссылка' : '');
+    } catch (error) {
+      setNote(boardErrorMessage(error, 'Не удалось изменить ссылку'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        title="Ссылка на доску"
+        aria-pressed={open}
+        onClick={onToggle}
+        className={`flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/95 shadow-sm hover:bg-zinc-50 min-[720px]:h-8 dark:border-zinc-800 dark:bg-zinc-950/95 ${access === 'off' ? 'text-zinc-400' : 'text-zinc-800 dark:text-zinc-100'}`}
+      >
+        <Link2 size={16} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-50 w-72 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold">Ссылка</p>
+            <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"><X size={14} /></button>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {[['off', 'Выкл'], ['view', 'Смотреть'], ['edit', 'Править']].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                disabled={busy}
+                onClick={() => apply(id)}
+                className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${access === id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {access !== 'off' && link && (
+            <div className="mt-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(link).then(() => setNote('Ссылка скопирована')).catch(() => setNote(link))}
+                className="w-full truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-left text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              >
+                {link}
+              </button>
+              <button type="button" disabled={busy} onClick={() => apply(access, true)} className="text-xs font-medium text-zinc-500 hover:text-zinc-800">
+                Новая ссылка, старая перестанет работать
+              </button>
+            </div>
+          )}
+          {note && <p className="mt-2 text-xs text-zinc-500">{note}</p>}
+        </div>
       )}
     </div>
   );

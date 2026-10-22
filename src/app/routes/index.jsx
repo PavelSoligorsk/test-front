@@ -7,6 +7,7 @@ const LoginPage = React.lazy(() => import('../../pages/LoginPage'));
 const RegisterPage = React.lazy(() => import('../../pages/RegisterPage'));
 const ResetPasswordPage = React.lazy(() => import('../../pages/ResetPasswordPage'));
 
+const SharedBoardPage = React.lazy(() => import('../../pages/SharedBoardPage'));
 const StudentLayout = React.lazy(() => import('../../pages/StudentDashboardPage'));
 const StudentTestsPage = React.lazy(() => import('../../pages/StudentDashboardPage/TestsPage'));
 const StudentTheoryPage = React.lazy(() => import('../../pages/StudentDashboardPage/TheoryPage'));
@@ -111,6 +112,8 @@ export default function AppRoutes() {
               <Route path="/login" element={<RedirectIfAuth><LoginPage /></RedirectIfAuth>} />
               <Route path="/register" element={<RedirectIfAuth><RegisterPage /></RedirectIfAuth>} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+              <Route path="/board/shared/:shareToken" element={<PrivateRoute><SharedBoardPage /></PrivateRoute>} />
 
               <Route path="/student" element={<PrivateRoute allowedRoles={['student']}><StudentLayout /></PrivateRoute>}>
                 <Route index element={<StudentIndexRedirect />} />
