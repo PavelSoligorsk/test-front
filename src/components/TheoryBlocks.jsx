@@ -5,7 +5,6 @@ import rehypeKatex from 'rehype-katex';
 import { AlertCircle, Bookmark, ChevronDown, ChevronUp, Lightbulb, Pencil } from 'lucide-react';
 import remarkGfm from 'remark-gfm';
 import { continueOrderedListNumbers, normalizeDisplayMath } from './theoryMath';
-import { geoPixelScale } from '../features/board/geogebraApi';
 
 export function MathText({ text }) {
   if (text == null || text === '') return null;
@@ -316,6 +315,12 @@ function renderGeogebraText(text, scope, cache) {
   return continueOrderedListNumbers(normalizeDisplayMath(markdown));
 }
 
+function theoryAppletBox(container, requestedHeight) {
+  const width = Math.max(260, Math.round(container?.clientWidth || 320));
+  const asked = Math.max(220, parseInt(requestedHeight, 10) || 400);
+  return { width, height: Math.min(asked, width) };
+}
+
 function applyControlValue(api, control, value) {
   if (!api || !control?.name || !Number.isFinite(value)) return;
   try {
@@ -355,10 +360,12 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
     const initApplet = () => {
       if (!containerRef.current) return;
 
+      const frame = theoryAppletBox(containerRef.current, height);
+      containerRef.current.style.height = `${frame.height}px`;
       const parameters = {
         id: appletId.current,
-        width: containerRef.current.clientWidth || 600,
-        height: parseInt(height, 10),
+        width: frame.width,
+        height: frame.height,
         showToolBar: false,
         showMenuBar: false,
         showAlgebraInput: false,
@@ -366,8 +373,8 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
         enableShiftDragZoom: true,
         language: 'ru',
         useBrowserForJS: false,
-        scale: geoPixelScale(1),
-        disableAutoScale: true,
+        scale: 1,
+        allowUpscale: false,
         ...(id ? { material_id: id } : {}),
         appletOnLoad: (api) => {
           apiRef.current = api;
@@ -523,7 +530,24 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
       initApplet();
     }
 
+    const box = containerRef.current;
+    let lastWidth = 0;
+    const fit = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const frame = theoryAppletBox(el, height);
+      if (frame.width === lastWidth) return;
+      lastWidth = frame.width;
+      el.style.height = `${frame.height}px`;
+      const api = apiRef.current;
+      if (!api || typeof api.setSize !== 'function') return;
+      try { api.setSize(frame.width, frame.height); } catch { /* апплет ещё меняет размер */ }
+    };
+    const observer = box ? new ResizeObserver(fit) : null;
+    if (box && observer) observer.observe(box);
+
     return () => {
+      observer?.disconnect();
       apiRef.current = null;
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
@@ -581,12 +605,12 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
 
   return (
     <div className="theory-geogebra my-6 w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60">
-      <div ref={containerRef} className="w-full" style={{ minHeight: `${height}px` }} />
+      <div ref={containerRef} className="w-full max-w-full" style={{ height: `${Math.min(parseInt(height, 10) || 400, 560)}px` }} />
       {hasPanel && (
         <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
           {controls.map((control, index) => (
-            <div key={`${control.kind}-${control.name}-${index}`} className="flex items-center gap-3">
-              <span className="w-28 shrink-0 text-sm text-zinc-700 dark:text-zinc-300">
+            <div key={`${control.kind}-${control.name}-${index}`} className="flex min-w-0 items-center gap-3">
+              <span className="w-24 shrink-0 text-sm text-zinc-700 sm:w-28 dark:text-zinc-300">
                 <MathText text={control.label} />
               </span>
               {control.kind === 'slider' && (
