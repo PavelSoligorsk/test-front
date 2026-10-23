@@ -156,7 +156,7 @@ export default function GeoGebraWidget({
         /* апплет ещё не готов к смене размера */
       }
     }
-    if (isGeoGebraView(viewRef.current)) {
+    if (appName !== '3d' && isGeoGebraView(viewRef.current)) {
       try { writeGeoGebraView(api, viewRef.current); } catch { /* вид догонит следующим кадром */ }
     }
     window.clearTimeout(fitTimerRef.current);
@@ -439,6 +439,29 @@ export default function GeoGebraWidget({
     try { api.setPerspective(code); } catch { /* код вида из теории не применился */ }
   }
 
+  // В файле записан размер холста того, кто сохранил построение. Без этой
+  // вырезки setXML сжимает чертёж, и под ним остаётся пустая полоса.
+  function xmlWithoutViewSize(xml) {
+    return String(xml || '').replace(
+      /(<euclidianView\b[^>]*>[\s\S]*?<\/euclidianView>|<euclidianView3D\b[^>]*>[\s\S]*?<\/euclidianView3D>)/g,
+      (block) => block.replace(/<size\b[^>]*\/>/g, ''),
+    );
+  }
+
+  function refillFrame(api, kept) {
+    if (!api || interactiveRef.current) return;
+    sharpRef.current = null;
+    fitToFrame(api);
+    if (!kept) return;
+    if (kept.camera) {
+      try { writeGeoGebraCamera(api, kept.camera, cameraFit()); } catch { /* свой вид 3D остаётся */ }
+    }
+    if (kept.view) {
+      try { writeGeoGebraView(api, kept.view); } catch { /* свой масштаб 3D остаётся */ }
+    }
+    glideRef.current.camera.now = kept.camera || glideRef.current.camera.now;
+  }
+
   function applyFile(api) {
     const file = fileRef.current;
     if (!file || file === appliedRef.current) return;
@@ -450,7 +473,7 @@ export default function GeoGebraWidget({
     appliedRef.current = file;
     try {
       api.setBase64(file, () => {
-        fitToFrame(api);
+        refillFrame(api);
         restoreTheoryPerspective(api);
       });
     } catch {
@@ -474,10 +497,10 @@ export default function GeoGebraWidget({
       return;
     }
     if (xml && xml !== appliedXmlRef.current && typeof api.setXML === 'function') {
-      const view = viewRef.current;
+      const view = appName === '3d' ? null : viewRef.current;
       const structure = graphStructure(xml);
       const states = elementStates(xml);
-      const plan = structure === appliedStructureRef.current ? glidePlan(api, xml, states) : null;
+      const plan = appName === '3d' ? null : (structure === appliedStructureRef.current ? glidePlan(api, xml, states) : null);
       if (plan) {
         rememberApplied(xml);
         glideToward(api, plan);
@@ -485,10 +508,12 @@ export default function GeoGebraWidget({
         glideCamera(api, readCamera3d(xml));
         return;
       }
+      const keptCamera = appName === '3d' ? readGeoGebraCamera(api) : null;
+      const keptView = appName === '3d' ? readGeoGebraView(api) : null;
       stopGlide();
       try {
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(false);
-        api.setXML(xml);
+        api.setXML(xmlWithoutViewSize(xml));
       } catch {
         rememberApplied('');
         return;
@@ -496,11 +521,14 @@ export default function GeoGebraWidget({
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
       }
       rememberApplied(xml);
-      glideRef.current.camera.now = readCamera3d(xml);
+      const kept = appName === '3d' ? { camera: keptCamera, view: keptView } : null;
+      refillFrame(api, kept);
+      window.setTimeout(() => refillFrame(api, kept), 80);
+      glideRef.current.camera.now = appName === '3d' ? keptCamera : readCamera3d(xml);
       if (view) glideView(api, view);
       return;
     }
-    if (viewRef.current) {
+    if (appName !== '3d' && viewRef.current) {
       glideView(api, viewRef.current);
     }
     if (appliedXmlRef.current || !file) return;

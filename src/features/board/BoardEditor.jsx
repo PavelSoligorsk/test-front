@@ -40,7 +40,7 @@ import {
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
+import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { setPenActive } from './penLock';
 import { applyOp, diffOps, keepLongerStrokes, reorder } from './ops';
@@ -1459,6 +1459,16 @@ export default function BoardEditor({
     live(next);
   }
 
+  function sameElementStates(prevXml, nextXml) {
+    const prev = elementStates(prevXml);
+    const next = elementStates(nextXml);
+    if (prev.size !== next.size) return false;
+    for (const [label, state] of next) {
+      if (prev.get(label) !== state) return false;
+    }
+    return true;
+  }
+
   function sameGeoView(prev, next) {
     return sameGeoGebraView(prev, next);
   }
@@ -1476,12 +1486,15 @@ export default function BoardEditor({
       const prevXml = obj.props.ggbXml || '';
       const prevView = obj.props.ggbView || null;
       const nextXml = xml || prevXml;
-      const viewChanged = Boolean(view) && !sameGeoView(prevView, view);
+      const is3d = obj.props.appName === '3d';
+      if (is3d && nextXml === prevXml) return;
+      if (is3d && graphStructure(nextXml) === graphStructure(prevXml) && sameElementStates(prevXml, nextXml)) return;
+      const viewChanged = !is3d && Boolean(view) && !sameGeoView(prevView, view);
       if (nextXml === prevXml && !viewChanged) return;
       pending.push({
         id,
         ggbXml: nextXml,
-        ggbView: view || prevView,
+        ggbView: is3d ? prevView : (view || prevView),
       });
     });
     if (!pending.length) return;
