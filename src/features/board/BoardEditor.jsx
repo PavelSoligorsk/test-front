@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -314,6 +314,8 @@ export default function BoardEditor({
   const [pagesOpen, setPagesOpen] = useState(false);
   const [surfaceOpen, setSurfaceOpen] = useState(false);
   const [sidePane, setSidePane] = useState(null);
+  const [keptPanes, setKeptPanes] = useState({ theory: false, tasks: false, students: false });
+  const sideStudentsRef = useRef(initialBoard.studentIds || EMPTY_STUDENTS);
   const [cursorsOn, setCursorsOn] = useState(true);
   const [shareAccess, setShareAccess] = useState(initialBoard.shareAccess || 'off');
   const [shareTokenState, setShareTokenState] = useState(initialBoard.shareToken || null);
@@ -1509,7 +1511,6 @@ export default function BoardEditor({
       changed = true;
       const props = { ...obj.props, ggbXml: update.ggbXml };
       if (update.ggbView) props.ggbView = update.ggbView;
-      if (String(props.ggbPerspective || '').trim().startsWith('<')) props.ggbPerspective = '';
       return { ...obj, props };
     });
     if (changed) live(next);
@@ -1533,24 +1534,36 @@ export default function BoardEditor({
     scheduleGeoSave(id);
   }
 
-  // Открытые панели и набор инструментов живут только в файле апплета, поэтому
-  // смена раскладки отправляется файлом с меткой, по которой его перечитают.
+  // Меню живёт в файле апплета. Графики и планиметрия уходят сразу после отпускания,
+  // 3D — с короткой паузой. Отдельный setPerspective затирает чертёж до белого.
   function geoLayoutChanged(id) {
     if (editingIdRef.current !== id || readOnlyRef.current) return;
+    const current = objectsRef.current.find((item) => item.id === id);
+    if (!current || current.type !== 'geogebra') return;
     window.clearTimeout(geoLayoutTimerRef.current);
+    const delay = current.props.appName === '3d' ? 400 : 0;
     geoLayoutTimerRef.current = window.setTimeout(async () => {
       const api = apiMap.current.get(id);
-      if (!api || !mountedRef.current) return;
+      if (!api || !mountedRef.current || editingIdRef.current !== id) return;
       const base64 = await readGeoGebraBase64(api);
-      if (!base64 || !mountedRef.current) return;
+      if (!base64 || !mountedRef.current || editingIdRef.current !== id) return;
       const xml = readGeoGebraXml(api);
       const next = objectsRef.current.map((obj) => (
         obj.id === id && obj.type === 'geogebra'
-          ? { ...obj, props: { ...obj.props, ggbBase64: base64, ggbLayout: uid(), ...(xml ? { ggbXml: xml } : {}) } }
+          ? {
+            ...obj,
+            props: {
+              ...obj.props,
+              ggbBase64: base64,
+              ggbLayout: uid(),
+              ggbPerspective: '',
+              ...(xml ? { ggbXml: xml } : {}),
+            },
+          }
           : obj
       ));
       live(next);
-    }, 400);
+    }, delay);
   }
 
   function scheduleGeoSave(id) {
@@ -1957,8 +1970,27 @@ export default function BoardEditor({
     }
   }
 
+  const sideActionsRef = useRef({});
+  sideActionsRef.current.theory = placeTheoryBlock;
+  sideActionsRef.current.tasks = placeTasks;
+  const copyTheoryToBoard = useCallback((payload) => sideActionsRef.current.theory?.(payload), []);
+  const copyTasksToBoard = useCallback((payload) => sideActionsRef.current.tasks?.(payload), []);
+  function toggleSidePane(pane) {
+    setSidePane((open) => (open === pane ? null : pane));
+    setKeptPanes((prev) => (prev[pane] ? prev : { ...prev, [pane]: true }));
+  }
+
   useLayoutEffect(() => {
     toolRef.current = tool;
+    if (dragRef.current?.kind === 'pen') {
+      objectsRef.current.forEach((obj) => {
+        if (obj.type !== 'draw') return;
+        const shown = objects.find((item) => item.id === obj.id);
+        if ((obj.props?.points?.length || 0) > (shown?.props?.points?.length || 0)) paintStrokeDom(objectsRef.current, obj.id);
+      });
+      if (inkRef.current.last) paintInk(inkRef.current.last);
+      return;
+    }
     paintCamera(cameraRef.current);
     paintCursor();
     // React рисует штрих по своему состоянию, а точки могли прийти позже и попасть только в DOM.
@@ -2886,7 +2918,7 @@ export default function BoardEditor({
 
   return (
     <div className={`fixed inset-0 z-30 flex overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100 ${theoryOpen ? 'min-[720px]:flex-row' : ''}`}>
-      <div className="@container relative h-full min-w-0 flex-1 overflow-hidden">
+      <div className="@container relative h-full min-w-0 flex-1 overflow-hidden [contain:layout_paint]">
       <div
         ref={viewportRef}
         className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'laser' || tool === 'eraser') ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
@@ -3014,7 +3046,7 @@ export default function BoardEditor({
             <button
               key={pane}
               type="button"
-              onClick={() => setSidePane((open) => (open === pane ? null : pane))}
+              onClick={() => toggleSidePane(pane)}
               className={`hidden h-8 items-center rounded-xl px-2 text-xs font-semibold min-[720px]:inline-flex ${sidePane === pane ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900'}`}
             >
               {label}
@@ -3260,22 +3292,49 @@ export default function BoardEditor({
         onChange={onImageFile}
       />
       </div>
-      {theoryOpen && audience === 'teacher' && (
-        <aside className="hidden h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 [contain:layout_paint] dark:border-zinc-800 min-[720px]:block">
-          {sidePane === 'theory' && <div className="h-full"><BoardTheoryPane onCopy={placeTheoryBlock} /></div>}
-          {sidePane === 'tasks' && <div className="h-full"><BoardTasksPane onCopy={placeTasks} /></div>}
-          {sidePane === 'students' && (
-            <BoardStudentsPane
-              groupId={initialBoard.groupId ?? null}
-              studentIds={initialBoard.studentIds || []}
-              onCopy={placeTasks}
-            />
-          )}
-        </aside>
+      {audience === 'teacher' && (
+        <BoardSidePanes
+          pane={sidePane}
+          kept={keptPanes}
+          groupId={initialBoard.groupId ?? null}
+          studentIds={sideStudentsRef.current}
+          onTheory={copyTheoryToBoard}
+          onTasks={copyTasksToBoard}
+        />
       )}
     </div>
   );
 }
+
+const EMPTY_STUDENTS = [];
+
+const BoardSidePanes = memo(function BoardSidePanes({ pane, kept, groupId, studentIds, onTheory, onTasks }) {
+  if (!kept.theory && !kept.tasks && !kept.students) return null;
+  const open = pane != null;
+  return (
+    <aside
+      hidden={!open}
+      inert={!open}
+      className={`h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 [contain:layout_paint] dark:border-zinc-800 ${open ? 'hidden min-[720px]:block' : 'hidden'}`}
+    >
+      {kept.theory && (
+        <div className="h-full" hidden={pane !== 'theory'} inert={pane !== 'theory'}>
+          <BoardTheoryPane onCopy={onTheory} />
+        </div>
+      )}
+      {kept.tasks && (
+        <div className="h-full" hidden={pane !== 'tasks'} inert={pane !== 'tasks'}>
+          <BoardTasksPane onCopy={onTasks} />
+        </div>
+      )}
+      {kept.students && (
+        <div className="h-full" hidden={pane !== 'students'} inert={pane !== 'students'}>
+          <BoardStudentsPane groupId={groupId} studentIds={studentIds || EMPTY_STUDENTS} onCopy={onTasks} />
+        </div>
+      )}
+    </aside>
+  );
+});
 
 function ShareButton({ open, access, token, onToggle, onClose, onApply }) {
   const [busy, setBusy] = useState(false);

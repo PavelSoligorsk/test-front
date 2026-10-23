@@ -10,6 +10,7 @@ import {
   readCamera3d,
   readConstructionTargets,
   readGeoGebraCamera,
+  readGeoGebraPerspective,
   readGeoGebraView,
   readGeoGebraXml,
   runTheorySetup,
@@ -57,6 +58,10 @@ export default function GeoGebraWidget({
   const viewRef = useRef(ggbView || null);
   const layoutRef = useRef(ggbLayout || '');
   const appliedLayoutRef = useRef(ggbLayout || '');
+  const menuHoldRef = useRef(false);
+  const menuPendingRef = useRef('');
+  const menuStillRef = useRef(0);
+  const layoutSeenRef = useRef('');
   const appliedStatesRef = useRef(new Map());
   const perspectiveRestoredRef = useRef(false);
   const setupRef = useRef(setup || '');
@@ -398,6 +403,13 @@ export default function GeoGebraWidget({
     appliedStatesRef.current = xml ? elementStates(xml) : new Map();
   }
 
+  function graphicsVisible(api) {
+    const perspective = readGeoGebraPerspective(api);
+    const tag = /<view\b[^>]*\bid="1"[^>]*\/?>/.exec(perspective)?.[0] || '';
+    if (!tag) return true;
+    return !/visible="false"/.test(tag);
+  }
+
   function reloadLayout(api) {
     const file = fileRef.current;
     appliedLayoutRef.current = layoutRef.current;
@@ -406,14 +418,16 @@ export default function GeoGebraWidget({
     stopGlide();
     try {
       api.setBase64(file, () => {
+        // Файл уже содержит и построение, и панели. Повторный setXML
+        // оставляет у планиметрии одну алгебру без чертежа.
+        rememberApplied(readGeoGebraXml(api) || xmlRef.current);
+        const view = appName === '3d' ? null : readGeoGebraView(api);
+        sharpRef.current = null;
         fitToFrame(api);
-        rememberApplied('');
-        glideRef.current.camera.now = null;
-        try {
-          applyConstruction(api);
-        } catch {
-          /* построение догонит следующим обновлением */
+        if (view) {
+          try { writeGeoGebraView(api, view); } catch { /* окно чертежа остаётся из файла */ }
         }
+        glideRef.current.camera.now = null;
       });
     } catch {
       appliedRef.current = '';
@@ -460,6 +474,14 @@ export default function GeoGebraWidget({
       try { writeGeoGebraView(api, kept.view); } catch { /* свой масштаб 3D остаётся */ }
     }
     glideRef.current.camera.now = kept.camera || glideRef.current.camera.now;
+  }
+
+  function publishMenu() {
+    if (appName === '3d') return;
+    const layout = layoutSignature(apiRef.current);
+    if (!layout || layout === layoutSeenRef.current) return;
+    layoutSeenRef.current = layout;
+    onLayoutRef.current?.();
   }
 
   function applyFile(api) {
@@ -521,6 +543,9 @@ export default function GeoGebraWidget({
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
       }
       rememberApplied(xml);
+      if (appName !== '3d' && !graphicsVisible(api)) {
+        try { api.setPerspective('AG'); } catch { /* чертёж рядом с алгеброй не открылся */ }
+      }
       const kept = appName === '3d' ? { camera: keptCamera, view: keptView } : null;
       refillFrame(api, kept);
       window.setTimeout(() => refillFrame(api, kept), 80);
@@ -698,13 +723,79 @@ export default function GeoGebraWidget({
         onChangeRef.current?.();
       }
       const layout = layoutSignature(current);
+      if (appName !== '3d' && menuHoldRef.current) {
+        if (layout !== menuPendingRef.current) {
+          menuPendingRef.current = layout;
+          menuStillRef.current = 0;
+        } else {
+          menuStillRef.current += 150;
+        }
+        if (menuStillRef.current < 240) return;
+        menuHoldRef.current = false;
+      }
       if (layout !== lastLayout) {
         lastLayout = layout;
-        onLayoutRef.current?.();
+        if (appName === '3d') onLayoutRef.current?.();
+        else publishMenu();
       }
     }, 150);
     return () => window.clearInterval(timer);
   }, [interactive, status]);
+
+  useEffect(() => {
+    if (!interactive || status !== 'ready' || appName === '3d') return undefined;
+    const host = hostRef.current;
+    if (!host) return undefined;
+    const mark = (event) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !host.contains(target)) return;
+      menuHoldRef.current = true;
+      menuStillRef.current = 0;
+    };
+    const release = () => {
+      if (!menuHoldRef.current) return;
+      menuHoldRef.current = false;
+      requestAnimationFrame(() => publishMenu());
+    };
+    const hold = () => {
+      menuHoldRef.current = true;
+      menuStillRef.current = 0;
+    };
+    const docs = new Set();
+    const bindDoc = (doc) => {
+      if (!doc || docs.has(doc)) return;
+      docs.add(doc);
+      doc.addEventListener('pointerdown', hold, true);
+      doc.addEventListener('mousedown', hold, true);
+      doc.addEventListener('pointerup', release, true);
+      doc.addEventListener('pointercancel', release, true);
+      doc.addEventListener('mouseup', release, true);
+    };
+    host.querySelectorAll('iframe').forEach((frame) => {
+      try { bindDoc(frame.contentDocument); } catch { /* чужой фрейм */ }
+    });
+    window.addEventListener('pointerdown', mark, true);
+    window.addEventListener('mousedown', mark, true);
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    window.addEventListener('mouseup', release, true);
+    return () => {
+      docs.forEach((doc) => {
+        doc.removeEventListener('pointerdown', hold, true);
+        doc.removeEventListener('mousedown', hold, true);
+        doc.removeEventListener('pointerup', release, true);
+        doc.removeEventListener('pointercancel', release, true);
+        doc.removeEventListener('mouseup', release, true);
+      });
+      window.removeEventListener('pointerdown', mark, true);
+      window.removeEventListener('mousedown', mark, true);
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', release, true);
+      window.removeEventListener('mouseup', release, true);
+    };
+    // publishMenu читает только ref-ы и зовётся в момент отпускания.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive, status, appName]);
 
   useEffect(() => {
     const frame = frameRef.current;
