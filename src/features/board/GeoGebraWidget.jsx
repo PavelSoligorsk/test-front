@@ -156,6 +156,9 @@ export default function GeoGebraWidget({
         /* апплет ещё не готов к смене размера */
       }
     }
+    if (isGeoGebraView(viewRef.current)) {
+      try { writeGeoGebraView(api, viewRef.current); } catch { /* вид догонит следующим кадром */ }
+    }
     window.clearTimeout(fitTimerRef.current);
     fitTimerRef.current = window.setTimeout(() => pinApplet(), 50);
   }
@@ -244,17 +247,20 @@ export default function GeoGebraWidget({
   function writeView(api, view, blend) {
     const now = readGeoGebraView(api);
     if (!now) return true;
-    const pixel = Math.max(now.sx, view.sx);
+    if (!Number.isFinite(view.wx) || !Number.isFinite(now.wx) || !(view.wx > 0) || !(now.wx > 0)) {
+      try { writeGeoGebraView(api, view); } catch { /* вид не применился */ }
+      return true;
+    }
     const next = {
       cx: now.cx + (view.cx - now.cx) * blend,
       cy: now.cy + (view.cy - now.cy) * blend,
-      sx: now.sx * (view.sx / now.sx) ** blend,
-      sy: now.sy * (view.sy / now.sy) ** blend,
+      wx: now.wx * (view.wx / now.wx) ** blend,
+      wy: now.wy * (view.wy / now.wy) ** blend,
     };
-    const arrived = Math.abs(view.cx - next.cx) < pixel * 0.25
-      && Math.abs(view.cy - next.cy) < pixel * 0.25
-      && Math.abs(next.sx / view.sx - 1) < 1e-3
-      && Math.abs(next.sy / view.sy - 1) < 1e-3;
+    const arrived = Math.abs(view.cx - next.cx) < Math.max(now.wx, view.wx) * 0.002
+      && Math.abs(view.cy - next.cy) < Math.max(now.wy, view.wy) * 0.002
+      && Math.abs(next.wx / view.wx - 1) < 1e-3
+      && Math.abs(next.wy / view.wy - 1) < 1e-3;
     try {
       writeGeoGebraView(api, arrived ? view : next);
     } catch {
@@ -563,7 +569,7 @@ export default function GeoGebraWidget({
           errorDialogsActive: false,
           useBrowserForJS: false,
           borderColor: '#ffffff',
-          scale: pixelScale,
+          scale: 1,
           disableAutoScale: true,
           appletOnLoad(api) {
             if (cancelled) return;

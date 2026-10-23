@@ -122,37 +122,50 @@ function viewProperties(api) {
   }
 }
 
-// Вид графики — центр и единица на пиксель. Так GeoGebra сама держит вид при
-// смене ширины области, и копия совпадает при любой раскладке панелей.
+function viewWindow(view, props) {
+  const wx = Number.isFinite(view?.wx) ? view.wx : (props && Number.isFinite(view?.sx) ? props.width * view.sx : NaN);
+  const wy = Number.isFinite(view?.wy) ? view.wy : (props && Number.isFinite(view?.sy) ? props.height * view.sy : NaN);
+  if (!(wx > 0) || !(wy > 0) || !Number.isFinite(view?.cx) || !Number.isFinite(view?.cy)) return null;
+  return { cx: view.cx, cy: view.cy, wx, wy };
+}
+
+// Вид графики — центр и ширина окна в единицах чертежа, не в пикселях.
+// Иначе при разном размере холста копия оказывается в другом масштабе.
 export function readGeoGebraView(api) {
   const props = viewProperties(api);
   if (!props) return null;
   return {
     cx: props.xMin + (props.width * props.invXscale) / 2,
     cy: props.yMin + (props.height * props.invYscale) / 2,
-    sx: props.invXscale,
-    sy: props.invYscale,
+    wx: props.width * props.invXscale,
+    wy: props.height * props.invYscale,
   };
 }
 
 export function isGeoGebraView(view) {
-  return Boolean(view) && ['cx', 'cy', 'sx', 'sy'].every((key) => Number.isFinite(view[key])) && view.sx > 0 && view.sy > 0;
+  return Boolean(viewWindow(view));
 }
 
 export function sameGeoGebraView(a, b) {
-  if (!isGeoGebraView(a) || !isGeoGebraView(b)) return false;
-  return Math.abs(a.cx - b.cx) <= 1e-6 * Math.max(1, Math.abs(a.cx))
-    && Math.abs(a.cy - b.cy) <= 1e-6 * Math.max(1, Math.abs(a.cy))
-    && Math.abs(a.sx / b.sx - 1) <= 1e-6
-    && Math.abs(a.sy / b.sy - 1) <= 1e-6;
+  const left = viewWindow(a);
+  const right = viewWindow(b);
+  if (!left || !right) return false;
+  return Math.abs(left.cx - right.cx) <= 1e-6 * Math.max(1, Math.abs(left.cx))
+    && Math.abs(left.cy - right.cy) <= 1e-6 * Math.max(1, Math.abs(left.cy))
+    && Math.abs(left.wx / right.wx - 1) <= 1e-6
+    && Math.abs(left.wy / right.wy - 1) <= 1e-6;
 }
 
 export function writeGeoGebraView(api, view) {
   const props = viewProperties(api);
-  if (!props || !isGeoGebraView(view) || typeof api.setCoordSystem !== 'function') return false;
-  const halfW = (props.width * view.sx) / 2;
-  const halfH = (props.height * view.sy) / 2;
-  api.setCoordSystem(view.cx - halfW, view.cx + halfW, view.cy - halfH, view.cy + halfH);
+  const window = viewWindow(view, props);
+  if (!props || !window || typeof api.setCoordSystem !== 'function') return false;
+  api.setCoordSystem(
+    window.cx - window.wx / 2,
+    window.cx + window.wx / 2,
+    window.cy - window.wy / 2,
+    window.cy + window.wy / 2,
+  );
   return true;
 }
 
