@@ -169,6 +169,22 @@ export function writeGeoGebraView(api, view) {
   return true;
 }
 
+// Один масштаб на обе оси: круг остаётся кругом, лишняя сторона показывает больше плоскости.
+export function fitUniformGeoGebraView(api, view) {
+  const props = viewProperties(api);
+  const frame = viewWindow(view, props);
+  if (!props || !frame || typeof api.setCoordSystem !== 'function') return false;
+  const unit = Math.max(frame.wx / props.width, frame.wy / props.height);
+  if (!(unit > 0)) return false;
+  api.setCoordSystem(
+    frame.cx - (unit * props.width) / 2,
+    frame.cx + (unit * props.width) / 2,
+    frame.cy - (unit * props.height) / 2,
+    frame.cy + (unit * props.height) / 2,
+  );
+  return true;
+}
+
 const CAMERA_KEYS = ['xZero', 'yZero', 'zZero', 'scale', 'xAngle', 'zAngle'];
 
 export function readCamera3d(xml) {

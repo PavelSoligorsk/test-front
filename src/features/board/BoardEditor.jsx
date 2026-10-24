@@ -2565,7 +2565,7 @@ export default function BoardEditor({
     }
 
     if (drag.kind === 'resize') {
-      const keepRatio = drag.obj.type === 'image' ? !event.shiftKey : event.shiftKey;
+      const keepRatio = drag.obj.type === 'geogebra' || (drag.obj.type === 'image' ? !event.shiftKey : event.shiftKey);
       const nextObj = { ...drag.obj, ...resizeBox(drag.obj, drag.handle, world, drag.start, keepRatio) };
       gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
       return;

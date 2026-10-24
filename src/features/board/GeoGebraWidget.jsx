@@ -3,6 +3,7 @@ import {
   angleGap,
   elementStates,
   graphStructure,
+  fitUniformGeoGebraView,
   isGeoGebraView,
   geoPixelScale,
   layoutSignature,
@@ -154,6 +155,9 @@ export default function GeoGebraWidget({
     if (same) return;
     sharpRef.current = { w: box.w, h: box.h, scale };
     glideRef.current.camera.fit = 0;
+    const flatAnchor = appName === '3d'
+      ? null
+      : (isGeoGebraView(viewRef.current) ? viewRef.current : readGeoGebraView(api));
     if (api && typeof api.setSize === 'function') {
       try {
         api.setSize(Math.round(box.w * scale), Math.round(box.h * scale));
@@ -161,11 +165,16 @@ export default function GeoGebraWidget({
         /* апплет ещё не готов к смене размера */
       }
     }
-    if (appName !== '3d' && isGeoGebraView(viewRef.current)) {
-      try { writeGeoGebraView(api, viewRef.current); } catch { /* вид догонит следующим кадром */ }
-    }
+    const fitFlat = () => {
+      if (!flatAnchor) return;
+      try { fitUniformGeoGebraView(apiRef.current, flatAnchor); } catch { /* вид догонит следующим кадром */ }
+    };
+    fitFlat();
     window.clearTimeout(fitTimerRef.current);
-    fitTimerRef.current = window.setTimeout(() => pinApplet(), 50);
+    fitTimerRef.current = window.setTimeout(() => {
+      pinApplet();
+      fitFlat();
+    }, 50);
   }
 
   function stopGlide() {
