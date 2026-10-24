@@ -169,6 +169,87 @@ export function writeGeoGebraView(api, view) {
   return true;
 }
 
+// Доли панелей меню. Пиксели экрана сюда не входят: на телефоне и на компьютере они разные.
+export function readMenuValue(api) {
+  const xml = readGeoGebraPerspective(api);
+  if (!xml) return '';
+  const panes = [];
+  const paneRe = /<pane\b([^>]*)\/?>/g;
+  let pane = paneRe.exec(xml);
+  while (pane) {
+    const divider = parseFloat(/\bdivider="([^"]+)"/.exec(pane[1])?.[1]);
+    const orientation = /\borientation="([^"]+)"/.exec(pane[1])?.[1] || '1';
+    if (divider >= 0 && divider <= 1) panes.push(`${orientation}:${divider.toFixed(4)}`);
+    pane = paneRe.exec(xml);
+  }
+  return panes.join(',');
+}
+
+export function readGeoGebraUnit(api) {
+  const props = viewProperties(api);
+  if (!props) return null;
+  return Math.max(props.invXscale, props.invYscale);
+}
+
+// Тот же масштаб в единицах на пиксель, центр прежний. Меняется только поле после сдвига меню.
+export function writeUniformUnit(api, view, unit) {
+  const props = viewProperties(api);
+  const frame = viewWindow(view, props);
+  if (!props || !frame || !(unit > 0) || typeof api.setCoordSystem !== 'function') return false;
+  api.setCoordSystem(
+    frame.cx - (unit * props.width) / 2,
+    frame.cx + (unit * props.width) / 2,
+    frame.cy - (unit * props.height) / 2,
+    frame.cy + (unit * props.height) / 2,
+  );
+  return true;
+}
+
+function placeSplit(dragger, fraction) {
+  if (!(dragger instanceof HTMLElement) || !(fraction >= 0 && fraction <= 1)) return false;
+  const panel = dragger.parentElement;
+  const menu = dragger.previousElementSibling;
+  const graphics = dragger.nextElementSibling;
+  if (!(panel instanceof HTMLElement) || !(menu instanceof HTMLElement)) return false;
+  const horizontal = dragger.classList.contains('gwt-SplitLayoutPanel-HDragger');
+  const total = horizontal ? panel.clientWidth : panel.clientHeight;
+  if (!(total > 2)) return false;
+  const size = Math.round(total * fraction);
+  const current = horizontal ? menu.offsetWidth : menu.offsetHeight;
+  if (Math.abs(current - size) < 2) return false;
+  const bar = horizontal ? dragger.offsetWidth : dragger.offsetHeight;
+  if (horizontal) {
+    menu.style.width = `${size}px`;
+    dragger.style.left = `${size}px`;
+    if (graphics instanceof HTMLElement) graphics.style.left = `${size + bar}px`;
+  } else {
+    menu.style.height = `${size}px`;
+    dragger.style.top = `${size}px`;
+    if (graphics instanceof HTMLElement) graphics.style.top = `${size + bar}px`;
+  }
+  return true;
+}
+
+// Ориентация 1 — левая панель (ширина), 0 — верхняя. Та же доля на любом устройстве.
+export function applyMenuValue(host, value) {
+  if (!host || !value) return false;
+  const parts = String(value).split(',').map((item) => {
+    const [orientation, raw] = item.split(':');
+    return { orientation: orientation || '1', divider: parseFloat(raw) };
+  }).filter((item) => item.divider >= 0 && item.divider <= 1);
+  if (!parts.length) return false;
+  const horizontal = [...host.querySelectorAll('.gwt-SplitLayoutPanel-HDragger')];
+  const vertical = [...host.querySelectorAll('.gwt-SplitLayoutPanel-VDragger')];
+  let across = 0;
+  let down = 0;
+  let applied = false;
+  parts.forEach((part) => {
+    const dragger = part.orientation === '0' ? vertical[down++] : horizontal[across++];
+    if (placeSplit(dragger, part.divider)) applied = true;
+  });
+  return applied;
+}
+
 // Один масштаб на обе оси: круг остаётся кругом, лишняя сторона показывает больше плоскости.
 export function fitUniformGeoGebraView(api, view) {
   const props = viewProperties(api);

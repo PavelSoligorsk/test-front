@@ -40,7 +40,7 @@ import {
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, sameGeoGebraView, theoryAppKind } from './geogebraApi';
+import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { setPenActive } from './penLock';
 import { applyOp, diffOps, keepLongerStrokes, reorder } from './ops';
@@ -1545,9 +1545,12 @@ export default function BoardEditor({
     geoLayoutTimerRef.current = window.setTimeout(async () => {
       const api = apiMap.current.get(id);
       if (!api || !mountedRef.current || editingIdRef.current !== id) return;
+      const is3d = current.props.appName === '3d';
+      const menu = is3d ? '' : readMenuValue(api);
+      const view = is3d ? null : readGeoGebraView(api);
+      const xml = readGeoGebraXml(api);
       const base64 = await readGeoGebraBase64(api);
       if (!base64 || !mountedRef.current || editingIdRef.current !== id) return;
-      const xml = readGeoGebraXml(api);
       const next = objectsRef.current.map((obj) => (
         obj.id === id && obj.type === 'geogebra'
           ? {
@@ -1558,6 +1561,8 @@ export default function BoardEditor({
               ggbLayout: uid(),
               ggbPerspective: '',
               ...(xml ? { ggbXml: xml } : {}),
+              ...(menu ? { ggbMenu: menu } : {}),
+              ...(view ? { ggbView: view } : {}),
             },
           }
           : obj

@@ -3,8 +3,12 @@ import {
   angleGap,
   elementStates,
   graphStructure,
+  applyMenuValue,
   fitUniformGeoGebraView,
   isGeoGebraView,
+  readGeoGebraUnit,
+  readMenuValue,
+  writeUniformUnit,
   geoPixelScale,
   layoutSignature,
   loadGeoGebraScript,
@@ -40,6 +44,7 @@ export default function GeoGebraWidget({
   ggbPerspective = '',
   ggbView = null,
   ggbLayout = '',
+  ggbMenu = '',
   setup = '',
   controls = [],
   texts = [],
@@ -58,10 +63,11 @@ export default function GeoGebraWidget({
   const perspectiveRef = useRef(ggbPerspective || '');
   const viewRef = useRef(ggbView || null);
   const layoutRef = useRef(ggbLayout || '');
+  const menuRef = useRef(ggbMenu || '');
   const appliedLayoutRef = useRef(ggbLayout || '');
   const menuHoldRef = useRef(false);
-  const menuPendingRef = useRef('');
-  const menuStillRef = useRef(0);
+  const menuDragRef = useRef(false);
+  const menuScaleRef = useRef(null);
   const layoutSeenRef = useRef('');
   const appliedStatesRef = useRef(new Map());
   const perspectiveRestoredRef = useRef(false);
@@ -96,9 +102,10 @@ export default function GeoGebraWidget({
     perspectiveRef.current = ggbPerspective || '';
     viewRef.current = ggbView || null;
     layoutRef.current = ggbLayout || '';
+    menuRef.current = ggbMenu || '';
     setupRef.current = setup || '';
     controlsRef.current = controls || [];
-  }, [ggbBase64, ggbXml, ggbPerspective, ggbView, ggbLayout, setup, controls]);
+  }, [ggbBase64, ggbXml, ggbPerspective, ggbView, ggbLayout, ggbMenu, setup, controls]);
 
   function frameBox() {
     const frame = frameRef.current;
@@ -115,7 +122,7 @@ export default function GeoGebraWidget({
     const host = hostRef.current;
     const box = frameBox();
     if (!host || !box) return null;
-    const scale = geoPixelScale(zoomRef.current);
+    const scale = appName === '3d' ? geoPixelScale(zoomRef.current) : 1;
     const pin = (node) => {
       if (!(node instanceof HTMLElement) || node.classList.contains('applet_scaler')) return;
       const style = node.style;
@@ -148,11 +155,19 @@ export default function GeoGebraWidget({
   function fitToFrame(api) {
     const box = frameBox();
     if (!box) return;
-    const scale = geoPixelScale(zoomRef.current);
+    const scale = appName === '3d' ? geoPixelScale(zoomRef.current) : 1;
     const prev = sharpRef.current;
     const same = prev && prev.w === box.w && prev.h === box.h && prev.scale === scale;
     pinApplet();
-    if (same) return;
+    if (same) {
+      if (appName !== '3d' && !menuHoldRef.current && applyMenuValue(hostRef.current, menuRef.current)) {
+        const anchor = isGeoGebraView(viewRef.current) ? viewRef.current : null;
+        if (anchor) {
+          try { fitUniformGeoGebraView(apiRef.current, anchor); } catch { /* вид догонит следующим кадром */ }
+        }
+      }
+      return;
+    }
     sharpRef.current = { w: box.w, h: box.h, scale };
     glideRef.current.camera.fit = 0;
     const flatAnchor = appName === '3d'
@@ -166,6 +181,9 @@ export default function GeoGebraWidget({
       }
     }
     const fitFlat = () => {
+      if (appName !== '3d' && menuRef.current && !menuHoldRef.current) {
+        applyMenuValue(hostRef.current, menuRef.current);
+      }
       if (!flatAnchor) return;
       try { fitUniformGeoGebraView(apiRef.current, flatAnchor); } catch { /* вид догонит следующим кадром */ }
     };
@@ -485,11 +503,28 @@ export default function GeoGebraWidget({
     glideRef.current.camera.now = kept.camera || glideRef.current.camera.now;
   }
 
+  function splitterTarget(target) {
+    return target instanceof Element
+      && Boolean(target.closest('.gwt-SplitLayoutPanel-HDragger, .gwt-SplitLayoutPanel-VDragger'));
+  }
+
+  function rememberMenuScale() {
+    if (menuScaleRef.current) return;
+    const api = apiRef.current;
+    const view = readGeoGebraView(api);
+    const unit = readGeoGebraUnit(api);
+    if (!view || !(unit > 0)) return;
+    menuScaleRef.current = { view, unit, menu: readMenuValue(api) };
+  }
+
   function publishMenu() {
     if (appName === '3d') return;
     const layout = layoutSignature(apiRef.current);
-    if (!layout || layout === layoutSeenRef.current) return;
-    layoutSeenRef.current = layout;
+    const menu = readMenuValue(apiRef.current);
+    const menuChanged = Boolean(menu) && menu !== (menuRef.current || '');
+    if ((!layout || layout === layoutSeenRef.current) && !menuChanged) return;
+    if (layout) layoutSeenRef.current = layout;
+    if (menu) menuRef.current = menu;
     onLayoutRef.current?.();
   }
 
@@ -603,7 +638,7 @@ export default function GeoGebraWidget({
         await loadGeoGebraScript();
         if (cancelled || !host || !window.GGBApplet) return;
         host.innerHTML = '';
-        const pixelScale = geoPixelScale(zoomRef.current);
+        const pixelScale = appName === '3d' ? geoPixelScale(zoomRef.current) : 1;
         sharpRef.current = {
           w: Math.max(40, Math.round(sizeAtStart.width)),
           h: Math.max(40, Math.round(sizeAtStart.height)),
@@ -641,6 +676,7 @@ export default function GeoGebraWidget({
             host.inert = !interactiveRef.current;
             host.style.pointerEvents = interactiveRef.current ? 'auto' : 'none';
             const notifyChange = () => {
+              if (menuDragRef.current) return;
               if (glideRef.current.raf) return;
               onChangeRef.current?.();
             };
@@ -726,22 +762,13 @@ export default function GeoGebraWidget({
       if (penActive()) return;
       const current = apiRef.current;
       if (!current) return;
+      if (appName !== '3d' && menuHoldRef.current) return;
       const xml = readGeoGebraXml(current);
       if (xml && xml !== lastXml) {
         lastXml = xml;
         onChangeRef.current?.();
       }
       const layout = layoutSignature(current);
-      if (appName !== '3d' && menuHoldRef.current) {
-        if (layout !== menuPendingRef.current) {
-          menuPendingRef.current = layout;
-          menuStillRef.current = 0;
-        } else {
-          menuStillRef.current += 150;
-        }
-        if (menuStillRef.current < 240) return;
-        menuHoldRef.current = false;
-      }
       if (layout !== lastLayout) {
         lastLayout = layout;
         if (appName === '3d') onLayoutRef.current?.();
@@ -755,20 +782,38 @@ export default function GeoGebraWidget({
     if (!interactive || status !== 'ready' || appName === '3d') return undefined;
     const host = hostRef.current;
     if (!host) return undefined;
+    const arm = (target) => {
+      menuHoldRef.current = true;
+      if (!splitterTarget(target)) return;
+      menuDragRef.current = true;
+      rememberMenuScale();
+    };
     const mark = (event) => {
       const target = event.target;
       if (!(target instanceof Node) || !host.contains(target)) return;
-      menuHoldRef.current = true;
-      menuStillRef.current = 0;
+      arm(target);
     };
+    let releaseTimer = 0;
     const release = () => {
       if (!menuHoldRef.current) return;
-      menuHoldRef.current = false;
-      requestAnimationFrame(() => publishMenu());
+      window.clearTimeout(releaseTimer);
+      releaseTimer = window.setTimeout(() => {
+        const api = apiRef.current;
+        const snap = menuScaleRef.current;
+        const menu = api ? readMenuValue(api) : '';
+        const changed = Boolean(snap && menu && menu !== snap.menu);
+        if (changed) {
+          try { writeUniformUnit(api, snap.view, snap.unit); } catch { /* масштаб остаётся как до сдвига меню */ }
+        }
+        menuScaleRef.current = null;
+        menuDragRef.current = false;
+        menuHoldRef.current = false;
+        if (changed) publishMenu();
+        onChangeRef.current?.();
+      }, 40);
     };
-    const hold = () => {
-      menuHoldRef.current = true;
-      menuStillRef.current = 0;
+    const hold = (event) => {
+      arm(event.target);
     };
     const docs = new Set();
     const bindDoc = (doc) => {
@@ -789,6 +834,7 @@ export default function GeoGebraWidget({
     window.addEventListener('pointercancel', release, true);
     window.addEventListener('mouseup', release, true);
     return () => {
+      window.clearTimeout(releaseTimer);
       docs.forEach((doc) => {
         doc.removeEventListener('pointerdown', hold, true);
         doc.removeEventListener('mousedown', hold, true);
@@ -832,7 +878,7 @@ export default function GeoGebraWidget({
     };
   }, [status]);
 
-  const pixelScale = geoPixelScale(zoom || 1);
+  const pixelScale = appName === '3d' ? geoPixelScale(zoom || 1) : 1;
   useEffect(() => {
     if (status !== 'ready') return;
     fitToFrame(apiRef.current);

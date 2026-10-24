@@ -312,6 +312,7 @@ function BoardObject({
               ggbPerspective={obj.props.ggbPerspective || ''}
               ggbView={obj.props.ggbView || null}
               ggbLayout={obj.props.ggbLayout || ''}
+              ggbMenu={obj.props.ggbMenu || ''}
               setup={obj.props.setup || ''}
               controls={obj.props.controls || []}
               texts={obj.props.texts || []}
