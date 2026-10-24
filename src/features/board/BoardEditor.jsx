@@ -53,9 +53,9 @@ import {
   intersects,
   rectFromPoints,
   resizeBox,
+  hitObject,
   smoothPath,
   snapMove,
-  topHit,
 } from './geometry';
 import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
 import { cloneObjects, parseObjects, serializeObjects } from './clipboard';
@@ -74,7 +74,35 @@ import {
 } from './model';
 import { boardImageSrc } from './images';
 import ShapeGlyph from './ShapeGlyph';
-import { SHAPE_GROUPS, defaultDepth, depthFromLocal, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
+import {
+  SHAPE_GROUPS,
+  attachSnap,
+  bindArrowEnds,
+  defaultDepth,
+  depthFromLocal,
+  extendStraight,
+  settleSnap,
+  jointLocal,
+  planeDefaults,
+  bindPolylineVertex,
+  bindPyramidBase,
+  moveApex,
+  movePolylineVertex,
+  movePyramidBase,
+  solidAnchors,
+  polylineFrame,
+  pruneJoints,
+  releaseMissingBinds,
+  retargetBound,
+  setArrowSide,
+  shapeFigures,
+  hitShapeContour,
+  shapeHandle,
+  shapeKnobPatch,
+  shapeKnobs,
+  shapeToneOpacity,
+  snapFigurePoint,
+} from './shapes';
 import { isPagesMeta } from './pages';
 import BoardTheoryPane from './BoardTheoryPane';
 import BoardTasksPane from './BoardTasksPane';
@@ -91,6 +119,16 @@ function isSurfaceMeta(obj) {
 
 function isHiddenBoardObject(obj) {
   return isPagesMeta(obj) || isSurfaceMeta(obj);
+}
+
+function pickObject(objects, point, zoom) {
+  for (let index = objects.length - 1; index >= 0; index -= 1) {
+    const obj = objects[index];
+    if (!obj) continue;
+    const hit = obj.type === 'shape' ? hitShapeContour(obj, point, zoom) : hitObject(obj, point, zoom);
+    if (hit) return obj;
+  }
+  return null;
 }
 
 function readSurface(objects) {
@@ -128,7 +166,7 @@ const TOOLS = [
 const INITIAL_STYLE = {
   sticky: STICKY_COLORS[0].bg,
   pen: PEN_COLORS[0],
-  penWidth: 4,
+  penWidth: 2,
   laserColor: LASER_COLOR,
   laserWidth: LASER_WIDTH,
   shape: 'cube',
@@ -156,7 +194,7 @@ const TOOL_CODES = {
 
 const MAX_OBJECTS = 10000;
 const SNAP_PX = 6;
-const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'marquee', 'pinch']);
+const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'shape-knob', 'poly-point', 'apex', 'base-point', 'marquee', 'pinch']);
 const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
 const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
 const SEND_MS = 50;
@@ -266,12 +304,15 @@ export default function BoardEditor({
   const peerCursorsRef = useRef(new Map());
   const cursorsOnRef = useRef(true);
   const incomingRef = useRef({ raf: 0, before: null });
+  const gestureIdsRef = useRef(new Set());
+  const gestureFrameRef = useRef(0);
   const clientIdRef = useRef(null);
   const lastErrorRef = useRef({ text: '', at: 0 });
   const apiMap = useRef(new Map());
   const pastRef = useRef([]);
   const futureRef = useRef([]);
   const dragRef = useRef(null);
+  const chainRef = useRef(null);
   const draftRef = useRef(null);
   const linkHoldRef = useRef(null);
   const dragCleanupRef = useRef(null);
@@ -375,10 +416,14 @@ export default function BoardEditor({
   }
 
   function commit(next) {
+    const before = new Map(objectsRef.current.map((obj) => [obj.id, obj]));
     pushHistory(objectsRef.current, next);
     objectsRef.current = next;
     setObjects(next);
     scheduleSend();
+    next.forEach((obj) => {
+      if (before.get(obj.id) !== obj) paintObject(obj);
+    });
   }
 
   function send(op) {
@@ -436,16 +481,11 @@ export default function BoardEditor({
     if (next === before) return;
     objectsRef.current = next;
     if (op.type === 'append_points' && paintStrokeDom(next, op.id)) return;
-    // Пока кто-то рисует, операции идут десятками в секунду: React перерисовывается не чаще раза за кадр.
     const incoming = incomingRef.current;
     if (incoming.raf) return;
-    incoming.before = before;
     incoming.raf = requestAnimationFrame(() => {
       incoming.raf = 0;
-      const from = incoming.before;
-      incoming.before = null;
       if (!mountedRef.current) return;
-      if (from && from !== objectsRef.current) noteShapeGlide(from, objectsRef.current);
       setObjects(objectsRef.current);
       pruneSelection();
     });
@@ -630,6 +670,7 @@ export default function BoardEditor({
       const client = pointerClientRef.current;
       if (!client || !viewportRef.current) return;
       const world = clientToWorld(client.x, client.y);
+      if (!world) return;
       socket.cursor(Math.round(world.x), Math.round(world.y));
     };
     pointerClientRef.current = { x: clientX, y: clientY };
@@ -653,6 +694,7 @@ export default function BoardEditor({
 
   function placeTheoryBlock(payload) {
     const point = viewportCenterWorld();
+    if (!point) return;
     if (payload?.kind === 'geogebra') {
       const height = Math.max(220, parseInt(payload.height, 10) || 400);
       const obj = createObject('geogebra', {
@@ -673,7 +715,9 @@ export default function BoardEditor({
       return;
     }
     if (payload?.kind === 'theory' && payload.block) {
-      const rect = viewportRef.current.getBoundingClientRect();
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
       const origin = clientToWorld(rect.left + 16, rect.top + 96);
       const obj = createObject('text', {
         x: origin.x,
@@ -951,8 +995,12 @@ export default function BoardEditor({
       paintSurface(cam);
       viewport.querySelectorAll('[data-handle]').forEach((handle) => {
         const kind = handle.dataset.handle;
-        if (kind === 'start' || kind === 'end') {
+        if (kind === 'start' || kind === 'end' || kind === 'skew' || kind === 'slantL' || kind === 'slantR' || kind === 'spin' || kind === 'lean' || kind === 'apex' || kind === 'joint' || kind?.startsWith('poly-') || kind?.startsWith('base-')) {
           handle.style.transform = `translate(-50%, -50%) scale(${inv})`;
+          return;
+        }
+        if (kind === 'depth') {
+          handle.style.transform = `translate(-50%, -50%) rotate(45deg) scale(${inv})`;
           return;
         }
         const x = kind?.includes('w') ? '-50%' : '50%';
@@ -1005,6 +1053,13 @@ export default function BoardEditor({
         end.style.left = `${obj.props.x2}px`;
         end.style.top = `${obj.props.y2}px`;
       }
+      (obj.props.joints || []).forEach((joint) => {
+        const dot = el.querySelector(`[data-point="${CSS.escape(joint.id)}"]`);
+        if (!dot) return;
+        const t = Number(joint.t) || 0;
+        dot.style.left = `${obj.props.x1 + (obj.props.x2 - obj.props.x1) * t}px`;
+        dot.style.top = `${obj.props.y1 + (obj.props.y2 - obj.props.y1) * t}px`;
+      });
     }
     if (obj.type === 'shape') {
       const svg = el.querySelector('[data-shape]');
@@ -1012,7 +1067,7 @@ export default function BoardEditor({
         svg.replaceChildren();
         const fill = obj.props.fill || '#ffffff';
         const stroke = obj.props.stroke || '#18181b';
-        shapeFigures(obj.props.shape, obj.props.depth).forEach((fig) => {
+        shapeFigures(obj.props.shape, obj.props.depth, obj.props).forEach((fig) => {
           const node = document.createElementNS('http://www.w3.org/2000/svg', fig.ellipse ? 'ellipse' : fig.d ? 'path' : 'polygon');
           if (fig.ellipse) {
             node.setAttribute('cx', fig.ellipse.cx);
@@ -1022,21 +1077,60 @@ export default function BoardEditor({
           } else if (fig.d) node.setAttribute('d', fig.d);
           else node.setAttribute('points', fig.points);
           node.setAttribute('fill', fig.fill === 'none' ? 'none' : fill);
-          node.setAttribute('stroke', stroke);
+          node.setAttribute('stroke', fig.stroke === 'none' ? 'none' : stroke);
           node.setAttribute('stroke-width', '2');
           node.setAttribute('stroke-linejoin', 'round');
           node.setAttribute('vector-effect', 'non-scaling-stroke');
           if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
-          if (fig.dashed) node.setAttribute('stroke-dasharray', '4 3');
+          if (fig.dashed || obj.props.dashed) node.setAttribute('stroke-dasharray', '4 3');
           svg.appendChild(node);
         });
       }
+      (obj.props.joints || []).forEach((joint) => {
+        const dot = el.querySelector(`[data-point="${CSS.escape(joint.id)}"]`);
+        if (!dot) return;
+        const [x, y] = jointLocal(obj, joint);
+        dot.style.left = `${x}%`;
+        dot.style.top = `${y}%`;
+      });
+      if (obj.props.shape === 'polyline') {
+        (obj.props.points || []).forEach((point, index) => {
+          const dot = el.querySelector(`[data-point="v${index}"]`);
+          const handle = el.querySelector(`[data-handle="poly-${index}"]`);
+          if (dot) {
+            dot.style.left = `${point[0]}%`;
+            dot.style.top = `${point[1]}%`;
+          }
+          if (handle) {
+            handle.style.left = `${point[0]}%`;
+            handle.style.top = `${point[1]}%`;
+          }
+        });
+      }
+      shapeKnobs(obj.props.shape, obj.props).forEach((knob) => {
+        const node = el.querySelector(`[data-handle="${knob.key}"]`);
+        if (!node) return;
+        node.style.left = `${knob.x}%`;
+        node.style.top = `${knob.y}%`;
+      });
       const knob = el.querySelector('[data-handle="depth"]');
       if (knob) {
-        const point = shapeHandle(obj.props.shape, obj.props.depth);
+        const point = shapeHandle(obj.props.shape, obj.props.depth, obj.props);
         knob.style.left = `${point.x}%`;
         knob.style.top = `${point.y}%`;
       }
+      const anchors = solidAnchors(obj.props.shape, obj.props.depth, obj.props);
+      const apex = el.querySelector('[data-handle="apex"]');
+      if (apex && anchors?.apex) {
+        apex.style.left = `${anchors.apex[0]}%`;
+        apex.style.top = `${anchors.apex[1]}%`;
+      }
+      (anchors?.base || []).forEach((point, index) => {
+        const handle = el.querySelector(`[data-handle="base-${index}"]`);
+        if (!handle) return;
+        handle.style.left = `${point[0]}%`;
+        handle.style.top = `${point[1]}%`;
+      });
     }
   }
 
@@ -1046,10 +1140,14 @@ export default function BoardEditor({
   }
 
   function draggedShapeIds() {
+    const ids = new Set(gestureIdsRef.current);
     const drag = dragRef.current;
-    if (!drag) return new Set();
-    if (drag.starts instanceof Set && drag.starts.size) return drag.starts;
-    return new Set(drag.id ? [drag.id] : []);
+    if (!drag) return ids;
+    if ((drag.starts instanceof Map || drag.starts instanceof Set) && drag.starts.size) {
+      drag.starts.forEach((_, id) => ids.add(id));
+    }
+    if (drag.id) ids.add(drag.id);
+    return ids;
   }
 
   function displayedObject(obj) {
@@ -1077,9 +1175,14 @@ export default function BoardEditor({
 
   function stopShapeGlide() {
     const glide = shapeGlideRef.current;
+    const ids = [...glide.items.keys()];
     if (glide.raf) cancelAnimationFrame(glide.raf);
     glide.raf = 0;
     glide.items.clear();
+    ids.forEach((id) => {
+      const obj = objectsRef.current.find((item) => item.id === id);
+      if (obj) paintObject(obj);
+    });
   }
 
   function tickShapeGlide(now) {
@@ -1178,10 +1281,21 @@ export default function BoardEditor({
   }
 
   function gesture(next, changed) {
+    stopShapeGlide();
     objectsRef.current = next;
-    changed.forEach(paintObject);
+    changed.forEach((obj) => {
+      if (!obj) return;
+      if (obj.id) gestureIdsRef.current.add(obj.id);
+      paintObject(obj);
+    });
     paintSelectionUi();
     scheduleSend();
+    if (gestureFrameRef.current) return;
+    gestureFrameRef.current = requestAnimationFrame(() => {
+      gestureFrameRef.current = 0;
+      if (!dragRef.current) return;
+      setObjects(objectsRef.current);
+    });
   }
 
   function hideErased(before, next) {
@@ -1193,6 +1307,14 @@ export default function BoardEditor({
     });
     objectsRef.current = next;
     scheduleSend();
+  }
+
+  function releaseGesture() {
+    gestureIdsRef.current.clear();
+    if (gestureFrameRef.current) {
+      cancelAnimationFrame(gestureFrameRef.current);
+      gestureFrameRef.current = 0;
+    }
   }
 
   function publishGesture() {
@@ -1294,6 +1416,48 @@ export default function BoardEditor({
       host.appendChild(node);
       return;
     }
+    if (draft.kind === 'chain') {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '1');
+      svg.setAttribute('height', '1');
+      svg.style.position = 'absolute';
+      svg.style.left = '0';
+      svg.style.top = '0';
+      svg.style.overflow = 'visible';
+      const addLine = (x1, y1, x2, y2, dashed) => {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        line.setAttribute('stroke', draft.stroke || '#18181b');
+        line.setAttribute('stroke-width', '2');
+        line.setAttribute('stroke-linecap', 'round');
+        if (dashed) line.setAttribute('stroke-dasharray', '6 4');
+        svg.appendChild(line);
+      };
+      draft.points.forEach((point, index) => {
+        if (index) addLine(draft.points[index - 1].x, draft.points[index - 1].y, point.x, point.y, false);
+      });
+      if (draft.closing && draft.points.length) {
+        const last = draft.points[draft.points.length - 1];
+        addLine(last.x, last.y, draft.points[0].x, draft.points[0].y, false);
+      } else if (draft.hover && draft.points.length) {
+        const last = draft.points[draft.points.length - 1];
+        addLine(last.x, last.y, draft.hover.x, draft.hover.y, false);
+      }
+      if (draft.guide) addLine(draft.guide.x1, draft.guide.y1, draft.guide.x2, draft.guide.y2, true);
+      draft.points.forEach((point, index) => {
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', point.x);
+        dot.setAttribute('cy', point.y);
+        dot.setAttribute('r', index === 0 ? '3.5' : '2.5');
+        dot.setAttribute('fill', '#18181b');
+        svg.appendChild(dot);
+      });
+      host.appendChild(svg);
+      return;
+    }
     if (draft.kind === 'shape') {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
@@ -1315,7 +1479,7 @@ export default function BoardEditor({
         } else if (fig.d) node.setAttribute('d', fig.d);
         else node.setAttribute('points', fig.points);
         node.setAttribute('fill', fig.fill === 'none' ? 'none' : draft.fill);
-        node.setAttribute('stroke', draft.stroke);
+        node.setAttribute('stroke', fig.stroke === 'none' ? 'none' : draft.stroke);
         node.setAttribute('stroke-width', '2');
         node.setAttribute('stroke-linejoin', 'round');
         node.setAttribute('vector-effect', 'non-scaling-stroke');
@@ -1374,6 +1538,17 @@ export default function BoardEditor({
       line.setAttribute('stroke-width', draft.width);
       line.setAttribute('stroke-linecap', 'round');
       svg.appendChild(line);
+      if (draft.guide) {
+        const guide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        guide.setAttribute('x1', draft.guide.x1 - left);
+        guide.setAttribute('y1', draft.guide.y1 - top);
+        guide.setAttribute('x2', draft.guide.x2 - left);
+        guide.setAttribute('y2', draft.guide.y2 - top);
+        guide.setAttribute('stroke', draft.color);
+        guide.setAttribute('stroke-width', '1.5');
+        guide.setAttribute('stroke-dasharray', '6 4');
+        svg.appendChild(guide);
+      }
     }
     host.appendChild(svg);
   }
@@ -1383,7 +1558,9 @@ export default function BoardEditor({
   }
 
   function clientToWorld(clientX, clientY) {
-    const rect = viewportRef.current.getBoundingClientRect();
+    const viewport = viewportRef.current;
+    if (!viewport) return null;
+    const rect = viewport.getBoundingClientRect();
     const cam = cameraRef.current;
     return {
       x: (clientX - rect.left - cam.x) / cam.zoom,
@@ -1392,7 +1569,9 @@ export default function BoardEditor({
   }
 
   function viewportCenterWorld() {
-    const rect = viewportRef.current.getBoundingClientRect();
+    const viewport = viewportRef.current;
+    if (!viewport) return null;
+    const rect = viewport.getBoundingClientRect();
     return clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
 
@@ -1402,7 +1581,9 @@ export default function BoardEditor({
   }
 
   function zoomAt(nextZoom, clientX, clientY) {
-    const rect = viewportRef.current.getBoundingClientRect();
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
     const cam = cameraRef.current;
     const zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
     const px = clientX - rect.left;
@@ -1414,7 +1595,9 @@ export default function BoardEditor({
   }
 
   function zoomBy(factor) {
-    const rect = viewportRef.current.getBoundingClientRect();
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
     zoomAt(cameraRef.current.zoom * factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
   }
 
@@ -1646,9 +1829,8 @@ export default function BoardEditor({
       },
     });
     socketRef.current = socket;
-    const onBeforeUnload = (event) => {
+    const onBeforeUnload = () => {
       liveRef.current.flushOps?.();
-      if (socket.pendingCount() > 0) event.preventDefault();
     };
     const onPageHide = () => liveRef.current.flushOps?.();
     window.addEventListener('beforeunload', onBeforeUnload);
@@ -1683,6 +1865,7 @@ export default function BoardEditor({
       window.clearTimeout(cursorTimerRef.current);
       setPenActive(false);
       cancelAnimationFrame(ink.raf);
+      dragCleanupRef.current?.();
       stopShapeGlide();
     };
   }, []);
@@ -1690,6 +1873,15 @@ export default function BoardEditor({
   useEffect(() => {
     scheduleSend();
   }, [objects, title]);
+
+  useLayoutEffect(() => {
+    const ids = draggedShapeIds();
+    if (!ids.size) return;
+    ids.forEach((id) => {
+      const obj = objectsRef.current.find((item) => item.id === id);
+      if (obj) paintObject(obj);
+    });
+  });
 
   useEffect(() => {
     if (!editingId || readOnly) return undefined;
@@ -1773,7 +1965,7 @@ export default function BoardEditor({
     if (readOnlyRef.current) return;
     const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
     if (!set.size) return;
-    commit(objectsRef.current.filter((obj) => !set.has(obj.id)));
+    commit(releaseMissingBinds(objectsRef.current.filter((obj) => !set.has(obj.id))));
     selectIds(selectedIdsRef.current.filter((id) => !set.has(id)));
     setEditingId(null);
   }
@@ -1781,16 +1973,66 @@ export default function BoardEditor({
   function patchSelected(type, patch) {
     const set = new Set(selectedList().filter((obj) => obj.type === type && canEdit(obj)).map((obj) => obj.id));
     if (!set.size) return;
-    commit(objectsRef.current.map((obj) => {
+    let next = objectsRef.current.map((obj) => {
       if (!set.has(obj.id)) return obj;
-      const next = { ...obj, props: { ...obj.props, ...patch } };
+      const updated = { ...obj, props: { ...obj.props, ...patch } };
       if (type === 'task' && patch.fontSize) {
         const w = Math.round(TASK_CARD_W * (patch.fontSize / TASK_FONT));
-        next.x = obj.x + (obj.w - w) / 2;
-        next.w = w;
+        updated.x = obj.x + (obj.w - w) / 2;
+        updated.w = w;
       }
-      return next;
-    }));
+      return updated;
+    });
+    if (type === 'shape' && patch.shape) {
+      const changedIds = new Set(
+        objectsRef.current.filter((obj) => set.has(obj.id) && obj.props.shape !== patch.shape).map((obj) => obj.id),
+      );
+      if (changedIds.size) {
+        next = next.map((obj) => {
+          if (obj.type !== 'arrow') return obj;
+          const bind1 = obj.props.bind1 && changedIds.has(obj.props.bind1.id) ? null : obj.props.bind1 || null;
+          const bind2 = obj.props.bind2 && changedIds.has(obj.props.bind2.id) ? null : obj.props.bind2 || null;
+          if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
+          return { ...obj, props: { ...obj.props, bind1, bind2 } };
+        });
+        next = pruneJoints(next);
+      }
+    }
+    commit(next);
+  }
+
+  function followMoved(next, movedIds) {
+    const moved = new Set(movedIds);
+    const hostIds = next.filter((obj) => moved.has(obj.id) && (obj.type === 'shape' || obj.type === 'arrow')).map((obj) => obj.id);
+    const hostSet = new Set(hostIds);
+    const result = next.map((obj) => {
+      if (!moved.has(obj.id)) return obj;
+      if (obj.type === 'arrow') {
+        const bind1 = obj.props.bind1 && hostSet.has(obj.props.bind1.id) ? obj.props.bind1 : null;
+        const bind2 = obj.props.bind2 && hostSet.has(obj.props.bind2.id) ? obj.props.bind2 : null;
+        if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
+        return { ...obj, props: { ...obj.props, bind1, bind2 } };
+      }
+      if (obj.type === 'shape' && obj.props.shape === 'polyline' && Array.isArray(obj.props.binds)) {
+        const binds = obj.props.binds.map((bind) => (bind && hostSet.has(bind.id) ? bind : null));
+        if (binds.every((bind, index) => (bind || null) === (obj.props.binds[index] || null))) return obj;
+        return { ...obj, props: { ...obj.props, binds } };
+      }
+      if (obj.type === 'shape' && obj.props.shape === 'pyramid3' && Array.isArray(obj.props.baseBinds)) {
+        const baseBinds = obj.props.baseBinds.map((bind) => (bind && hostSet.has(bind.id) ? bind : null));
+        if (baseBinds.every((bind, index) => (bind || null) === (obj.props.baseBinds[index] || null))) return obj;
+        return { ...obj, props: { ...obj.props, baseBinds } };
+      }
+      return obj;
+    });
+    return hostIds.length ? retargetBound(result, hostIds) : pruneJoints(result);
+  }
+
+  function gestureFollow(base, movedIds, changed) {
+    const settled = followMoved(base, movedIds);
+    const known = new Set(changed.map((obj) => obj.id));
+    const extra = settled.filter((obj, index) => obj !== base[index] && !known.has(obj.id));
+    gesture(settled, [...changed, ...extra]);
   }
 
   function reorderSelected(toFront) {
@@ -1842,7 +2084,119 @@ export default function BoardEditor({
   function nudge(dx, dy) {
     const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
     if (!set.size) return;
-    commit(objectsRef.current.map((obj) => (set.has(obj.id) ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj)));
+    const moved = objectsRef.current.map((obj) => (set.has(obj.id) ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj));
+    commit(followMoved(moved, [...set]));
+  }
+
+  function styleKeys(key) {
+    if (readOnlyRef.current) return false;
+    const selected = objectsRef.current.filter((obj) => selectedIdsRef.current.includes(obj.id) && canEdit(obj));
+    if (!selected.length || !selected.every((obj) => obj.type === 'shape' || obj.type === 'arrow')) return false;
+    if (key === 'ArrowUp' || key === 'ArrowDown') {
+      const dashed = key === 'ArrowDown';
+      const ids = new Set(selected.map((obj) => obj.id));
+      commit(objectsRef.current.map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, dashed } } : obj)));
+      return true;
+    }
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      const arrows = selected.filter((obj) => obj.type === 'arrow');
+      if (!arrows.length) return false;
+      const side = key === 'ArrowLeft' ? 'left' : 'right';
+      const ids = new Set(arrows.map((obj) => obj.id));
+      commit(objectsRef.current.map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, ...setArrowSide(obj, side) } } : obj)));
+      return true;
+    }
+    return false;
+  }
+
+  function arrowSide(side) {
+    if (readOnlyRef.current) return;
+    const ids = new Set(selectedList().filter((obj) => obj.type === 'arrow' && canEdit(obj)).map((obj) => obj.id));
+    if (!ids.size) return;
+    commit(objectsRef.current.map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, ...setArrowSide(obj, side) } } : obj)));
+  }
+
+  function aimPoint(point, anchor, alt, ignoreId) {
+    const zoom = cameraRef.current.zoom || 1;
+    if (alt) return { point, dist: Infinity };
+    const hosts = objectsRef.current;
+    const hit = settleSnap(snapFigurePoint(point, hosts, zoom, ignoreId), hosts);
+    const locked = anchor ? settleSnap(anchor, hosts) : null;
+    const straight = locked ? extendStraight(point, locked, hosts, zoom) : null;
+    if (straight && !hit.bind && straight.dist < hit.dist) return { point: straight.point, guide: straight.guide, dist: straight.dist };
+    return hit;
+  }
+
+  function commitChain(chain, closed) {
+    chainRef.current = null;
+    paintDraft(null);
+    if (!chain || chain.points.length < 2) return false;
+    if (objectsRef.current.length + 1 > MAX_OBJECTS) {
+      notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+      return true;
+    }
+    const look = styleRef.current;
+    let next = objectsRef.current;
+    const binds = [];
+    chain.hits.forEach((hit) => {
+      const placed = attachSnap(next, hit, uid);
+      next = placed.objects;
+      binds.push(placed.bind);
+    });
+    const frame = polylineFrame(chain.points, {
+      shape: 'polyline',
+      closed,
+      binds,
+      fill: closed ? look.fill.fill : 'none',
+      stroke: look.fill.stroke,
+      text: '',
+      depth: 0,
+    });
+    const obj = createObject('shape', frame);
+    commit([...next, obj]);
+    selectIds([obj.id]);
+    return true;
+  }
+
+  function finishChain() {
+    const chain = chainRef.current;
+    if (!chain) return false;
+    return commitChain(chain, false);
+  }
+
+  function paintChainPreview(hover) {
+    const chain = chainRef.current;
+    if (!chain) {
+      paintDraft(null);
+      return;
+    }
+    const zoom = cameraRef.current.zoom || 1;
+    const closing = Boolean(hover) && chain.points.length >= 3
+      && Math.hypot(hover.point.x - chain.points[0].x, hover.point.y - chain.points[0].y) <= 16 / zoom;
+    paintDraft({
+      kind: 'chain',
+      points: chain.points,
+      hover: closing ? null : hover?.point,
+      guide: closing ? null : hover?.guide,
+      closing,
+      stroke: styleRef.current.fill.stroke,
+    });
+  }
+
+  function placePolylinePoint(world, alt) {
+    const chain = chainRef.current;
+    const zoom = cameraRef.current.zoom || 1;
+    if (chain && chain.points.length >= 3 && Math.hypot(world.x - chain.points[0].x, world.y - chain.points[0].y) <= 16 / zoom) {
+      commitChain(chain, true);
+      return;
+    }
+    const hit = aimPoint(world, chain?.hits?.at(-1), alt);
+    if (chain && Math.hypot(hit.point.x - chain.points.at(-1).x, hit.point.y - chain.points.at(-1).y) < 4 / zoom) return;
+    chainRef.current = {
+      points: chain ? [...chain.points, hit.point] : [hit.point],
+      hits: chain ? [...chain.hits, hit] : [hit],
+    };
+    paintChainPreview(null);
   }
 
   function pasteObjects(list, point) {
@@ -2061,6 +2415,9 @@ export default function BoardEditor({
       toggleLock,
       reorderSelected,
       nudge,
+      styleKeys,
+      arrowSide,
+      finishChain,
       fitAll,
       zoomTo,
       pasteObjects,
@@ -2151,6 +2508,7 @@ export default function BoardEditor({
       }
       if (event.key.startsWith('Arrow') && selectedIdsRef.current.length) {
         event.preventDefault();
+        if (!event.shiftKey && actions.styleKeys(event.key)) return;
         const step = event.shiftKey ? 10 : 1;
         const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
         const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
@@ -2163,6 +2521,7 @@ export default function BoardEditor({
         return;
       }
       if (event.key === 'Escape') {
+        if (actions.finishChain?.()) return;
         setEditingId(null);
         selectedIdsRef.current = [];
         setSelectedIds([]);
@@ -2207,6 +2566,7 @@ export default function BoardEditor({
       if (!data) return;
       const actions = actionsRef.current;
       const point = actions.pasteTarget();
+      if (!point) return;
       const files = imageFiles(data.files);
       if (files.length) {
         event.preventDefault();
@@ -2328,6 +2688,7 @@ export default function BoardEditor({
   }
 
   function endPinch() {
+    releaseGesture();
     dragRef.current = null;
     paintCursor();
     publishGesture();
@@ -2349,6 +2710,7 @@ export default function BoardEditor({
   function cancelDrag() {
     const drag = dragRef.current;
     if (!drag) return;
+    releaseGesture();
     dragRef.current = null;
     flushHeldLink();
     dragCleanupRef.current?.();
@@ -2376,6 +2738,7 @@ export default function BoardEditor({
 
   function finishDrag(event) {
     const drag = dragRef.current;
+    releaseGesture();
     dragRef.current = null;
     if (drag?.kind === 'pen') setPenActive(false);
     flushHeldLink();
@@ -2393,6 +2756,7 @@ export default function BoardEditor({
         return;
       }
       const world = toWorld(event);
+      if (!world) return;
       const currentStyle = styleRef.current;
 
       if (drag.kind === 'marquee') {
@@ -2426,6 +2790,7 @@ export default function BoardEditor({
             stroke: currentStyle.fill.stroke,
             depth: defaultDepth(currentStyle.shape),
             text: '',
+            ...planeDefaults(currentStyle.shape),
           },
         });
         if (addObjects([shape])) selectIds([shape.id]);
@@ -2434,16 +2799,41 @@ export default function BoardEditor({
       }
 
       if (drag.kind === 'arrow') {
-        if (Math.hypot(world.x - drag.start.x, world.y - drag.start.y) < 8 / cameraRef.current.zoom) return;
-        const bounds = arrowBounds(drag.start, world, {
+        const zoom = cameraRef.current.zoom;
+        const startHit = aimPoint(drag.start, null, event.altKey);
+        const endHit = aimPoint(world, startHit, event.altKey);
+        if (Math.hypot(endHit.point.x - startHit.point.x, endHit.point.y - startHit.point.y) < 8 / zoom) return;
+        let next = objectsRef.current;
+        const startBind = attachSnap(next, startHit, uid);
+        next = startBind.objects;
+        const endBind = attachSnap(next, endHit, uid);
+        next = endBind.objects;
+        if (next.length + 1 > MAX_OBJECTS) {
+          notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+          return;
+        }
+        const arrow = createObject('arrow', arrowBounds(startHit.point, endHit.point, {
           color: currentStyle.arrow,
           width: currentStyle.penWidth,
           head: false,
-        });
-        const arrow = createObject('arrow', bounds);
-        if (addObjects([arrow])) selectIds([arrow.id]);
-        setTool('select');
+          bind1: startBind.bind,
+          bind2: endBind.bind,
+        }));
+        commit([...next, arrow]);
+        selectIds([arrow.id]);
         return;
+      }
+
+      if (drag.kind === 'arrow-end' && drag.dirty && !event.altKey) {
+        objectsRef.current = bindArrowEnds(objectsRef.current, drag.id, cameraRef.current.zoom, uid);
+      }
+
+      if (drag.kind === 'poly-point' && drag.dirty && !event.altKey) {
+        objectsRef.current = bindPolylineVertex(objectsRef.current, drag.id, drag.index, cameraRef.current.zoom, uid);
+      }
+
+      if (drag.kind === 'base-point' && drag.dirty && !event.altKey) {
+        objectsRef.current = bindPyramidBase(objectsRef.current, drag.id, drag.index, cameraRef.current.zoom, uid);
       }
 
       if (drag.dirty && drag.origin) pushHistory(drag.origin);
@@ -2452,6 +2842,7 @@ export default function BoardEditor({
       publishGesture();
       paintSelectionUi();
       flushHeldLink();
+      flushOps();
     }
   }
 
@@ -2471,6 +2862,7 @@ export default function BoardEditor({
     }
 
     const world = toWorld(event);
+    if (!world) return;
     const currentStyle = styleRef.current;
     const zoom = cameraRef.current.zoom;
 
@@ -2524,12 +2916,15 @@ export default function BoardEditor({
     }
 
     if (drag.kind === 'arrow') {
+      const startHit = aimPoint(drag.start, null, event.altKey);
+      const endHit = aimPoint(world, startHit, event.altKey);
       paintDraft({
         kind: 'arrow',
-        x1: drag.start.x,
-        y1: drag.start.y,
-        x2: world.x,
-        y2: world.y,
+        x1: startHit.point.x,
+        y1: startHit.point.y,
+        x2: endHit.point.x,
+        y2: endHit.point.y,
+        guide: endHit.guide,
         color: currentStyle.arrow,
         width: currentStyle.penWidth,
       });
@@ -2565,14 +2960,22 @@ export default function BoardEditor({
         changed.push(moved);
         return moved;
       });
-      gesture(next, changed);
+      gestureFollow(next, changed.map((obj) => obj.id), changed);
       return;
     }
 
     if (drag.kind === 'resize') {
       const keepRatio = drag.obj.type === 'geogebra' || (drag.obj.type === 'image' ? !event.shiftKey : event.shiftKey);
       const nextObj = { ...drag.obj, ...resizeBox(drag.obj, drag.handle, world, drag.start, keepRatio) };
-      gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
+      if (nextObj.type === 'shape' && nextObj.props.shape === 'polyline' && Array.isArray(nextObj.props.binds)) {
+        nextObj.props = { ...nextObj.props, binds: nextObj.props.binds.map(() => null) };
+      }
+      if (nextObj.type === 'shape' && nextObj.props.shape === 'pyramid3' && Array.isArray(nextObj.props.baseBinds)) {
+        nextObj.props = { ...nextObj.props, baseBinds: nextObj.props.baseBinds.map(() => null) };
+      }
+      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
+      if (nextObj.type === 'shape') gestureFollow(base, [nextObj.id], [nextObj]);
+      else gesture(base, [nextObj]);
       return;
     }
 
@@ -2580,19 +2983,62 @@ export default function BoardEditor({
       const box = drag.obj;
       const u = ((world.x - box.x) / box.w) * 100;
       const v = ((world.y - box.y) / box.h) * 100;
-      const depth = depthFromLocal(box.props.shape, u, v);
+      const depth = depthFromLocal(box.props.shape, u, v, box.props);
       const nextObj = { ...box, props: { ...box.props, depth } };
-      gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
+      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
+      gestureFollow(base, [nextObj.id], [nextObj]);
+      return;
+    }
+
+    if (drag.kind === 'apex') {
+      const box = drag.obj;
+      const u = ((world.x - box.x) / box.w) * 100;
+      const v = ((world.y - box.y) / box.h) * 100;
+      const nextObj = { ...box, props: { ...box.props, ...moveApex(box.props.shape, box.props, u, v) } };
+      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
+      gestureFollow(base, [nextObj.id], [nextObj]);
+      return;
+    }
+
+    if (drag.kind === 'base-point') {
+      const box = drag.obj;
+      const hit = aimPoint(world, null, event.altKey, drag.id);
+      const local = [((hit.point.x - box.x) / box.w) * 100, ((hit.point.y - box.y) / box.h) * 100];
+      const moved = movePyramidBase(box, drag.index, local);
+      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? moved : obj));
+      gestureFollow(base, [moved.id], [moved]);
+      return;
+    }
+
+    if (drag.kind === 'poly-point') {
+      const hit = aimPoint(world, null, event.altKey, drag.id);
+      const moved = movePolylineVertex(drag.obj, drag.index, hit.point);
+      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? moved : obj));
+      const settled = retargetBound(base, [drag.id]);
+      const known = new Set([drag.id]);
+      const extra = settled.filter((obj, index) => obj !== base[index] && !known.has(obj.id));
+      gesture(settled, [settled.find((obj) => obj.id === drag.id), ...extra]);
+      return;
+    }
+
+    if (drag.kind === 'shape-knob') {
+      const box = drag.obj;
+      const u = ((world.x - box.x) / box.w) * 100;
+      const patch = shapeKnobPatch(box.props.shape, drag.handle, u, box.props);
+      if (!patch) return;
+      const nextObj = { ...box, props: { ...box.props, ...patch } };
+      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
+      gestureFollow(base, [nextObj.id], [nextObj]);
       return;
     }
 
     if (drag.kind === 'arrow-end') {
-      const start = drag.handle === 'start'
-        ? world
-        : { x: drag.obj.x + drag.obj.props.x1, y: drag.obj.y + drag.obj.props.y1 };
-      const end = drag.handle === 'end'
-        ? world
-        : { x: drag.obj.x + drag.obj.props.x2, y: drag.obj.y + drag.obj.props.y2 };
+      const fixed = drag.handle === 'start'
+        ? { x: drag.obj.x + drag.obj.props.x2, y: drag.obj.y + drag.obj.props.y2, bind: drag.obj.props.bind2 }
+        : { x: drag.obj.x + drag.obj.props.x1, y: drag.obj.y + drag.obj.props.y1, bind: drag.obj.props.bind1 };
+      const moving = aimPoint(world, fixed.bind ? fixed : null, event.altKey, drag.id);
+      const start = drag.handle === 'start' ? moving.point : fixed;
+      const end = drag.handle === 'end' ? moving.point : fixed;
       const nextObj = { ...drag.obj, ...arrowBounds(start, end, drag.obj.props) };
       gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
     }
@@ -2650,6 +3096,7 @@ export default function BoardEditor({
 
     pointerClientRef.current = { x: event.clientX, y: event.clientY };
     const world = toWorld(event);
+    if (!world) return;
     const currentTool = toolRef.current;
     const handleEl = target?.closest('[data-handle]');
     const panButton = event.button === 1 || event.button === 2;
@@ -2664,14 +3111,22 @@ export default function BoardEditor({
       if (editing && editing.type !== 'geogebra') actionsRef.current.commitEdit(editingIdRef.current);
     }
 
-    if (currentTool === 'select' || handleEl) {
+    if (chainRef.current && !(currentTool === 'shape' && styleRef.current.shape === 'polyline')) finishChain();
+
+    const drawingLine = currentTool === 'arrow' || (currentTool === 'shape' && styleRef.current.shape === 'polyline');
+    const polyHandle = handleEl?.dataset.handle?.startsWith('poly-');
+    if ((((currentTool === 'select' || handleEl) && !drawingLine) || polyHandle)) {
       if (handleEl) {
         const id = handleEl.closest('[data-object]')?.dataset.object;
         const obj = objectsRef.current.find((item) => item.id === id);
         if (!obj || !canEdit(obj)) return;
         const handle = handleEl.dataset.handle;
+        const knob = handle === 'skew' || handle === 'slantL' || handle === 'slantR' || handle === 'spin' || handle === 'lean';
+        const polyIndex = handle.startsWith('poly-') ? Number(handle.slice(5)) : -1;
+        const baseIndex = handle.startsWith('base-') ? Number(handle.slice(5)) : -1;
         dragRef.current = {
-          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : handle === 'depth' ? 'depth' : 'resize',
+          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : handle === 'depth' ? 'depth' : handle === 'apex' ? 'apex' : knob ? 'shape-knob' : polyIndex >= 0 ? 'poly-point' : baseIndex >= 0 ? 'base-point' : 'resize',
+          index: polyIndex >= 0 ? polyIndex : baseIndex,
           pointerId: event.pointerId,
           id,
           handle,
@@ -2685,7 +3140,7 @@ export default function BoardEditor({
         return;
       }
 
-      const hit = topHit(canvasList().filter(canSelect), world, cameraRef.current.zoom);
+      const hit = pickObject(canvasList().filter(canSelect), world, cameraRef.current.zoom);
       if (!hit) {
         if (event.pointerType === 'touch') {
           selectIds([]);
@@ -2777,6 +3232,12 @@ export default function BoardEditor({
       return;
     }
 
+    if (currentTool === 'shape' && styleRef.current.shape === 'polyline') {
+      if (hintRef.current) hintRef.current.style.display = 'none';
+      placePolylinePoint(world, event.altKey);
+      return;
+    }
+
     if (currentTool === 'shape' || currentTool === 'arrow') {
       if (hintRef.current) hintRef.current.style.display = 'none';
       dragRef.current = { kind: currentTool, pointerId: event.pointerId, start: world };
@@ -2818,6 +3279,10 @@ export default function BoardEditor({
 
   function onViewportPointerMove(event) {
     if (event.pointerType === 'touch') return;
+    if (chainRef.current && !dragRef.current && toolRef.current === 'shape' && styleRef.current.shape === 'polyline') {
+      const world = toWorld(event);
+      if (world) paintChainPreview(aimPoint(world, chainRef.current.hits.at(-1), event.altKey));
+    }
     if (dragRef.current) return;
     sendCursor(event.clientX, event.clientY);
   }
@@ -2839,7 +3304,9 @@ export default function BoardEditor({
     const files = imageFiles(event.dataTransfer?.files);
     if (!files.length) return;
     event.preventDefault();
-    insertImages(files, toWorld(event));
+    const world = toWorld(event);
+    if (!world) return;
+    insertImages(files, world);
   }
 
   async function onImageFile(event) {
@@ -2868,7 +3335,8 @@ export default function BoardEditor({
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest('[data-geo-live], [data-chrome], textarea')) return;
     const world = toWorld(event);
-    const hit = topHit(canvasList().filter(canSelect), world, cameraRef.current.zoom);
+    if (!world) return;
+    const hit = pickObject(canvasList().filter(canSelect), world, cameraRef.current.zoom);
     if (hit) {
       if (canEdit(hit) && hit.props?.format !== 'markdown' && hit.props?.format !== 'theory' && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
       return;
@@ -2926,7 +3394,7 @@ export default function BoardEditor({
       <div className="@container relative h-full min-w-0 flex-1 overflow-hidden [contain:layout_paint]">
       <div
         ref={viewportRef}
-        className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'laser' || tool === 'eraser') ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
+        className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'laser' || tool === 'eraser' || (tool === 'shape' && style.shape === 'polyline')) ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
         style={{ backgroundColor: surface.color }}
         onPointerDown={onPointerDown}
         onPointerMove={onViewportPointerMove}
@@ -3021,6 +3489,7 @@ export default function BoardEditor({
             onFront={() => reorderSelected(true)}
             onBack={() => reorderSelected(false)}
             onToggleLock={toggleLock}
+            onArrowSide={arrowSide}
             onToggleGeo={() => selectedObjects[0] && toggleGeo(selectedObjects[0].id)}
           />
         )}
@@ -3665,7 +4134,9 @@ function ColorDot({ color, label, active, onClick }) {
       aria-label={label}
       onClick={onClick}
       className={`h-5 w-5 rounded-full border ${active ? 'ring-2 ring-zinc-900 ring-offset-2 ring-offset-white dark:ring-white dark:ring-offset-zinc-950' : 'border-zinc-300 dark:border-zinc-700'}`}
-      style={{ background: color }}
+      style={color === 'none'
+        ? { background: 'linear-gradient(135deg, transparent 46%, currentColor 46%, currentColor 54%, transparent 54%)' }
+        : { background: color }}
     />
   );
 }

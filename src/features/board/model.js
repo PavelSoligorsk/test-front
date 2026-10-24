@@ -110,6 +110,7 @@ export const TASK_FONT = 20;
 export const SELECTION_COLOR = '#4262ff';
 
 export const SHAPE_FILLS = [
+  { id: 'none', label: 'Без фона', fill: 'none', stroke: '#18181b' },
   { id: 'white', label: 'Белый', fill: '#ffffff', stroke: '#18181b' },
   { id: 'blue', label: 'Синий', fill: '#dbeafe', stroke: '#1d4ed8' },
   { id: 'green', label: 'Зелёный', fill: '#dcfce7', stroke: '#15803d' },

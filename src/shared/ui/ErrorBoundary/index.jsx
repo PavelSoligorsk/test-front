@@ -1,8 +1,5 @@
 import React from 'react';
 
-const RETRY_KEY = 'eb_reload_ts';
-const RETRY_WINDOW_MS = 10_000;
-
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -15,16 +12,6 @@ export class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo);
-
-    const lastReload = sessionStorage.getItem(RETRY_KEY);
-    const now = Date.now();
-
-    if (lastReload && now - parseInt(lastReload, 10) < RETRY_WINDOW_MS) {
-      return;
-    }
-
-    sessionStorage.setItem(RETRY_KEY, String(now));
-    window.location.reload();
   }
 
   render() {
@@ -39,7 +26,6 @@ export class ErrorBoundary extends React.Component {
             </p>
             <button
               onClick={() => {
-                sessionStorage.removeItem(RETRY_KEY);
                 window.location.reload();
               }}
               className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"

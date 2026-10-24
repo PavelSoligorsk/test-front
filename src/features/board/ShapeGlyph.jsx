@@ -6,7 +6,7 @@ export default function ShapeGlyph({ id, size = 16 }) {
       {shapeFigures(id).map((fig, index) => {
         const props = {
           fill: fig.fill === 'none' ? 'none' : 'currentColor',
-          stroke: 'currentColor',
+          stroke: fig.stroke === 'none' ? 'none' : 'currentColor',
           strokeWidth: 6,
           strokeLinejoin: 'round',
           strokeDasharray: fig.dashed ? '7 5' : undefined,

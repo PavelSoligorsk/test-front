@@ -50,7 +50,7 @@ export function strokeBounds(points, width) {
     maxX = Math.max(maxX, p.x);
     maxY = Math.max(maxY, p.y);
   });
-  const pad = (width || 4) + 6;
+  const pad = (width || 2) + 6;
   const left = minX - pad;
   const top = minY - pad;
   return {
@@ -76,15 +76,24 @@ export function hitObject(obj, point, zoom) {
     return nx * nx + ny * ny <= 1;
   }
 
+  if (obj.type === 'shape' && obj.props.shape === 'polyline' && !obj.props.closed && obj.props.points?.length) {
+    const limit = 10 / zoom;
+    const pts = obj.props.points.map(([u, v]) => ({ x: obj.x + (u / 100) * obj.w, y: obj.y + (v / 100) * obj.h }));
+    for (let i = 1; i < pts.length; i += 1) {
+      if (distToSegment(point, pts[i - 1], pts[i]) <= limit) return true;
+    }
+    return pts.some((item) => Math.hypot(point.x - item.x, point.y - item.y) <= limit);
+  }
+
   if (obj.type === 'arrow') {
     const a = { x: obj.x + obj.props.x1, y: obj.y + obj.props.y1 };
     const b = { x: obj.x + obj.props.x2, y: obj.y + obj.props.y2 };
-    return distToSegment(point, a, b) <= Math.max(10, (obj.props.width || 3) + 8) / zoom;
+    return distToSegment(point, a, b) <= Math.max(10, (obj.props.width || 2) + 8) / zoom;
   }
 
   if (obj.type === 'draw') {
     const pts = obj.props.points || [];
-    const limit = ((obj.props.width || 4) / 2 + 8) / zoom;
+    const limit = ((obj.props.width || 2) / 2 + 8) / zoom;
     if (pts.length === 1) {
       return Math.hypot(point.x - (obj.x + pts[0].x), point.y - (obj.y + pts[0].y)) <= limit;
     }

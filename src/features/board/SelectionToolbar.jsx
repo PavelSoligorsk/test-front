@@ -1,17 +1,19 @@
 import {
+  ArrowDown,
+  ArrowLeft,
   ArrowLeftRight,
-  ArrowUpRight,
+  ArrowRight,
+  ArrowUp,
   BringToFront,
   Copy,
   Lock,
   LockOpen,
-  Minus,
   SendToBack,
   Trash2,
 } from 'lucide-react';
 import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TASK_FONT, TASK_SIZES, TEXT_SIZES } from './model';
 import ShapeGlyph from './ShapeGlyph';
-import { SHAPE_KINDS, defaultDepth } from './shapes';
+import { SHAPE_KINDS, arrowHeadSides, arrowHeadState, defaultDepth, planeDefaults } from './shapes';
 
 function Divider() {
   return <span className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />;
@@ -49,7 +51,9 @@ function Swatch({ color, label, active, onClick }) {
     >
       <span
         className={`h-5 w-5 rounded-full border ${active ? 'ring-2 ring-[#4262ff] ring-offset-1 ring-offset-white dark:ring-offset-zinc-900' : 'border-black/10'}`}
-        style={{ background: color }}
+        style={color === 'none'
+          ? { background: 'linear-gradient(135deg, transparent 46%, currentColor 46%, currentColor 54%, transparent 54%)' }
+          : { background: color }}
       />
     </button>
   );
@@ -65,6 +69,7 @@ export default function SelectionToolbar({
   onFront,
   onBack,
   onToggleLock,
+  onArrowSide,
   onToggleGeo,
 }) {
   if (!objects.length) return null;
@@ -103,8 +108,9 @@ export default function SelectionToolbar({
       />
     ));
   } else if (only === 'arrow') {
-    const head = first.props.head !== false;
     const dashed = Boolean(first.props.dashed);
+    const heads = arrowHeadState(first.props);
+    const sides = arrowHeadSides(first);
     specific = (
       <>
         {objects.length === 1 && (
@@ -115,30 +121,50 @@ export default function SelectionToolbar({
               y1: first.props.y2,
               x2: first.props.x1,
               y2: first.props.y1,
+              bind1: first.props.bind2 || null,
+              bind2: first.props.bind1 || null,
+              headStart: heads.headEnd,
+              headEnd: heads.headStart,
+              head: false,
             })}
           >
             <ArrowLeftRight size={15} />
           </ToolButton>
         )}
         <ToolButton
-          label={head ? 'Убрать наконечник' : 'Добавить наконечник'}
-          active={head}
-          onClick={() => onPatch('arrow', { head: !head })}
+          label="Стрелка слева"
+          active={heads[sides.left]}
+          onClick={() => onArrowSide?.('left')}
         >
-          {head ? <ArrowUpRight size={15} /> : <Minus size={15} />}
+          <ArrowLeft size={15} />
         </ToolButton>
         <ToolButton
-          label={dashed ? 'Сплошная линия' : 'Пунктир'}
-          active={dashed}
-          onClick={() => onPatch('arrow', { dashed: !dashed })}
+          label="Стрелка справа"
+          active={heads[sides.right]}
+          onClick={() => onArrowSide?.('right')}
         >
-          <span className="block w-4 border-t-2 border-current" style={{ borderTopStyle: dashed ? 'dashed' : 'solid' }} />
+          <ArrowRight size={15} />
+        </ToolButton>
+        <ToolButton
+          label="Сплошная линия"
+          active={!dashed}
+          onClick={() => onPatch('arrow', { dashed: false })}
+        >
+          <ArrowUp size={15} />
+        </ToolButton>
+        <ToolButton
+          label="Полосатая линия"
+          active={dashed}
+          onClick={() => onPatch('arrow', { dashed: true })}
+        >
+          <ArrowDown size={15} />
         </ToolButton>
         <Divider />
       </>
     );
   }
   if (only === 'shape') {
+    const dashed = Boolean(first.props.dashed);
     specific = (
       <>
         <div className="flex max-w-56 gap-0.5 overflow-x-auto">
@@ -147,12 +173,26 @@ export default function SelectionToolbar({
               key={kind.id}
               label={kind.label}
               active={(first.props.shape || 'rect') === kind.id}
-              onClick={() => onPatch('shape', { shape: kind.id, depth: defaultDepth(kind.id) })}
+              onClick={() => {
+                const same = (first.props.shape || 'rect') === kind.id;
+                onPatch('shape', {
+                  shape: kind.id,
+                  depth: defaultDepth(kind.id),
+                  ...(same ? {} : { joints: [], ...planeDefaults(kind.id) }),
+                });
+              }}
             >
               <ShapeGlyph id={kind.id} size={15} />
             </ToolButton>
           ))}
         </div>
+        <Divider />
+        <ToolButton label="Сплошной контур" active={!dashed} onClick={() => onPatch('shape', { dashed: false })}>
+          <ArrowUp size={15} />
+        </ToolButton>
+        <ToolButton label="Полосатый контур" active={dashed} onClick={() => onPatch('shape', { dashed: true })}>
+          <ArrowDown size={15} />
+        </ToolButton>
         <Divider />
         {SHAPE_FILLS.map((fill) => (
           <Swatch
@@ -184,7 +224,7 @@ export default function SelectionToolbar({
           <ToolButton
             key={width}
             label={`Толщина ${width}`}
-            active={(first.props.width || 4) === width}
+            active={(first.props.width || 2) === width}
             onClick={() => onPatch(only, { width })}
           >
             <span className="block rounded-full bg-current" style={{ width: 14, height: Math.max(2, width / 1.5) }} />

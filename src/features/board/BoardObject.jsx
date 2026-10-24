@@ -7,7 +7,7 @@ import TaskCard from './TaskCard';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
-import { isSolid, shapeFigures, shapeHandle, shapeToneOpacity } from './shapes';
+import { arrowHeadState, isSolid, jointLocal, planeNodes, shapeFigures, shapeHandle, shapeKnobs, shapeToneOpacity, solidAnchors } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -141,15 +141,15 @@ function TextBody({ obj, editing, onChange, onBlur }) {
   );
 }
 
-function shapePaint(fig, fill, stroke) {
+function shapePaint(fig, fill, stroke, dashed) {
   return {
     fill: fig.fill === 'none' ? 'none' : fill,
-    stroke,
+    stroke: fig.stroke === 'none' ? 'none' : stroke,
     strokeWidth: 2,
     strokeLinejoin: 'round',
     vectorEffect: 'non-scaling-stroke',
     fillOpacity: fig.fill === 'none' ? 1 : shapeToneOpacity(fig.tone),
-    strokeDasharray: fig.dashed ? '4 3' : undefined,
+    strokeDasharray: fig.dashed || dashed ? '4 3' : undefined,
   };
 }
 
@@ -158,13 +158,32 @@ function ShapeBody({ obj }) {
   const stroke = obj.props.stroke || '#18181b';
   return (
     <svg data-shape="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-      {shapeFigures(obj.props.shape, obj.props.depth).map((fig, index) => {
-        const props = shapePaint(fig, fill, stroke);
+      {shapeFigures(obj.props.shape, obj.props.depth, obj.props).map((fig, index) => {
+        const props = shapePaint(fig, fill, stroke, obj.props.dashed);
         if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
         if (fig.d) return <path key={index} d={fig.d} {...props} />;
         return <polygon key={index} points={fig.points} {...props} />;
       })}
     </svg>
+  );
+}
+
+function polylineLocals(obj) {
+  if (Array.isArray(obj.props.points) && obj.props.points.length >= 2) return obj.props.points;
+  return planeNodes('polyline', obj.props) || [];
+}
+
+function RoundPoint({ id, x, y, unit = '%' }) {
+  return (
+    <span
+      data-point={id}
+      className="pointer-events-none absolute z-10 h-[5px] w-[5px] rounded-full bg-black"
+      style={{
+        left: unit === '%' ? `${x}%` : `${x}px`,
+        top: unit === '%' ? `${y}%` : `${y}px`,
+        transform: 'translate(-50%, -50%)',
+      }}
+    />
   );
 }
 
@@ -193,6 +212,10 @@ function BoardObject({
   const markdown = obj.type === 'text' && obj.props.format === 'markdown';
   const theoryBlock = obj.type === 'text' && obj.props.format === 'theory' ? obj.props.theoryBlock : null;
   const outlineWidth = handles ? 2 : 1.5;
+  const heads = obj.type === 'arrow' ? arrowHeadState(obj.props) : null;
+  const knobs = obj.type === 'shape' ? shapeKnobs(obj.props.shape, obj.props) : [];
+  const anchors = obj.type === 'shape' ? solidAnchors(obj.props.shape, obj.props.depth, obj.props) : null;
+  const showDepth = obj.type === 'shape' && isSolid(obj.props.shape) && !(obj.props.shape === 'pyramid3' && Array.isArray(obj.props.base));
 
   return (
     <div
@@ -221,17 +244,44 @@ function BoardObject({
       {obj.type === 'shape' && (
         <>
           <ShapeBody obj={obj} />
+          {(obj.props.joints || []).map((joint) => {
+            const [x, y] = jointLocal(obj, joint);
+            return <RoundPoint key={joint.id} id={joint.id} x={x} y={y} />;
+          })}
+          {obj.props.shape === 'polyline' && !obj.props.closed && !(selected && handles) && polylineLocals(obj).map((point, index) => (
+            <RoundPoint key={`v${index}`} id={`v${index}`} x={point[0]} y={point[1]} />
+          ))}
+          {selected && handles && !locked && obj.props.shape === 'polyline' && polylineLocals(obj).map((point, index) => (
+            <span
+              key={`poly-${index}`}
+              data-handle={`poly-${index}`}
+              className="absolute z-30 h-2 w-2 rounded-full bg-black"
+              style={{
+                left: `${point[0]}%`,
+                top: `${point[1]}%`,
+                transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                cursor: 'grab',
+              }}
+            />
+          ))}
           <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
         </>
       )}
 
       {obj.type === 'arrow' && (
         <svg width={obj.w} height={obj.h} className="overflow-visible">
-          {obj.props.head !== false && (
+          {(heads.headStart || heads.headEnd) && (
             <defs>
-              <marker id={`arrowhead-${obj.id}`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                <path d="M0,0 L7,3 L0,6 Z" fill={obj.props.color || '#18181b'} />
-              </marker>
+              {heads.headEnd && (
+                <marker id={`arrowhead-${obj.id}`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                  <path d="M0,0 L7,3 L0,6 Z" fill={obj.props.color || '#18181b'} />
+                </marker>
+              )}
+              {heads.headStart && (
+                <marker id={`arrowhead-start-${obj.id}`} markerWidth="8" markerHeight="8" refX="1" refY="3" orient="auto-start-reverse">
+                  <path d="M0,0 L7,3 L0,6 Z" fill={obj.props.color || '#18181b'} />
+                </marker>
+              )}
             </defs>
           )}
           <line
@@ -240,13 +290,23 @@ function BoardObject({
             x2={obj.props.x2}
             y2={obj.props.y2}
             stroke={obj.props.color || '#18181b'}
-            strokeWidth={obj.props.width || 3}
+            strokeWidth={obj.props.width || 2}
             strokeLinecap="round"
-            strokeDasharray={obj.props.dashed ? `${(obj.props.width || 3) * 2.4} ${(obj.props.width || 3) * 1.6}` : undefined}
-            markerEnd={obj.props.head !== false ? `url(#arrowhead-${obj.id})` : undefined}
+            strokeDasharray={obj.props.dashed ? `${(obj.props.width || 2) * 2.4} ${(obj.props.width || 2) * 1.6}` : undefined}
+            markerStart={heads.headStart ? `url(#arrowhead-start-${obj.id})` : undefined}
+            markerEnd={heads.headEnd ? `url(#arrowhead-${obj.id})` : undefined}
           />
         </svg>
       )}
+      {obj.type === 'arrow' && (obj.props.joints || []).map((joint) => (
+        <RoundPoint
+          key={joint.id}
+          id={joint.id}
+          unit="px"
+          x={obj.props.x1 + (obj.props.x2 - obj.props.x1) * (Number(joint.t) || 0)}
+          y={obj.props.y1 + (obj.props.y2 - obj.props.y1) * (Number(joint.t) || 0)}
+        />
+      ))}
 
       {obj.type === 'draw' && (
         <svg width={obj.w} height={obj.h} className="block overflow-visible">
@@ -254,7 +314,7 @@ function BoardObject({
             d={smoothPath(obj.props.points || [])}
             fill="none"
             stroke={obj.props.color || '#18181b'}
-            strokeWidth={obj.props.width || 4}
+            strokeWidth={obj.props.width || 2}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -347,15 +407,69 @@ function BoardObject({
 
       {selected && handles && box && !interactiveGeo && !locked && <BoxHandles zoom={zoom} />}
 
-      {selected && handles && !locked && obj.type === 'shape' && isSolid(obj.props.shape) && (
+      {selected && handles && !locked && knobs.length > 0 && (
+        <>
+          {knobs.some((knob) => knob.y < 50) && (
+            <span className="pointer-events-none absolute h-px bg-zinc-300" style={{ left: '8%', width: '84%', top: '6%' }} />
+          )}
+          {knobs.some((knob) => knob.y > 50) && (
+            <span className="pointer-events-none absolute h-px bg-zinc-300" style={{ left: '8%', width: '84%', top: '94%' }} />
+          )}
+          {knobs.map((knob) => (
+            <span
+              key={knob.key}
+              data-handle={knob.key}
+              aria-label={knob.key === 'skew' ? 'Вершина' : knob.key === 'spin' ? 'Поворот' : knob.key === 'lean' ? 'Наклон' : 'Основание'}
+              className="absolute z-30 h-3 w-3 rounded-full border-2 border-white bg-[#4262ff]"
+              style={{
+                left: `${knob.x}%`,
+                top: `${knob.y}%`,
+                transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                cursor: 'ew-resize',
+              }}
+            />
+          ))}
+        </>
+      )}
+
+      {selected && handles && !locked && anchors?.base && anchors.base.map((point, index) => (
+        <span
+          key={`base-${index}`}
+          data-handle={`base-${index}`}
+          className="absolute z-30 h-2 w-2 rounded-full bg-black"
+          style={{
+            left: `${point[0]}%`,
+            top: `${point[1]}%`,
+            transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+            cursor: 'grab',
+          }}
+        />
+      ))}
+
+      {selected && handles && !locked && anchors?.apex && (
+        <span
+          data-handle="apex"
+          aria-label="Высота"
+          title="Высота"
+          className="absolute z-30 h-3 w-3 rounded-full border-2 border-white bg-[#4262ff]"
+          style={{
+            left: `${anchors.apex[0]}%`,
+            top: `${anchors.apex[1]}%`,
+            transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+            cursor: 'grab',
+          }}
+        />
+      )}
+
+      {selected && handles && !locked && showDepth && (
         <span
           data-handle="depth"
           aria-label="Глубина"
           title="Глубина"
           className="absolute z-30 h-3 w-3 border-2 border-amber-600 bg-amber-400"
           style={{
-            left: `${shapeHandle(obj.props.shape, obj.props.depth).x}%`,
-            top: `${shapeHandle(obj.props.shape, obj.props.depth).y}%`,
+            left: `${shapeHandle(obj.props.shape, obj.props.depth, obj.props).x}%`,
+            top: `${shapeHandle(obj.props.shape, obj.props.depth, obj.props).y}%`,
             transform: `translate(-50%, -50%) rotate(45deg) scale(${1 / zoom})`,
             cursor: 'grab',
           }}
