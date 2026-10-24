@@ -250,7 +250,7 @@ export function applyMenuValue(host, value) {
   return applied;
 }
 
-// Один масштаб на обе оси: круг остаётся кругом, лишняя сторона показывает больше плоскости.
+// Один масштаб на обе оси при смене размера рамки: круг остаётся кругом.
 export function fitUniformGeoGebraView(api, view) {
   const props = viewProperties(api);
   const frame = viewWindow(view, props);
@@ -264,6 +264,91 @@ export function fitUniformGeoGebraView(api, view) {
     frame.cy + (unit * props.height) / 2,
   );
   return true;
+}
+
+const canvasSize = {
+  width: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width'),
+  height: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height'),
+};
+
+function canvasExtra(canvas, state) {
+  const logical = state.logicalW;
+  const real = canvasSize.width.get.call(canvas);
+  if (!(logical > 0) || !(real > 0)) return 1;
+  return real / logical;
+}
+
+function applyCanvasBacking(canvas, state) {
+  const cssW = canvas.clientWidth || canvas.offsetWidth || 0;
+  const cssH = canvas.clientHeight || canvas.offsetHeight || 0;
+  const logicalW = state.logicalW;
+  const logicalH = state.logicalH;
+  if (!(cssW > 1) || !(cssH > 1) || !(logicalW > 0) || !(logicalH > 0) || !(state.ratio > 0)) return false;
+  const extra = Math.max(state.ratio * cssW, logicalW) / logicalW;
+  const actualW = Math.max(1, Math.round(logicalW * extra));
+  const actualH = Math.max(1, Math.round(logicalH * extra));
+  const realW = canvasSize.width.get.call(canvas);
+  const realH = canvasSize.height.get.call(canvas);
+  if (realW === actualW && realH === actualH) return false;
+  const ctx = canvas.getContext('2d');
+  const prev = ctx?.getTransform?.();
+  const prevExtra = logicalW > 0 ? realW / logicalW : 1;
+  canvasSize.width.set.call(canvas, actualW);
+  canvasSize.height.set.call(canvas, actualH);
+  if (state.restore && ctx && prev && state.nativeSetTransform) {
+    const gain = prevExtra > 0 ? extra / prevExtra : extra;
+    state.nativeSetTransform.call(ctx, prev.a * gain, prev.b * gain, prev.c * gain, prev.d * gain, prev.e * gain, prev.f * gain);
+  }
+  return true;
+}
+
+// Только холст чертежа: буфер в пикселях экрана, логический размер для GeoGebra прежний.
+export function sharpenEuclidianCanvas(canvas, ratio) {
+  if (!(canvas instanceof HTMLCanvasElement) || !(ratio > 0)) return false;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  let state = canvas.__euclidianSharp;
+  if (!state) {
+    state = {
+      logicalW: canvasSize.width.get.call(canvas),
+      logicalH: canvasSize.height.get.call(canvas),
+      ratio,
+      restore: false,
+      nativeSetTransform: CanvasRenderingContext2D.prototype.setTransform,
+    };
+    canvas.__euclidianSharp = state;
+    const sync = (axis, value) => {
+      state[axis] = Number(value) || 0;
+      state.restore = false;
+      applyCanvasBacking(canvas, state);
+    };
+    Object.defineProperty(canvas, 'width', {
+      configurable: true,
+      get: () => state.logicalW,
+      set: (value) => { sync('logicalW', value); },
+    });
+    Object.defineProperty(canvas, 'height', {
+      configurable: true,
+      get: () => state.logicalH,
+      set: (value) => { sync('logicalH', value); },
+    });
+    const orig = ctx.setTransform.bind(ctx);
+    ctx.setTransform = function scaleBacking(...args) {
+      const extra = canvasExtra(canvas, state);
+      if (!(extra > 0) || Math.abs(extra - 1) < 0.001) return orig(...args);
+      if (args.length === 1 && args[0] && typeof args[0] === 'object') {
+        const matrix = args[0];
+        return orig(matrix.a * extra, matrix.b * extra, matrix.c * extra, matrix.d * extra, matrix.e * extra, matrix.f * extra);
+      }
+      if (args.length >= 6) {
+        return orig(args[0] * extra, args[1] * extra, args[2] * extra, args[3] * extra, args[4] * extra, args[5] * extra);
+      }
+      return orig(...args);
+    };
+  }
+  state.ratio = ratio;
+  state.restore = true;
+  return applyCanvasBacking(canvas, state);
 }
 
 const CAMERA_KEYS = ['xZero', 'yZero', 'zZero', 'scale', 'xAngle', 'zAngle'];

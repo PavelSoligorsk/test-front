@@ -6,6 +6,7 @@ import {
   applyMenuValue,
   fitUniformGeoGebraView,
   isGeoGebraView,
+  sharpenEuclidianCanvas,
   readGeoGebraUnit,
   readMenuValue,
   writeUniformUnit,
@@ -116,8 +117,36 @@ export default function GeoGebraWidget({
     return { w, h };
   }
 
-  // Холст рисуется в zoom × плотность экрана. Скейлер уменьшает его обратно в рамку,
-  // поэтому зум доски не растягивает график как картинку.
+  // Меню остаётся в пикселях рамки. Чёткость только у холста чертежа: его буфер
+  // больше CSS-размера, а зум доски больше не растягивает кривые и подписи функций.
+  function graphicsCanvases() {
+    const host = hostRef.current;
+    if (!host || appName === '3d') return [];
+    const marked = [...host.querySelectorAll('canvas')].filter((canvas) => {
+      const test = canvas.getAttribute('data-test') || '';
+      return test === 'euclidianView' || test === 'euclidianView2';
+    });
+    if (marked.length) return marked;
+    const large = [...host.querySelectorAll('canvas')].filter((canvas) => canvas.clientWidth >= 80 && canvas.clientHeight >= 80);
+    large.sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight));
+    return large.slice(0, 1);
+  }
+
+  function sharpenGraphics() {
+    if (appName === '3d') return;
+    const ratio = geoPixelScale(zoomRef.current || 1);
+    let changed = false;
+    graphicsCanvases().forEach((canvas) => {
+      try {
+        if (sharpenEuclidianCanvas(canvas, ratio)) changed = true;
+      } catch {
+        /* холст ещё не готов к смене плотности */
+      }
+    });
+    if (!changed || typeof apiRef.current?.refreshViews !== 'function') return;
+    try { apiRef.current.refreshViews(); } catch { /* перерисовка догонит следующим кадром */ }
+  }
+
   function pinApplet() {
     const host = hostRef.current;
     const box = frameBox();
@@ -149,6 +178,7 @@ export default function GeoGebraWidget({
       node.style.setProperty('transform-origin', '0 0', 'important');
     });
     if (appletObjRef.current) appletObjRef.current.scale = scale;
+    sharpenGraphics();
     return box;
   }
 
@@ -184,8 +214,9 @@ export default function GeoGebraWidget({
       if (appName !== '3d' && menuRef.current && !menuHoldRef.current) {
         applyMenuValue(hostRef.current, menuRef.current);
       }
-      if (!flatAnchor) return;
-      try { fitUniformGeoGebraView(apiRef.current, flatAnchor); } catch { /* вид догонит следующим кадром */ }
+      if (flatAnchor) {
+        try { fitUniformGeoGebraView(apiRef.current, flatAnchor); } catch { /* вид догонит следующим кадром */ }
+      }
     };
     fitFlat();
     window.clearTimeout(fitTimerRef.current);
@@ -879,12 +910,19 @@ export default function GeoGebraWidget({
   }, [status]);
 
   const pixelScale = appName === '3d' ? geoPixelScale(zoom || 1) : 1;
+  const graphicsScale = appName === '3d' ? 1 : geoPixelScale(zoom || 1);
   useEffect(() => {
     if (status !== 'ready') return;
     fitToFrame(apiRef.current);
     // Размер холста зависит только от шага pixelScale, не от каждого промежуточного зума.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixelScale, status]);
+  useEffect(() => {
+    if (status !== 'ready' || appName === '3d') return;
+    sharpenGraphics();
+    // Плотность холста зависит от шага graphicsScale, меню и размер апплета не меняются.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphicsScale, status, appName]);
 
   const hasPanel = (controls?.length || 0) + (texts?.length || 0) > 0;
 

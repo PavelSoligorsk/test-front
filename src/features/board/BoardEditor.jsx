@@ -3095,18 +3095,20 @@ export default function BoardEditor({
             </button>
           )}
           {audience === 'teacher' && (
-            <ShareButton
-              open={shareOpen}
-              access={shareAccess}
-              token={shareTokenState}
-              onToggle={() => setShareOpen((open) => !open)}
-              onClose={() => setShareOpen(false)}
-              onApply={async (access, resetLink) => {
-                const data = await updateTeacherBoardShare(initialBoard.id, { access, resetLink });
-                setShareAccess(data.shareAccess || 'off');
-                setShareTokenState(data.shareToken || null);
-              }}
-            />
+            <div className="hidden min-[720px]:block">
+              <ShareButton
+                open={shareOpen}
+                access={shareAccess}
+                token={shareTokenState}
+                onToggle={() => setShareOpen((open) => !open)}
+                onClose={() => setShareOpen(false)}
+                onApply={async (access, resetLink) => {
+                  const data = await updateTeacherBoardShare(initialBoard.id, { access, resetLink });
+                  setShareAccess(data.shareAccess || 'off');
+                  setShareTokenState(data.shareToken || null);
+                }}
+              />
+            </div>
           )}
           {!readOnly && (
             <div className="relative">
@@ -3132,22 +3134,18 @@ export default function BoardEditor({
             <IconButton label="Отменить (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={18} /></IconButton>
             <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={18} /></IconButton>
           </div>
-          <div className="flex items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95">
-            <span className="hidden min-[720px]:contents">
-              <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
-            </span>
+          <div className="hidden items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm min-[720px]:flex dark:border-zinc-800 dark:bg-zinc-950/95">
+            <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
             <button
               ref={zoomLabelRef}
               type="button"
               title="100% (Shift+0)"
               onClick={() => zoomTo(1)}
-              className="h-9 w-10 text-center text-xs font-medium tabular-nums text-zinc-600 min-[720px]:h-8 min-[720px]:w-12 dark:text-zinc-300"
+              className="h-8 w-12 text-center text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-300"
             >
               {Math.round(camera.zoom * 100)}%
             </button>
-            <span className="hidden min-[720px]:contents">
-              <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={18} /></IconButton>
-            </span>
+            <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={18} /></IconButton>
             <IconButton label="Показать всё (Shift+1)" onClick={fitAll}><Maximize2 size={16} /></IconButton>
           </div>
         </div>
@@ -3263,8 +3261,8 @@ export default function BoardEditor({
         </div>
       )}
 
-      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 flex-col-reverse items-center gap-2 min-[720px]:bottom-3 [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:w-auto [@media(min-width:720px)_and_(min-height:760px)]:translate-x-0 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
-        <div className="flex w-max min-w-0 max-w-full flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:max-w-none [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
+      <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-2 right-2 z-30 flex translate-x-0 flex-col-reverse items-stretch gap-2 min-[720px]:bottom-3 min-[720px]:left-1/2 min-[720px]:right-auto min-[720px]:w-max min-[720px]:-translate-x-1/2 min-[720px]:items-center [@media(min-width:720px)_and_(min-height:760px)]:bottom-auto [@media(min-width:720px)_and_(min-height:760px)]:left-3 [@media(min-width:720px)_and_(min-height:760px)]:top-16 [@media(min-width:720px)_and_(min-height:760px)]:w-auto [@media(min-width:720px)_and_(min-height:760px)]:translate-x-0 [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:items-start">
+        <div className="flex min-w-0 max-w-full flex-row items-center gap-0.5 overflow-x-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950/95 min-[720px]:w-max [@media(min-width:720px)_and_(min-height:760px)]:w-12 [@media(min-width:720px)_and_(min-height:760px)]:max-w-none [@media(min-width:720px)_and_(min-height:760px)]:flex-col [@media(min-width:720px)_and_(min-height:760px)]:overflow-visible [@media(min-width:720px)_and_(min-height:760px)]:p-1.5">
           {TOOLS.filter((item) => !readOnly || item.id === 'select' || item.id === 'hand' || item.id === 'laser').map((item) => {
             const Icon = item.icon;
             const active = tool === item.id;
