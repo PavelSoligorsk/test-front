@@ -40,7 +40,7 @@ import {
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
 } from './api';
-import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, theoryAppKind } from './geogebraApi';
+import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, stripCamera, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { setPenActive } from './penLock';
 import { applyOp, diffOps, keepLongerStrokes, reorder } from './ops';
@@ -297,6 +297,11 @@ export default function BoardEditor({
   const sentRef = useRef(initialBoard.objects || []);
   const sentTitleRef = useRef(boardTitle(initialBoard.title));
   const socketRef = useRef(null);
+  const geoCamInRef = useRef(new Map());
+  const geoInputInRef = useRef(new Map());
+  const geoCamLastRef = useRef(new Map());
+  const geoSeqRef = useRef(new Map());
+  const geoCamFromRef = useRef(new Map());
   const sendTimerRef = useRef(0);
   const lastCursorRef = useRef(0);
   const cursorTimerRef = useRef(0);
@@ -513,6 +518,11 @@ export default function BoardEditor({
       cursorsOnRef.current = message.cursors;
       setCursorsOn(message.cursors);
     }
+    if (Array.isArray(message.geocams)) {
+      message.geocams.forEach((cam) => {
+        if (cam?.id) geoCamLastRef.current.set(cam.id, cam);
+      });
+    }
     const roster = (message.peers || []).filter((peer) => peer.clientId !== message.clientId);
     peerCursorsRef.current = new Map([...peerCursorsRef.current].filter(([id]) => roster.some((peer) => peer.clientId === id)));
     if (!mountedRef.current) return;
@@ -662,6 +672,8 @@ export default function BoardEditor({
   function sendCursor(clientX, clientY) {
     const socket = socketRef.current;
     if (!socket || !viewportRef.current || !cursorsOnRef.current) return;
+    const editing = objectsRef.current.find((obj) => obj.id === editingIdRef.current);
+    if (editing?.type === 'geogebra') return;
     const now = performance.now();
     const wait = SEND_MS - (now - lastCursorRef.current);
     const push = () => {
@@ -1667,12 +1679,12 @@ export default function BoardEditor({
       const api = apiMap.current.get(id);
       if (!obj || obj.type !== 'geogebra' || !api) return;
       const xml = readGeoGebraXml(api);
-      const view = readGeoGebraView(api);
       const prevXml = obj.props.ggbXml || '';
-      const prevView = obj.props.ggbView || null;
       const nextXml = xml || prevXml;
       const is3d = obj.props.appName === '3d';
-      if (is3d && nextXml === prevXml) return;
+      if (is3d && stripCamera(nextXml) === stripCamera(prevXml)) return;
+      const view = is3d ? null : readGeoGebraView(api);
+      const prevView = obj.props.ggbView || null;
       if (is3d && graphStructure(nextXml) === graphStructure(prevXml) && sameElementStates(prevXml, nextXml)) return;
       const viewChanged = !is3d && Boolean(view) && !sameGeoView(prevView, view);
       if (nextXml === prevXml && !viewChanged) return;
@@ -1795,7 +1807,8 @@ export default function BoardEditor({
         onOp: call('applyRemote'),
         onCursor: (message) => {
           if (!message?.clientId || message.clientId === clientIdRef.current) return;
-          peerCursorsRef.current.set(message.clientId, { x: Number(message.x) || 0, y: Number(message.y) || 0 });
+          if (message.hidden) peerCursorsRef.current.delete(message.clientId);
+          else peerCursorsRef.current.set(message.clientId, { x: Number(message.x) || 0, y: Number(message.y) || 0 });
           liveRef.current.paintPeerCursors?.();
         },
         onLaser: call('showLaser'),
@@ -1804,6 +1817,21 @@ export default function BoardEditor({
           if (!enabled) peerCursorsRef.current.clear();
           setCursorsOn(enabled);
           liveRef.current.paintPeerCursors?.();
+        },
+        onGeoInput: (message) => {
+          if (!message?.id || message.clientId === clientIdRef.current) return;
+          geoInputInRef.current.get(message.id)?.(message);
+        },
+        onGeocam: (message) => {
+          if (!message?.id || !Number.isFinite(message.seq)) return;
+          const prevFrom = geoCamFromRef.current.get(message.id);
+          if (prevFrom && prevFrom !== message.clientId) geoSeqRef.current.delete(message.id);
+          geoCamFromRef.current.set(message.id, message.clientId);
+          if ((geoSeqRef.current.get(message.id) ?? -1) >= message.seq) return;
+          geoSeqRef.current.set(message.id, message.seq);
+          geoCamLastRef.current.set(message.id, message);
+          if (message.clientId === clientIdRef.current) return;
+          liveRef.current.onGeocam?.(message);
         },
         onPull: (message) => {
           if (!message?.camera || message.clientId === clientIdRef.current) return;
@@ -1882,17 +1910,6 @@ export default function BoardEditor({
       if (obj) paintObject(obj);
     });
   });
-
-  useEffect(() => {
-    if (!editingId || readOnly) return undefined;
-    const current = objectsRef.current.find((obj) => obj.id === editingId);
-    if (current?.type !== 'geogebra') return undefined;
-    const timer = window.setInterval(() => {
-      geoDirtyRef.current.add(editingId);
-      liveRef.current.saveGeoXml?.();
-    }, GEO_XML_MS);
-    return () => window.clearInterval(timer);
-  }, [editingId, readOnly]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -2318,6 +2335,7 @@ export default function BoardEditor({
     const turningOff = editingIdRef.current === id;
     editingIdRef.current = turningOff ? null : id;
     setEditingId(editingIdRef.current);
+    if (!turningOff && obj.type === 'geogebra') socketRef.current?.hideCursor();
     if (turningOff) {
       geoDirtyRef.current.add(id);
       window.clearTimeout(geoXmlTimerRef.current);
@@ -2403,6 +2421,8 @@ export default function BoardEditor({
       onClosed,
       paintPeerCursors,
       showLaser,
+      onGeocam: (message) => geoCamInRef.current.get(message.id)?.(message),
+      onGeoInput: (message) => geoInputInRef.current.get(message.id)?.(message),
     };
     actionsRef.current = {
       undo,
@@ -2431,6 +2451,7 @@ export default function BoardEditor({
     readOnlyRef.current = readOnly;
     audienceRef.current = audience;
     wheelRef.current = (event) => {
+      if (!event.isTrusted) return;
       if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
       event.preventDefault();
       const cam = cameraRef.current;
@@ -3077,6 +3098,7 @@ export default function BoardEditor({
   }
 
   function onPointerDown(event) {
+    if (!event.isTrusted) return;
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest('[data-geo-live]')) return;
     if (target?.closest('textarea, input')) return;
@@ -3278,6 +3300,7 @@ export default function BoardEditor({
   }
 
   function onViewportPointerMove(event) {
+    if (!event.isTrusted) return;
     if (event.pointerType === 'touch') return;
     if (chainRef.current && !dragRef.current && toolRef.current === 'shape' && styleRef.current.shape === 'polyline') {
       const world = toWorld(event);
@@ -3429,6 +3452,19 @@ export default function BoardEditor({
                 scheduleGeoSave(id);
               }}
               onGeoLayout={(id) => liveRef.current.geoLayoutChanged?.(id)}
+              onGeoCamera={(id, wire) => socketRef.current?.geocam({ id, ...wire })}
+              onGeoCamBind={(id, fn) => {
+                if (fn) {
+                  geoCamInRef.current.set(id, fn);
+                  const last = geoCamLastRef.current.get(id);
+                  if (last) fn(last);
+                } else geoCamInRef.current.delete(id);
+              }}
+              onGeoInput={(id, body) => socketRef.current?.geoinput({ id, ...body })}
+              onGeoInputBind={(id, fn) => {
+                if (fn) geoInputInRef.current.set(id, fn);
+                else geoInputInRef.current.delete(id);
+              }}
               onTaskMeasure={(id, height) => liveRef.current.measureTask?.(id, height)}
               onGeoControls={changeGeoControls}
             />

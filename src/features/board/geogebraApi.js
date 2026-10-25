@@ -1,9 +1,15 @@
-// Холст GeoGebra — картинка. Рисуем его в пикселях экрана, не крупнее 3× рамки.
-export function geoPixelScale(zoom = 1) {
+const MAX_CANVAS_PIXELS = 4096 * 4096;
+
+// Точный множитель обёртки: зум доски и плотность экрана, без шагов.
+// Потолок — чтобы холст не съел память, особенно у 3D.
+export function geoPixelScale(zoom = 1, box, cap = 0) {
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
-  const raw = Math.min(3, Math.max(0.25, zoom) * dpr);
-  const stepped = Math.round(raw * 4) / 4;
-  return Math.min(3, Math.max(1, stepped));
+  let ratio = Math.max(1, zoom * dpr);
+  if (cap > 0) ratio = Math.min(ratio, cap);
+  if (box && box.w > 0 && box.h > 0) {
+    ratio = Math.min(ratio, Math.sqrt(MAX_CANVAS_PIXELS / (box.w * box.h)));
+  }
+  return Math.max(1, ratio);
 }
 
 let scriptPromise = null;
@@ -266,91 +272,6 @@ export function fitUniformGeoGebraView(api, view) {
   return true;
 }
 
-const canvasSize = {
-  width: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width'),
-  height: Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height'),
-};
-
-function canvasExtra(canvas, state) {
-  const logical = state.logicalW;
-  const real = canvasSize.width.get.call(canvas);
-  if (!(logical > 0) || !(real > 0)) return 1;
-  return real / logical;
-}
-
-function applyCanvasBacking(canvas, state) {
-  const cssW = canvas.clientWidth || canvas.offsetWidth || 0;
-  const cssH = canvas.clientHeight || canvas.offsetHeight || 0;
-  const logicalW = state.logicalW;
-  const logicalH = state.logicalH;
-  if (!(cssW > 1) || !(cssH > 1) || !(logicalW > 0) || !(logicalH > 0) || !(state.ratio > 0)) return false;
-  const extra = Math.max(state.ratio * cssW, logicalW) / logicalW;
-  const actualW = Math.max(1, Math.round(logicalW * extra));
-  const actualH = Math.max(1, Math.round(logicalH * extra));
-  const realW = canvasSize.width.get.call(canvas);
-  const realH = canvasSize.height.get.call(canvas);
-  if (realW === actualW && realH === actualH) return false;
-  const ctx = canvas.getContext('2d');
-  const prev = ctx?.getTransform?.();
-  const prevExtra = logicalW > 0 ? realW / logicalW : 1;
-  canvasSize.width.set.call(canvas, actualW);
-  canvasSize.height.set.call(canvas, actualH);
-  if (state.restore && ctx && prev && state.nativeSetTransform) {
-    const gain = prevExtra > 0 ? extra / prevExtra : extra;
-    state.nativeSetTransform.call(ctx, prev.a * gain, prev.b * gain, prev.c * gain, prev.d * gain, prev.e * gain, prev.f * gain);
-  }
-  return true;
-}
-
-// Только холст чертежа: буфер в пикселях экрана, логический размер для GeoGebra прежний.
-export function sharpenEuclidianCanvas(canvas, ratio) {
-  if (!(canvas instanceof HTMLCanvasElement) || !(ratio > 0)) return false;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return false;
-  let state = canvas.__euclidianSharp;
-  if (!state) {
-    state = {
-      logicalW: canvasSize.width.get.call(canvas),
-      logicalH: canvasSize.height.get.call(canvas),
-      ratio,
-      restore: false,
-      nativeSetTransform: CanvasRenderingContext2D.prototype.setTransform,
-    };
-    canvas.__euclidianSharp = state;
-    const sync = (axis, value) => {
-      state[axis] = Number(value) || 0;
-      state.restore = false;
-      applyCanvasBacking(canvas, state);
-    };
-    Object.defineProperty(canvas, 'width', {
-      configurable: true,
-      get: () => state.logicalW,
-      set: (value) => { sync('logicalW', value); },
-    });
-    Object.defineProperty(canvas, 'height', {
-      configurable: true,
-      get: () => state.logicalH,
-      set: (value) => { sync('logicalH', value); },
-    });
-    const orig = ctx.setTransform.bind(ctx);
-    ctx.setTransform = function scaleBacking(...args) {
-      const extra = canvasExtra(canvas, state);
-      if (!(extra > 0) || Math.abs(extra - 1) < 0.001) return orig(...args);
-      if (args.length === 1 && args[0] && typeof args[0] === 'object') {
-        const matrix = args[0];
-        return orig(matrix.a * extra, matrix.b * extra, matrix.c * extra, matrix.d * extra, matrix.e * extra, matrix.f * extra);
-      }
-      if (args.length >= 6) {
-        return orig(args[0] * extra, args[1] * extra, args[2] * extra, args[3] * extra, args[4] * extra, args[5] * extra);
-      }
-      return orig(...args);
-    };
-  }
-  state.ratio = ratio;
-  state.restore = true;
-  return applyCanvasBacking(canvas, state);
-}
-
 const CAMERA_KEYS = ['xZero', 'yZero', 'zZero', 'scale', 'xAngle', 'zAngle'];
 
 export function readCamera3d(xml) {
@@ -383,18 +304,95 @@ export function readGeoGebraCamera(api) {
   return readCamera3d(readGeoGebraXml(api));
 }
 
+export function stripCamera(xml) {
+  return String(xml || '').replace(
+    /(<euclidianView3D\b[^>]*>[\s\S]*?)<coordSystem\b[^>]*\/>/,
+    '$1',
+  );
+}
+
+export function readViewSize3d(xml) {
+  const block = /<euclidianView3D\b[^>]*>([\s\S]*?)<\/euclidianView3D>/.exec(String(xml || ''))?.[1];
+  const tag = block && /<size\b([^>]*)\/?>/.exec(block)?.[1];
+  if (!tag) return null;
+  const w = parseFloat(/\bwidth="([^"]+)"/.exec(tag)?.[1]);
+  const h = parseFloat(/\bheight="([^"]+)"/.exec(tag)?.[1]);
+  return w > 0 && h > 0 ? { w, h } : null;
+}
+
+function roundCam(value) {
+  return Math.round(value * 1e4) / 1e4;
+}
+
+export function cameraToWire(cam, size) {
+  const base = Math.min(size.w, size.h);
+  if (!(base > 0) || !(cam?.scale > 0)) return null;
+  return {
+    az: roundCam(cam.zAngle),
+    el: roundCam(cam.xAngle),
+    c: [roundCam(cam.xZero), roundCam(cam.yZero), roundCam(cam.zZero)],
+    z: roundCam(cam.scale / base),
+  };
+}
+
+export function cameraFromWire(wire, size) {
+  const base = Math.min(size.w, size.h);
+  if (!wire || !(base > 0) || !(wire.z > 0)) return null;
+  const [xZero, yZero, zZero] = wire.c || [];
+  if (![wire.az, wire.el, xZero, yZero, zZero].every(Number.isFinite)) return null;
+  return {
+    zAngle: wire.az,
+    xAngle: wire.el,
+    xZero,
+    yZero,
+    zZero,
+    scale: wire.z * base,
+  };
+}
+
+export function withCamera(xml, cam) {
+  if (!cam) return String(xml || '');
+  return String(xml || '').replace(
+    /(<euclidianView3D\b[^>]*>[\s\S]*?)<coordSystem\b([^>]*)\/>/,
+    (full, head, attrs) => {
+      let next = attrs;
+      for (const key of CAMERA_KEYS) {
+        if (!Number.isFinite(cam[key])) continue;
+        const re = new RegExp(`\\b${key}="[^"]*"`);
+        const value = `${key}="${cam[key]}"`;
+        next = re.test(next) ? next.replace(re, value) : `${next} ${value}`;
+      }
+      return `${head}<coordSystem${next}/>`;
+    },
+  );
+}
+
+export function writeCameraXml(api, camera) {
+  if (!api || !camera || typeof api.evalXML !== 'function') return false;
+  const f = (value) => Number(value).toFixed(5);
+  api.evalXML(
+    `<euclidianView3D><coordSystem xZero="${f(camera.xZero)}" yZero="${f(camera.yZero)}" zZero="${f(camera.zZero)}" scale="${f(camera.scale)}" xAngle="${f(camera.xAngle)}" zAngle="${f(camera.zAngle)}"/></euclidianView3D>`,
+  );
+  return true;
+}
+
 // Поворот — точной командой, центр и масштаб — кубом вокруг центра: у куба
 // масштаб обратно пропорционален половине ребра, коэффициент уточняется по факту.
 export function writeGeoGebraCamera(api, camera, fit) {
   if (!api || !camera || !(fit > 0)) return 0;
   const azimuth = camera.zAngle + 180;
   const elevation = -camera.xAngle;
-  api.evalCommand(`SetViewDirection(Vector((1; ${azimuth.toFixed(4)}°; ${elevation.toFixed(4)}°)), false)`);
   const half = fit / camera.scale;
   const x = -camera.xZero;
   const y = -camera.yZero;
   const z = -camera.zZero;
-  api.setCoordSystem(x - half, x + half, y - half, y + half, z - half, z + half);
+  try { api.setRepaintingActive?.(false); } catch { /* старая сборка рисует сразу */ }
+  try {
+    api.evalCommand(`SetViewDirection(Vector((1; ${azimuth.toFixed(4)}°; ${elevation.toFixed(4)}°)), false)`);
+    api.setCoordSystem(x - half, x + half, y - half, y + half, z - half, z + half);
+  } finally {
+    try { api.setRepaintingActive?.(true); } catch { /* перерисовка включится сама */ }
+  }
   return half;
 }
 

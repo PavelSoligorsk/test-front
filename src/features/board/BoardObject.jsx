@@ -200,6 +200,10 @@ function BoardObject({
   onGeoChange,
   onGeoLayout,
   onGeoControls,
+  onGeoCamera,
+  onGeoCamBind,
+  onGeoInput,
+  onGeoInputBind,
   onTaskMeasure,
   teacher,
 }) {
@@ -378,6 +382,11 @@ function BoardObject({
               texts={obj.props.texts || []}
               zoom={zoom}
               interactive={interactiveGeo}
+              boardObjectId={obj.id}
+              onCamera={(wire) => onGeoCamera?.(obj.id, wire)}
+              onCamBind={onGeoCamBind}
+              onInput={(body) => onGeoInput?.(obj.id, body)}
+              onInputBind={onGeoInputBind}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={() => onGeoChange(obj.id)}
               onLayoutChange={() => onGeoLayout?.(obj.id)}
@@ -522,4 +531,5 @@ export default memo(BoardObject, (prev, next) => (
   && prev.selected === next.selected
   && prev.handles === next.handles
   && prev.editing === next.editing
+  && (next.obj.type !== 'geogebra' || prev.zoom === next.zoom)
 ));

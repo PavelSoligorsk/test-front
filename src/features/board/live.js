@@ -76,6 +76,12 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
       case 'pull':
         handlers.onPull?.(message);
         break;
+      case 'geocam':
+        handlers.onGeocam?.(message);
+        break;
+      case 'geoinput':
+        handlers.onGeoInput?.(message);
+        break;
       case 'join':
         if (message.peer) handlers.onJoin?.(message.peer);
         break;
@@ -147,6 +153,9 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
     cursor(x, y) {
       raw({ type: 'cursor', x, y });
     },
+    hideCursor() {
+      raw({ type: 'cursor', hidden: true });
+    },
     laser(points, color, width) {
       raw({ type: 'laser', points, color, width });
     },
@@ -155,6 +164,12 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
     },
     pull(camera) {
       raw({ type: 'pull', camera });
+    },
+    geocam(body) {
+      raw({ type: 'geocam', ...body });
+    },
+    geoinput(body) {
+      raw({ type: 'geoinput', ...body });
     },
     pendingCount: () => pending.size,
     close() {

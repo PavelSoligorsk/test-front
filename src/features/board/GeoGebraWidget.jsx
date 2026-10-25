@@ -6,7 +6,6 @@ import {
   applyMenuValue,
   fitUniformGeoGebraView,
   isGeoGebraView,
-  sharpenEuclidianCanvas,
   readGeoGebraUnit,
   readMenuValue,
   writeUniformUnit,
@@ -15,6 +14,8 @@ import {
   loadGeoGebraScript,
   readCamera3d,
   readConstructionTargets,
+  cameraFromWire,
+  cameraToWire,
   readGeoGebraCamera,
   readGeoGebraPerspective,
   readGeoGebraView,
@@ -23,6 +24,8 @@ import {
   sameCamera,
   sameConstruction,
   sameGeoGebraView,
+  stripCamera,
+  withCamera,
   theoryPerspectiveCode,
   writeGeoGebraCamera,
   writeGeoGebraView,
@@ -55,6 +58,11 @@ export default function GeoGebraWidget({
   onConstructionChange,
   onLayoutChange,
   onControls,
+  boardObjectId = '',
+  onCamera,
+  onCamBind,
+  onInput,
+  onInputBind,
 }) {
   const frameRef = useRef(null);
   const hostRef = useRef(null);
@@ -83,14 +91,45 @@ export default function GeoGebraWidget({
     raf: 0,
     last: 0,
     view: null,
-    camera: { now: null, to: null, fit: 0, half: 0, check: 0 },
+    camera: {
+      now: null, to: null, fit: 0, half: 0, check: 0, live: false, tau: 0,
+      shown: null, from: null, t0: 0, dur: 0, lastPacket: 0, lastWrite: 0, writeCost: 0, raf: 0,
+    },
   });
   const fitTimerRef = useRef(0);
+  const zoomTimerRef = useRef(0);
+  const wrapRef = useRef(null);
   const sharpRef = useRef(null);
   const appletObjRef = useRef(null);
   const zoomRef = useRef(zoom || 1);
   zoomRef.current = zoom || 1;
   const interactiveRef = useRef(interactive);
+  const wasInteractiveRef = useRef(interactive);
+  const quietUntilRef = useRef(0);
+  const camSeenRef = useRef(0);
+  const camTimerRef = useRef(0);
+  const camHeldRef = useRef(false);
+  const camReadCostRef = useRef(8);
+  const lastSentRef = useRef(0);
+  const camQuietRef = useRef(0);
+  const camPollRef = useRef(0);
+  const camSizeRef = useRef(null);
+  const camBufRef = useRef({ q: [], offset: null, delay: 120, raf: 0, last: 0 });
+  const lastWireRef = useRef(null);
+  const lastCamRef = useRef(null);
+  const followRef = useRef(true);
+  const [follow, setFollow] = useState(true);
+  const onCameraRef = useRef(onCamera);
+  const onInputRef = useRef(onInput);
+  const replayRef = useRef({
+    on: false, b: 0, q: [], offset: null, delay: 70, cur: null,
+    lastRecv: 0, lastAt: 0, raf: 0, fx: NaN, fy: NaN, frameRect: null,
+  });
+  const ghostRef = useRef(null);
+  const ghostTimerRef = useRef(0);
+  const canvasRef = useRef(null);
+  onCameraRef.current = onCamera;
+  onInputRef.current = onInput;
   const onReadyRef = useRef(onReady);
   const onChangeRef = useRef(onConstructionChange);
   const onLayoutRef = useRef(onLayoutChange);
@@ -117,78 +156,33 @@ export default function GeoGebraWidget({
     return { w, h };
   }
 
-  // Меню остаётся в пикселях рамки. Чёткость только у холста чертежа: его буфер
-  // больше CSS-размера, а зум доски больше не растягивает кривые и подписи функций.
-  function graphicsCanvases() {
-    const host = hostRef.current;
-    if (!host || appName === '3d') return [];
-    const marked = [...host.querySelectorAll('canvas')].filter((canvas) => {
-      const test = canvas.getAttribute('data-test') || '';
-      return test === 'euclidianView' || test === 'euclidianView2';
-    });
-    if (marked.length) return marked;
-    const large = [...host.querySelectorAll('canvas')].filter((canvas) => canvas.clientWidth >= 80 && canvas.clientHeight >= 80);
-    large.sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight));
-    return large.slice(0, 1);
+  // Своя обёртка: апплет рисуется в пикселях экрана и уменьшается в рамку.
+  // Внутренний scaler GeoGebra не трогаем.
+  function sharpRatio(box) {
+    return geoPixelScale(zoomRef.current || 1, box, appName === '3d' ? 1.25 : 0);
   }
 
-  function sharpenGraphics() {
-    if (appName === '3d') return;
-    const ratio = geoPixelScale(zoomRef.current || 1);
-    let changed = false;
-    graphicsCanvases().forEach((canvas) => {
-      try {
-        if (sharpenEuclidianCanvas(canvas, ratio)) changed = true;
-      } catch {
-        /* холст ещё не готов к смене плотности */
-      }
-    });
-    if (!changed || typeof apiRef.current?.refreshViews !== 'function') return;
-    try { apiRef.current.refreshViews(); } catch { /* перерисовка догонит следующим кадром */ }
-  }
-
-  function pinApplet() {
-    const host = hostRef.current;
-    const box = frameBox();
-    if (!host || !box) return null;
-    const scale = appName === '3d' ? geoPixelScale(zoomRef.current) : 1;
-    const pin = (node) => {
-      if (!(node instanceof HTMLElement) || node.classList.contains('applet_scaler')) return;
-      const style = node.style;
-      if (style.getPropertyValue('width') !== '100%') style.setProperty('width', '100%', 'important');
-      if (style.getPropertyValue('height') !== '100%') style.setProperty('height', '100%', 'important');
-      if (style.getPropertyValue('max-width') !== 'none') style.setProperty('max-width', 'none', 'important');
-      if (style.getPropertyValue('max-height') !== 'none') style.setProperty('max-height', 'none', 'important');
-      if (style.getPropertyValue('transform') !== 'none') style.setProperty('transform', 'none', 'important');
-    };
-    pin(host.firstElementChild);
-    const mark = String(scale);
-    const width = `${Math.round(box.w * scale)}px`;
-    const height = `${Math.round(box.h * scale)}px`;
-    const transform = `scale(${1 / scale})`;
-    host.querySelectorAll('.applet_scaler').forEach((node) => {
-      const current = node.style.getPropertyValue('transform');
-      if (node.dataset.sharp === mark && current && current !== 'none') return;
-      node.dataset.sharp = mark;
-      node.style.setProperty('width', width, 'important');
-      node.style.setProperty('height', height, 'important');
-      node.style.setProperty('max-width', 'none', 'important');
-      node.style.setProperty('max-height', 'none', 'important');
-      node.style.setProperty('transform', transform, 'important');
-      node.style.setProperty('transform-origin', '0 0', 'important');
-    });
-    if (appletObjRef.current) appletObjRef.current.scale = scale;
-    sharpenGraphics();
-    return box;
+  function applyWrap(box, ratio) {
+    const wrap = wrapRef.current;
+    if (!wrap || !box || !(ratio > 0)) return null;
+    const w = Math.max(1, Math.round(box.w * ratio));
+    const h = Math.max(1, Math.round(box.h * ratio));
+    wrap.style.width = `${w}px`;
+    wrap.style.height = `${h}px`;
+    wrap.style.transform = `scale(${box.w / w}, ${box.h / h})`;
+    wrap.style.transformOrigin = '0 0';
+    return { w, h };
   }
 
   function fitToFrame(api) {
     const box = frameBox();
     if (!box) return;
-    const scale = appName === '3d' ? geoPixelScale(zoomRef.current) : 1;
+    camSizeRef.current = null;
+    replayRef.current.frameRect = null;
+    const scale = sharpRatio(box);
+    const sized = applyWrap(box, scale);
     const prev = sharpRef.current;
-    const same = prev && prev.w === box.w && prev.h === box.h && prev.scale === scale;
-    pinApplet();
+    const same = prev && prev.w === box.w && prev.h === box.h && Math.abs((prev.scale || 1) - scale) < 0.001;
     if (same) {
       if (appName !== '3d' && !menuHoldRef.current && applyMenuValue(hostRef.current, menuRef.current)) {
         const anchor = isGeoGebraView(viewRef.current) ? viewRef.current : null;
@@ -199,17 +193,11 @@ export default function GeoGebraWidget({
       return;
     }
     sharpRef.current = { w: box.w, h: box.h, scale };
+    camSizeRef.current = null;
     glideRef.current.camera.fit = 0;
     const flatAnchor = appName === '3d'
       ? null
       : (isGeoGebraView(viewRef.current) ? viewRef.current : readGeoGebraView(api));
-    if (api && typeof api.setSize === 'function') {
-      try {
-        api.setSize(Math.round(box.w * scale), Math.round(box.h * scale));
-      } catch {
-        /* апплет ещё не готов к смене размера */
-      }
-    }
     const fitFlat = () => {
       if (appName !== '3d' && menuRef.current && !menuHoldRef.current) {
         applyMenuValue(hostRef.current, menuRef.current);
@@ -218,12 +206,29 @@ export default function GeoGebraWidget({
         try { fitUniformGeoGebraView(apiRef.current, flatAnchor); } catch { /* вид догонит следующим кадром */ }
       }
     };
-    fitFlat();
-    window.clearTimeout(fitTimerRef.current);
-    fitTimerRef.current = window.setTimeout(() => {
-      pinApplet();
+    if (api && sized && typeof api.setSize === 'function') {
+      try { api.setRepaintingActive?.(false); } catch { /* старая сборка без этого метода */ }
+      try {
+        api.setSize(sized.w, sized.h);
+        fitFlat();
+      } catch {
+        /* апплет ещё не готов к смене размера */
+      } finally {
+        try { api.setRepaintingActive?.(true); } catch { /* перерисовка включится сама */ }
+      }
+    } else {
       fitFlat();
-    }, 50);
+    }
+    const gen = fitTimerRef.current + 1;
+    fitTimerRef.current = gen;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (fitTimerRef.current !== gen || apiRef.current !== api) return;
+        const nextBox = frameBox();
+        if (nextBox) applyWrap(nextBox, sharpRatio(nextBox));
+        fitFlat();
+      });
+    });
   }
 
   function stopGlide() {
@@ -232,15 +237,26 @@ export default function GeoGebraWidget({
     glide.raf = 0;
     glide.items.clear();
     glide.view = null;
-    glide.camera.to = null;
-    window.clearTimeout(glide.camera.check);
+    const camera = glide.camera;
+    if (camera.raf) cancelAnimationFrame(camera.raf);
+    camera.raf = 0;
+    camera.to = null;
+    camera.from = null;
+    camera.shown = null;
+    window.clearTimeout(camera.check);
+    const buf = camBufRef.current;
+    if (buf.raf) cancelAnimationFrame(buf.raf);
+    buf.raf = 0;
+    buf.q = [];
   }
 
   function cameraFit() {
     const camera = glideRef.current.camera;
     if (camera.fit > 0) return camera.fit;
     const box = frameBox() || sharpRef.current || { w: width, h: height };
-    return Math.max(40, Math.min(box.w, box.h)) / 3.1;
+    const ratio = sharpRef.current?.scale || geoPixelScale(zoomRef.current || 1);
+    const canvas = Math.min(box.w, box.h) * ratio;
+    return Math.max(40, canvas) / 3.1;
   }
 
   function stepCamera(api, blend) {
@@ -248,21 +264,22 @@ export default function GeoGebraWidget({
     const from = camera.now;
     const to = camera.to;
     if (!from || !to) return true;
+    const nearPole = Math.min(Math.abs(Math.abs(from.xAngle) - 90), Math.abs(Math.abs(to.xAngle) - 90)) < 12;
     const next = {
       xZero: from.xZero + (to.xZero - from.xZero) * blend,
       yZero: from.yZero + (to.yZero - from.yZero) * blend,
       zZero: from.zZero + (to.zZero - from.zZero) * blend,
       scale: from.scale * (to.scale / from.scale) ** blend,
       xAngle: from.xAngle + angleGap(from.xAngle, to.xAngle) * blend,
-      zAngle: from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
+      zAngle: nearPole ? from.zAngle : from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
     };
-    const arrived = sameCamera(next, to, 0.01);
+    const arrived = sameCamera(nearPole ? { ...next, zAngle: to.zAngle } : next, to, 0.01);
     const value = arrived ? to : next;
     camera.half = writeGeoGebraCamera(api, value, cameraFit());
     camera.now = value;
     if (!arrived) return false;
     camera.to = null;
-    checkCamera(api, 0);
+    if (!camera.live) checkCamera(api, 0);
     return true;
   }
 
@@ -291,12 +308,14 @@ export default function GeoGebraWidget({
     }, 450);
   }
 
-  function glideCamera(api, target) {
+  function glideCamera(api, target, live = false) {
     if (!api || !target) return;
     const camera = glideRef.current.camera;
     if (!camera.now) camera.now = readGeoGebraCamera(api);
     if (!camera.now) return;
-    if (sameCamera(camera.to || camera.now, target)) return;
+    camera.live = live;
+    camera.tau = live ? 65 : 0;
+    if (sameCamera(camera.to || camera.now, target, live ? 1e-3 : 1e-3)) return;
     if (sameCamera(camera.now, target)) {
       camera.to = null;
       return;
@@ -365,7 +384,9 @@ export default function GeoGebraWidget({
       if (glide.camera.to) {
         let arrived = true;
         try {
-          arrived = stepCamera(current, blend);
+          const tau = glide.camera.tau || 110;
+          const camBlend = 1 - Math.exp(-elapsed / tau);
+          arrived = stepCamera(current, camBlend);
         } catch {
           glide.camera.to = null;
         }
@@ -548,6 +569,353 @@ export default function GeoGebraWidget({
     menuScaleRef.current = { view, unit, menu: readMenuValue(api) };
   }
 
+  function sameWire(a, b) {
+    return a && b
+      && Math.abs(a.az - b.az) < 0.05 && Math.abs(a.el - b.el) < 0.05
+      && Math.abs(a.z / b.z - 1) < 1e-3
+      && a.c.every((value, index) => Math.abs(value - b.c[index]) < 1e-3 * Math.max(1, Math.abs(value)));
+  }
+
+  function viewSize3d() {
+    const sharp = sharpRef.current;
+    if (sharp?.w > 0 && sharp?.h > 0 && sharp.scale > 0) {
+      return { w: sharp.w * sharp.scale, h: sharp.h * sharp.scale };
+    }
+    const box = frameBox();
+    if (!box) return null;
+    const ratio = sharpRatio(box);
+    return { w: box.w * ratio, h: box.h * ratio };
+  }
+
+  function publishCamera(api, force = false) {
+    camTimerRef.current = 0;
+    if ((!force && !interactiveRef.current) || !api || apiRef.current !== api) return;
+    const started = performance.now();
+    const xml = readGeoGebraXml(api);
+    camReadCostRef.current = camReadCostRef.current * 0.8 + (performance.now() - started) * 0.2;
+    const cam = readCamera3d(xml);
+    const size = viewSize3d();
+    if (!cam || !size) return;
+    camSizeRef.current = size;
+    const wire = cameraToWire(cam, size);
+    if (!wire || sameWire(lastWireRef.current, wire)) return;
+    lastWireRef.current = wire;
+    lastSentRef.current = performance.now();
+    onCameraRef.current?.({ seq: Math.floor(performance.timeOrigin + performance.now()), ...wire });
+  }
+
+  function scheduleCamera(api, force = false) {
+    if (!force) followRef.current = false;
+    const wait = Math.max(50, camReadCostRef.current * 3);
+    const now = performance.now();
+    window.clearTimeout(camTimerRef.current);
+    if (force || now - lastSentRef.current >= wait) {
+      camTimerRef.current = 0;
+      publishCamera(api, force);
+      return;
+    }
+    camTimerRef.current = window.setTimeout(() => publishCamera(api), wait - (now - lastSentRef.current));
+  }
+
+  function applyLiveCamera(api, value) {
+    const camera = glideRef.current.camera;
+    const prev = camera.shown;
+    const angles = !prev
+      || Math.abs(angleGap(prev.xAngle, value.xAngle)) > 0.05
+      || Math.abs(angleGap(prev.zAngle, value.zAngle)) > 0.05;
+    const place = !prev
+      || Math.abs(prev.scale / value.scale - 1) > 1e-3
+      || Math.hypot(prev.xZero - value.xZero, prev.yZero - value.yZero, prev.zZero - value.zZero) > 1e-3;
+    if (!angles && !place) {
+      camera.shown = value;
+      return;
+    }
+    const half = cameraFit() / value.scale;
+    const x = -value.xZero;
+    const y = -value.yZero;
+    const z = -value.zZero;
+    try { api.setRepaintingActive?.(false); } catch { /* старая сборка рисует сразу */ }
+    try {
+      if (angles) {
+        const azimuth = value.zAngle + 180;
+        const elevation = -value.xAngle;
+        api.evalCommand(`SetViewDirection(Vector((1; ${azimuth.toFixed(4)}°; ${elevation.toFixed(4)}°)), false)`);
+      }
+      if (place || angles) {
+        api.setCoordSystem(x - half, x + half, y - half, y + half, z - half, z + half);
+      }
+      camera.half = half;
+    } finally {
+      try { api.setRepaintingActive?.(true); } catch { /* перерисовка включится сама */ }
+    }
+    camera.shown = value;
+  }
+
+  function settleCamera(api, expected) {
+    const camera = glideRef.current.camera;
+    window.clearTimeout(camera.check);
+    camera.check = window.setTimeout(() => {
+      if (apiRef.current !== api || interactiveRef.current || replayRef.current.on) return;
+      const actual = readGeoGebraCamera(api);
+      if (!actual || !(camera.half > 0)) return;
+      if (Math.abs(actual.scale / expected.scale - 1) <= 0.005) return;
+      camera.fit = actual.scale * camera.half;
+      camera.half = cameraFit() / expected.scale;
+      camera.shown = null;
+      applyLiveCamera(api, expected);
+    }, 450);
+  }
+
+  function tickCam(api) {
+    const buf = camBufRef.current;
+    buf.raf = 0;
+    if (apiRef.current !== api || interactiveRef.current || replayRef.current.on || !buf.q.length) return;
+    const play = performance.now() - buf.delay;
+    while (buf.q.length > 1 && buf.q[1].at <= play) buf.q.shift();
+    const [from, to] = buf.q;
+    if (play < from.at) {
+      buf.raf = requestAnimationFrame(() => tickCam(api));
+      return;
+    }
+    const span = to ? to.at - from.at : 1;
+    const k = to ? Math.min(1, Math.max(0, (play - from.at) / Math.max(1, span))) : 1;
+    const value = to ? lerpCamera(from.cam, to.cam, k) : from.cam;
+    try {
+      applyLiveCamera(api, value);
+    } catch {
+      buf.q.length = 0;
+      return;
+    }
+    if (to) buf.raf = requestAnimationFrame(() => tickCam(api));
+    else settleCamera(api, value);
+  }
+
+  function pushCamSample(api, cam, sentWallMs) {
+    const buf = camBufRef.current;
+    const recv = performance.now();
+    const sent = sentWallMs - performance.timeOrigin;
+    const skew = recv - sent;
+    buf.offset = buf.offset == null || skew < buf.offset ? skew : buf.offset + (skew - buf.offset) * 0.002;
+    const at = Math.max(buf.last, sent + buf.offset);
+    buf.last = at;
+    buf.q.push({ cam, at });
+    if (buf.q.length > 60) buf.q.splice(0, buf.q.length - 30);
+    window.clearTimeout(glideRef.current.camera.check);
+    if (!buf.raf) buf.raf = requestAnimationFrame(() => tickCam(api));
+  }
+
+  function lerpCamera(from, to, k) {
+    const mix = (a, b) => a + (b - a) * k;
+    return {
+      xZero: mix(from.xZero, to.xZero),
+      yZero: mix(from.yZero, to.yZero),
+      zZero: mix(from.zZero, to.zZero),
+      scale: from.scale * (to.scale / from.scale) ** k,
+      xAngle: from.xAngle + angleGap(from.xAngle, to.xAngle) * k,
+      zAngle: from.zAngle + angleGap(from.zAngle, to.zAngle) * k,
+    };
+  }
+
+  function takeGeoCam(message) {
+    lastCamRef.current = message;
+    if (interactiveRef.current || !followRef.current) return;
+    const api = apiRef.current;
+    if (!api) return;
+    const size = viewSize3d();
+    const cam = size && cameraFromWire(message, size);
+    if (!cam) return;
+    if (replayRef.current.on) return;
+    const sent = Number.isFinite(message.seq) ? message.seq : performance.timeOrigin + performance.now();
+    pushCamSample(api, cam, sent);
+  }
+
+  function canvas3d() {
+    const cached = canvasRef.current;
+    if (cached?.isConnected) return cached;
+    let best = null;
+    hostRef.current?.querySelectorAll('canvas').forEach((canvas) => {
+      if (!best || canvas.width * canvas.height > best.width * best.height) best = canvas;
+    });
+    canvasRef.current = best;
+    return best;
+  }
+
+  function pxOf(u, v, rect) {
+    if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+    const span = Math.min(rect.width, rect.height);
+    if (!(span > 0)) return null;
+    const k = Math.min(
+      1,
+      (rect.width / 2 / span) / Math.max(Math.abs(u), 1e-6),
+      (rect.height / 2 / span) / Math.max(Math.abs(v), 1e-6),
+    );
+    return {
+      x: rect.left + rect.width / 2 + u * k * span,
+      y: rect.top + rect.height / 2 + v * k * span,
+    };
+  }
+
+  function resetReplay() {
+    const state = replayRef.current;
+    if (state.raf) cancelAnimationFrame(state.raf);
+    Object.assign(state, { on: false, q: [], cur: null, raf: 0, fx: NaN, fy: NaN, offset: null });
+    paintGhost(0, 0, false);
+  }
+
+  function firePointer(type, x, y, movementX = 0, movementY = 0) {
+    const canvas = canvas3d();
+    const state = replayRef.current;
+    if (!canvas) return;
+    const buttons = type === 'pointerup' || !state.on ? 0 : (state.b === 2 ? 2 : 1);
+    const mouseType = type === 'pointerdown' ? 'mousedown' : type === 'pointerup' ? 'mouseup' : 'mousemove';
+    canvas.dispatchEvent(new MouseEvent(mouseType, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      movementX,
+      movementY,
+      button: state.b,
+      buttons,
+      detail: 97,
+    }));
+  }
+
+  function paintGhost(x, y, show) {
+    const ghost = ghostRef.current;
+    const frame = frameRef.current;
+    if (!ghost || !frame) return;
+    window.clearTimeout(ghostTimerRef.current);
+    if (!show) {
+      ghost.style.display = 'none';
+      return;
+    }
+    const frameRect = replayRef.current.frameRect;
+    if (!frameRect) return;
+    const zoom = zoomRef.current || 1;
+    ghost.style.display = 'block';
+    ghost.style.transform = `translate(${(x - frameRect.left) / zoom}px, ${(y - frameRect.top) / zoom}px) scale(${1 / zoom})`;
+    ghostTimerRef.current = window.setTimeout(() => {
+      if (ghostRef.current) ghostRef.current.style.display = 'none';
+    }, 2000);
+  }
+
+  function enqueueInput(message) {
+    if (interactiveRef.current || appName !== '3d') return;
+    const state = replayRef.current;
+    const recv = performance.now();
+    if (recv - state.lastRecv > 3000) state.offset = null;
+    state.lastRecv = recv;
+    if (Number.isFinite(message.t)) {
+      const skew = recv - message.t;
+      state.offset = state.offset == null || skew < state.offset ? skew : state.offset + (skew - state.offset) * 0.002;
+    }
+    const at = Math.max(
+      state.lastAt,
+      Number.isFinite(message.t) && state.offset != null ? message.t + state.offset : recv,
+    );
+    state.lastAt = at;
+    state.q.push({ ...message, at });
+    if (state.q.length > 600) state.q.splice(0, state.q.length - 300);
+    pumpCursor();
+  }
+
+  function moveTo(u, v, rect) {
+    const state = replayRef.current;
+    const point = pxOf(u, v, rect);
+    if (!point) return;
+    const dx = point.x - (Number.isFinite(state.fx) ? state.fx : point.x);
+    const dy = point.y - (Number.isFinite(state.fy) ? state.fy : point.y);
+    if (Math.hypot(dx, dy) >= 0.25) {
+      firePointer('pointermove', point.x, point.y, dx, dy);
+      state.fx = point.x;
+      state.fy = point.y;
+    }
+    paintGhost(point.x, point.y, true);
+  }
+
+  function playEvent(message, rect) {
+    const state = replayRef.current;
+    const point = pxOf(message.u, message.v, rect);
+    if (!point) return;
+    state.cur = { u: message.u, v: message.v, at: message.at };
+    if (message.ev === 'down') {
+      const cam = glideRef.current.camera;
+      if (cam.raf) cancelAnimationFrame(cam.raf);
+      cam.raf = 0;
+      cam.to = null;
+      cam.from = null;
+      cam.shown = null;
+      window.clearTimeout(cam.check);
+      const buf = camBufRef.current;
+      if (buf.raf) cancelAnimationFrame(buf.raf);
+      buf.raf = 0;
+      buf.q = [];
+      state.on = true;
+      state.b = message.b === 2 ? 2 : 0;
+      state.fx = point.x;
+      state.fy = point.y;
+      firePointer('pointerdown', point.x, point.y);
+    } else if (message.ev === 'up') {
+      moveTo(message.u, message.v, rect);
+      firePointer('pointerup', point.x, point.y);
+      state.on = false;
+      window.setTimeout(() => {
+        try { applyConstruction(apiRef.current); } catch { /* построение догонит следующим сообщением */ }
+        if (lastCamRef.current && !replayRef.current.on) takeGeoCam(lastCamRef.current);
+      }, 120);
+    } else if (message.ev === 'wheel') {
+      canvas3d()?.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        deltaY: message.dy || 0,
+        clientX: point.x,
+        clientY: point.y,
+        detail: 97,
+      }));
+    }
+  }
+
+  function pumpCursor() {
+    const state = replayRef.current;
+    if (state.raf) return;
+    const step = (now) => {
+      state.raf = 0;
+      const canvas = canvas3d();
+      if (!canvas || interactiveRef.current) {
+        state.q.length = 0;
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      state.frameRect = frameRef.current?.getBoundingClientRect() || state.frameRect;
+      const playT = now - state.delay;
+      while (state.q.length && state.q[0].at <= playT) playEvent(state.q.shift(), rect);
+      if (state.cur) {
+        let { u, v } = state.cur;
+        const next = state.q.find((item) => item.ev !== 'wheel');
+        if (next) {
+          const span = next.at - state.cur.at;
+          const k = span > 0 ? Math.min(1, Math.max(0, (playT - state.cur.at) / span)) : 1;
+          u += (next.u - u) * k;
+          v += (next.v - v) * k;
+        }
+        moveTo(u, v, rect);
+      }
+      if (state.q.length) state.raf = requestAnimationFrame(step);
+    };
+    state.raf = requestAnimationFrame(step);
+  }
+
+  function followLeader() {
+    followRef.current = true;
+    setFollow(true);
+    const message = lastCamRef.current;
+    if (!message) return;
+    camSeenRef.current = 0;
+    takeGeoCam(message);
+  }
+
   function publishMenu() {
     if (appName === '3d') return;
     const layout = layoutSignature(apiRef.current);
@@ -580,9 +948,10 @@ export default function GeoGebraWidget({
 
   function applyConstruction(api) {
     if (!api) return;
+    if (appName === '3d' && replayRef.current.on) return;
     const xml = xmlRef.current;
     if (interactiveRef.current) {
-      if (xml) rememberApplied(xml);
+      if (xml) rememberApplied(appName === '3d' ? stripCamera(xml) : xml);
       if (fileRef.current) appliedRef.current = fileRef.current;
       appliedLayoutRef.current = layoutRef.current;
       glideRef.current.camera.now = null;
@@ -593,39 +962,47 @@ export default function GeoGebraWidget({
       reloadLayout(api);
       return;
     }
-    if (xml && xml !== appliedXmlRef.current && typeof api.setXML === 'function') {
+    const comparable = appName === '3d' ? stripCamera(xml) : xml;
+    if (comparable && comparable !== appliedXmlRef.current && typeof api.setXML === 'function') {
       const view = appName === '3d' ? null : viewRef.current;
-      const structure = graphStructure(xml);
+      const structure = graphStructure(comparable);
       const states = elementStates(xml);
-      const plan = appName === '3d' ? null : (structure === appliedStructureRef.current ? glidePlan(api, xml, states) : null);
+      const plan = structure === appliedStructureRef.current ? glidePlan(api, xml, states) : null;
       if (plan) {
-        rememberApplied(xml);
+        rememberApplied(comparable);
         glideToward(api, plan);
         if (view) glideView(api, view);
-        glideCamera(api, readCamera3d(xml));
+        if (appName !== '3d') glideCamera(api, readCamera3d(xml));
         return;
       }
       const keptCamera = appName === '3d' ? readGeoGebraCamera(api) : null;
       const keptView = appName === '3d' ? readGeoGebraView(api) : null;
       stopGlide();
+      const painted = appName === '3d'
+        ? withCamera(xmlWithoutViewSize(xml), keptCamera)
+        : xmlWithoutViewSize(xml);
       try {
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(false);
-        api.setXML(xmlWithoutViewSize(xml));
+        api.setXML(painted);
       } catch {
         rememberApplied('');
         return;
       } finally {
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
       }
-      rememberApplied(xml);
+      rememberApplied(comparable);
       if (appName !== '3d' && !graphicsVisible(api)) {
         try { api.setPerspective('AG'); } catch { /* чертёж рядом с алгеброй не открылся */ }
       }
-      const kept = appName === '3d' ? { camera: keptCamera, view: keptView } : null;
-      refillFrame(api, kept);
-      window.setTimeout(() => refillFrame(api, kept), 80);
-      glideRef.current.camera.now = appName === '3d' ? keptCamera : readCamera3d(xml);
-      if (view) glideView(api, view);
+      if (appName !== '3d') {
+        refillFrame(api, keptView ? { view: keptView } : null);
+        window.setTimeout(() => refillFrame(api, keptView ? { view: keptView } : null), 80);
+        glideRef.current.camera.now = readCamera3d(xml);
+        if (view) glideView(api, view);
+      } else {
+        camSizeRef.current = null;
+        glideRef.current.camera.now = keptCamera;
+      }
       return;
     }
     if (appName !== '3d' && viewRef.current) {
@@ -634,6 +1011,167 @@ export default function GeoGebraWidget({
     if (appliedXmlRef.current || !file) return;
     applyFile(api);
   }
+
+  useEffect(() => {
+    if (!interactive || status !== 'ready' || appName !== '3d') return undefined;
+    const host = hostRef.current;
+    if (!host) return undefined;
+    let pressed = false;
+    let button = 0;
+    let lastSent = 0;
+    let pending = null;
+    let timer = 0;
+    let wheelAcc = 0;
+    let wheelEvent = null;
+    let wheelTimer = 0;
+    const place = (event) => {
+      const canvas = canvas3d();
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const span = Math.min(rect.width, rect.height);
+      if (!(span > 0)) return null;
+      return {
+        u: (event.clientX - rect.left - rect.width / 2) / span,
+        v: (event.clientY - rect.top - rect.height / 2) / span,
+      };
+    };
+    const send = (ev, event, extra) => {
+      const point = place(event);
+      if (!point) return;
+      const t = event.timeStamp > 0 && event.timeStamp < 1e11 ? event.timeStamp : performance.now();
+      onInputRef.current?.({ ev, b: button, t, ...point, ...extra });
+    };
+    const tick = () => {
+      timer = 0;
+      if (!pending) return;
+      send(pressed ? 'move' : 'hover', pending);
+      pending = null;
+      lastSent = performance.now();
+    };
+    const down = (event) => {
+      const canvas = canvas3d();
+      if (!canvas || !(event.target instanceof Node) || !canvas.contains(event.target)) return;
+      pressed = true;
+      button = (event.button === 2 || event.ctrlKey) ? 2 : 0;
+      send('down', event);
+    };
+    const move = (event) => {
+      const canvas = canvas3d();
+      if (!pressed && !(canvas && event.target instanceof Node && canvas.contains(event.target))) return;
+      const samples = event.getCoalescedEvents?.();
+      pending = samples?.length ? samples[samples.length - 1] : event;
+      if (!timer) timer = window.requestAnimationFrame(tick);
+    };
+    const up = (event) => {
+      if (!pressed) return;
+      pressed = false;
+      pending = null;
+      send('up', event);
+    };
+    const wheel = (event) => {
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+      wheelAcc += event.deltaY * unit;
+      wheelEvent = event;
+      if (!wheelTimer) {
+        wheelTimer = window.setTimeout(() => {
+          wheelTimer = 0;
+          if (!wheelAcc || !wheelEvent) return;
+          send('wheel', wheelEvent, { dy: wheelAcc });
+          wheelAcc = 0;
+        }, 33);
+      }
+    };
+    host.addEventListener('pointerdown', down, true);
+    host.addEventListener('wheel', wheel, true);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+    return () => {
+      window.cancelAnimationFrame(timer);
+      window.clearTimeout(wheelTimer);
+      host.removeEventListener('pointerdown', down, true);
+      host.removeEventListener('wheel', wheel, true);
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive, status, appName]);
+
+  useEffect(() => {
+    if (status !== 'ready' || appName !== '3d' || !onInputBind || !boardObjectId) return undefined;
+    onInputBind(boardObjectId, (message) => enqueueInput(message));
+    return () => onInputBind(boardObjectId, null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, appName, boardObjectId, onInputBind]);
+
+  useEffect(() => {
+    if (!interactive || status !== 'ready' || appName !== '3d') return undefined;
+    const host = hostRef.current;
+    if (!host) return undefined;
+    let held = false;
+    const down = () => {
+      held = true;
+      camHeldRef.current = true;
+      followRef.current = false;
+      window.clearTimeout(camQuietRef.current);
+      camQuietRef.current = window.setTimeout(() => {
+        if (!camHeldRef.current || camPollRef.current) return;
+        camPollRef.current = window.setInterval(() => publishCamera(apiRef.current), 450);
+      }, 200);
+    };
+    const up = () => {
+      if (!held) return;
+      held = false;
+      camHeldRef.current = false;
+      window.clearTimeout(camQuietRef.current);
+      window.clearInterval(camPollRef.current);
+      camPollRef.current = 0;
+      window.setTimeout(() => scheduleCamera(apiRef.current, true), 60);
+      if (!followRef.current) setFollow(false);
+    };
+    const wheel = () => {
+      if (!interactiveRef.current) return;
+      window.clearTimeout(camTimerRef.current);
+      camTimerRef.current = window.setTimeout(() => publishCamera(apiRef.current), 150);
+    };
+    host.addEventListener('pointerdown', down, true);
+    host.addEventListener('wheel', wheel, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
+    return () => {
+      window.clearTimeout(camQuietRef.current);
+      window.clearInterval(camPollRef.current);
+      camPollRef.current = 0;
+      host.removeEventListener('pointerdown', down, true);
+      host.removeEventListener('wheel', wheel, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+    };
+    // scheduleCamera читает только ref-ы.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive, status, appName]);
+
+  useEffect(() => {
+    if (status !== 'ready' || appName !== '3d' || !onCamBind || !boardObjectId) return undefined;
+    let camWait = 0;
+    onCamBind(boardObjectId, (message) => {
+      const state = replayRef.current;
+      if (!(state.on || state.q.length)) {
+        takeGeoCam(message);
+        return;
+      }
+      lastCamRef.current = message;
+      window.clearTimeout(camWait);
+      camWait = window.setTimeout(() => takeGeoCam(message), state.delay);
+    });
+    return () => {
+      window.clearTimeout(camWait);
+      onCamBind(boardObjectId, null);
+    };
+    // takeGeoCam читает только ref-ы.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, appName, boardObjectId, onCamBind]);
 
   useEffect(() => {
     onReadyRef.current = onReady;
@@ -645,13 +1183,36 @@ export default function GeoGebraWidget({
     const frame = frameRef.current;
     const host = hostRef.current;
     if (!frame || !host) return;
+    const was = wasInteractiveRef.current;
+    wasInteractiveRef.current = interactive;
+    if (was && !interactive && status === 'ready' && appName === '3d') {
+      scheduleCamera(apiRef.current, true);
+    }
     interactiveRef.current = interactive;
+    if (interactive && !was) {
+      stopGlide();
+      glideRef.current.camera.shown = null;
+      resetReplay();
+      quietUntilRef.current = performance.now() + 300;
+    }
     host.inert = !interactive;
     host.style.pointerEvents = interactive ? 'auto' : 'none';
     if (!interactive && frame.contains(document.activeElement)) {
       document.activeElement.blur();
     }
-  }, [interactive]);
+    if (was && !interactive && status === 'ready') {
+      const resume = followRef.current;
+      followRef.current = true;
+      setFollow(true);
+      if (resume && appName === '3d' && lastCamRef.current) {
+        camSeenRef.current = 0;
+        takeGeoCam(lastCamRef.current);
+      }
+      quietUntilRef.current = performance.now() + 300;
+      appliedXmlRef.current = '';
+      try { applyConstruction(apiRef.current); } catch { /* чужое построение догонит следующим сообщением */ }
+    }
+  }, [interactive, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -669,7 +1230,14 @@ export default function GeoGebraWidget({
         await loadGeoGebraScript();
         if (cancelled || !host || !window.GGBApplet) return;
         host.innerHTML = '';
-        const pixelScale = appName === '3d' ? geoPixelScale(zoomRef.current) : 1;
+        const pixelScale = sharpRatio({
+          w: Math.max(40, Math.round(sizeAtStart.width)),
+          h: Math.max(40, Math.round(sizeAtStart.height)),
+        });
+        applyWrap(
+          { w: Math.max(40, Math.round(sizeAtStart.width)), h: Math.max(40, Math.round(sizeAtStart.height)) },
+          pixelScale,
+        );
         sharpRef.current = {
           w: Math.max(40, Math.round(sizeAtStart.width)),
           h: Math.max(40, Math.round(sizeAtStart.height)),
@@ -681,8 +1249,8 @@ export default function GeoGebraWidget({
         const params = {
           id: appletId,
           ...(fromTheory ? {} : { appName: kind }),
-          width: Math.max(40, Math.round(sizeAtStart.width)),
-          height: Math.max(40, Math.round(sizeAtStart.height)),
+          width: Math.max(40, Math.round(sizeAtStart.width * pixelScale)),
+          height: Math.max(40, Math.round(sizeAtStart.height * pixelScale)),
           language: 'ru',
           showMenuBar: false,
           showToolBar: true,
@@ -707,8 +1275,9 @@ export default function GeoGebraWidget({
             host.inert = !interactiveRef.current;
             host.style.pointerEvents = interactiveRef.current ? 'auto' : 'none';
             const notifyChange = () => {
-              if (menuDragRef.current) return;
-              if (glideRef.current.raf) return;
+              if (!interactiveRef.current) return;
+              if (performance.now() < quietUntilRef.current) return;
+              if (menuDragRef.current || glideRef.current.raf) return;
               onChangeRef.current?.();
             };
             if (typeof api.registerUpdateListener === 'function') {
@@ -717,7 +1286,17 @@ export default function GeoGebraWidget({
             if (typeof api.registerClientListener === 'function') {
               api.registerClientListener((event) => {
                 const type = event?.type;
-                if (type === 'viewChanged2D' || type === 'viewChanged3D' || type === 'movingGeos' || type === 'movedGeos' || type === 'dragEnd') {
+                if (appName === '3d' && type && type !== 'viewChanged3D' && type !== 'movingGeos' && type !== 'movedGeos' && type !== 'dragEnd') {
+                  camSizeRef.current = null;
+                }
+                if (type === 'viewChanged3D') {
+                  if (appName === '3d' && interactiveRef.current && !camHeldRef.current) {
+                    window.clearTimeout(camTimerRef.current);
+                    camTimerRef.current = window.setTimeout(() => publishCamera(api), 150);
+                  }
+                  return;
+                }
+                if (type === 'viewChanged2D' || type === 'movingGeos' || type === 'movedGeos' || type === 'dragEnd') {
                   notifyChange();
                 }
               });
@@ -734,7 +1313,6 @@ export default function GeoGebraWidget({
               restoreTheoryPerspective(api);
               applyConstruction(api);
             }
-            pinApplet();
             setStatus('ready');
           },
         };
@@ -750,6 +1328,10 @@ export default function GeoGebraWidget({
     return () => {
       cancelled = true;
       stopGlide();
+      const dying = appletObjRef.current;
+      try { dying?.removeExistingApplet?.(appletId, false); } catch { /* апплет уже снят */ }
+      try { window[appletId]?.remove?.(); } catch { /* веб-контекст уже закрыт */ }
+      try { delete window[appletId]; } catch { /* имя апплета занято */ }
       apiRef.current = null;
       appletObjRef.current = null;
       onReadyRef.current?.(null);
@@ -786,17 +1368,19 @@ export default function GeoGebraWidget({
     if (!interactive || status !== 'ready') return undefined;
     const api = apiRef.current;
     if (!api) return undefined;
-    let lastXml = readGeoGebraXml(api);
+    let lastXml = appName === '3d' ? stripCamera(readGeoGebraXml(api)) : readGeoGebraXml(api);
     let lastLayout = layoutSignature(api);
     const timer = window.setInterval(() => {
       // Пока на доске ведут кисть, опрос построения её тормозит.
-      if (penActive()) return;
+      if (penActive() || camHeldRef.current) return;
+      if (performance.now() < quietUntilRef.current) return;
       const current = apiRef.current;
       if (!current) return;
       if (appName !== '3d' && menuHoldRef.current) return;
       const xml = readGeoGebraXml(current);
-      if (xml && xml !== lastXml) {
-        lastXml = xml;
+      const comparable = appName === '3d' ? stripCamera(xml) : xml;
+      if (comparable && comparable !== lastXml) {
+        lastXml = comparable;
         onChangeRef.current?.();
       }
       const layout = layoutSignature(current);
@@ -891,38 +1475,43 @@ export default function GeoGebraWidget({
     fit();
     const resizeObserver = new ResizeObserver(fit);
     resizeObserver.observe(frame);
-    let pinScheduled = false;
-    const pinSoon = () => {
-      if (pinScheduled) return;
-      pinScheduled = true;
-      requestAnimationFrame(() => {
-        pinScheduled = false;
-        pinApplet();
-      });
-    };
-    const mutationObserver = new MutationObserver(pinSoon);
-    mutationObserver.observe(host, { attributes: true, subtree: true, attributeFilter: ['style', 'class'] });
     return () => {
       resizeObserver.disconnect();
-      mutationObserver.disconnect();
-      window.clearTimeout(fitTimerRef.current);
+      fitTimerRef.current += 1;
     };
   }, [status]);
 
-  const pixelScale = appName === '3d' ? geoPixelScale(zoom || 1) : 1;
-  const graphicsScale = appName === '3d' ? 1 : geoPixelScale(zoom || 1);
   useEffect(() => {
-    if (status !== 'ready') return;
-    fitToFrame(apiRef.current);
-    // Размер холста зависит только от шага pixelScale, не от каждого промежуточного зума.
+    if (status !== 'ready') return undefined;
+    window.clearTimeout(zoomTimerRef.current);
+    zoomTimerRef.current = window.setTimeout(() => {
+      const box = frameBox();
+      const need = sharpRatio(box);
+      const have = sharpRef.current?.scale || 1;
+      if (need > have * 1.02 || need < have * 0.6) fitToFrame(apiRef.current);
+    }, 150);
+    return () => window.clearTimeout(zoomTimerRef.current);
+    // Пока доску зумят, её CSS просто растягивает холст. Резкость догоняется после жеста.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixelScale, status]);
+  }, [zoom, status, appName]);
+
   useEffect(() => {
-    if (status !== 'ready' || appName === '3d') return;
-    sharpenGraphics();
-    // Плотность холста зависит от шага graphicsScale, меню и размер апплета не меняются.
+    if (status !== 'ready') return undefined;
+    let mq;
+    const onChange = () => {
+      bind();
+      sharpRef.current = null;
+      fitToFrame(apiRef.current);
+    };
+    const bind = () => {
+      mq?.removeEventListener('change', onChange);
+      mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      mq.addEventListener('change', onChange);
+    };
+    bind();
+    return () => mq?.removeEventListener('change', onChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphicsScale, status, appName]);
+  }, [status]);
 
   const hasPanel = (controls?.length || 0) + (texts?.length || 0) > 0;
 
@@ -934,8 +1523,29 @@ export default function GeoGebraWidget({
       className="relative min-h-0 w-full flex-1 overflow-hidden bg-white"
       data-geo-live={interactive ? 'true' : undefined}
     >
-      <div ref={hostRef} className="absolute inset-0 z-0" />
+      <div ref={wrapRef} className="absolute left-0 top-0 z-0">
+        <div ref={hostRef} className="h-full w-full" />
+      </div>
       {!interactive && <div className="absolute inset-0 z-10" style={{ cursor: 'inherit' }} />}
+      <div ref={ghostRef} className="pointer-events-none absolute left-0 top-0 z-20" style={{ display: 'none' }}>
+        <svg width="18" height="18" viewBox="0 0 18 18">
+          <path d="M2 1.5 L15 8.5 L9 10 L6.5 16 Z" fill="#2563eb" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      </div>
+      {appName === '3d' && !interactive && !follow && (
+        <button
+          type="button"
+          data-chrome="true"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            followLeader();
+          }}
+          className="absolute right-2 top-2 z-30 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-semibold text-white"
+        >
+          К виду ведущего
+        </button>
+      )}
       {status === 'loading' && (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-white text-xs font-medium text-zinc-400">
           Загрузка GeoGebra…
