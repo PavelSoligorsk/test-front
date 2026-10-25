@@ -801,8 +801,21 @@ export default function GeoGebraWidget({
     }, 2000);
   }
 
+  function showGhostInput(message) {
+    const canvas = canvas3d();
+    if (!canvas || !Number.isFinite(message?.u) || !Number.isFinite(message?.v)) return;
+    const point = pxOf(message.u, message.v, canvas.getBoundingClientRect());
+    if (!point) return;
+    replayRef.current.frameRect = frameRef.current?.getBoundingClientRect() || replayRef.current.frameRect;
+    paintGhost(point.x, point.y, true);
+  }
+
   function enqueueInput(message) {
-    if (interactiveRef.current || appName !== '3d') return;
+    if (interactiveRef.current) return;
+    if (appName !== '3d') {
+      showGhostInput(message);
+      return;
+    }
     const state = replayRef.current;
     const recv = performance.now();
     if (recv - state.lastRecv > 3000) state.offset = null;
@@ -1099,7 +1112,46 @@ export default function GeoGebraWidget({
   }, [interactive, status, appName]);
 
   useEffect(() => {
-    if (status !== 'ready' || appName !== '3d' || !onInputBind || !boardObjectId) return undefined;
+    if (!interactive || status !== 'ready' || appName === '3d') return undefined;
+    const host = hostRef.current;
+    if (!host) return undefined;
+    let timer = 0;
+    let pending = null;
+    const place = (event) => {
+      const canvas = canvas3d();
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const span = Math.min(rect.width, rect.height);
+      if (!(span > 0)) return null;
+      return {
+        u: (event.clientX - rect.left - rect.width / 2) / span,
+        v: (event.clientY - rect.top - rect.height / 2) / span,
+      };
+    };
+    const tick = () => {
+      timer = 0;
+      if (!pending) return;
+      const point = place(pending);
+      const stamp = pending.timeStamp;
+      pending = null;
+      if (!point) return;
+      const t = stamp > 0 && stamp < 1e11 ? stamp : performance.now();
+      onInputRef.current?.({ ev: 'hover', b: 0, t, ...point });
+    };
+    const move = (event) => {
+      if (!(event.target instanceof Node) || !host.contains(event.target)) return;
+      pending = event;
+      if (!timer) timer = window.requestAnimationFrame(tick);
+    };
+    host.addEventListener('pointermove', move);
+    return () => {
+      window.cancelAnimationFrame(timer);
+      host.removeEventListener('pointermove', move);
+    };
+  }, [interactive, status, appName]);
+
+  useEffect(() => {
+    if (status !== 'ready' || !onInputBind || !boardObjectId) return undefined;
     onInputBind(boardObjectId, (message) => enqueueInput(message));
     return () => onInputBind(boardObjectId, null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
