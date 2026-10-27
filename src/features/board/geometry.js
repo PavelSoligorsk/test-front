@@ -39,6 +39,11 @@ export function arrowBounds(a, b, props) {
   };
 }
 
+function strokePad(width) {
+  return (Number(width) || 2) / 2 + 2;
+}
+
+/** Рамка штриха по точкам: x, y — левый верхний угол, точки — от него. */
 export function strokeBounds(points, width) {
   let minX = Infinity;
   let minY = Infinity;
@@ -50,16 +55,59 @@ export function strokeBounds(points, width) {
     maxX = Math.max(maxX, p.x);
     maxY = Math.max(maxY, p.y);
   });
-  const pad = (width || 2) + 6;
-  const left = minX - pad;
-  const top = minY - pad;
+  const pad = strokePad(width);
+  const left = round1(minX - pad);
+  const top = round1(minY - pad);
   return {
     x: left,
     y: top,
-    w: Math.max(12, maxX - minX + pad * 2),
-    h: Math.max(12, maxY - minY + pad * 2),
-    points: points.map((p) => ({ x: p.x - left, y: p.y - top })),
+    w: round1(maxX - minX + pad * 2),
+    h: round1(maxY - minY + pad * 2),
+    points: points.map((p) => ({ x: round1(p.x - left), y: round1(p.y - top) })),
   };
+}
+
+const strokeBoxes = new WeakMap();
+
+// У старых штрихов рамка 12×12 в первой точке, а точки уходят в любую сторону.
+// Настоящие границы считаются по точкам и кэшируются на массив точек.
+function strokeLocalBounds(obj) {
+  const points = obj.props?.points;
+  if (!Array.isArray(points) || !points.length) return { x: 0, y: 0, w: obj.w || 0, h: obj.h || 0 };
+  const width = obj.props.width || 2;
+  const cached = strokeBoxes.get(points);
+  if (cached && cached.width === width) return cached.box;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  points.forEach((p) => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  });
+  const pad = strokePad(width);
+  const box = { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+  strokeBoxes.set(points, { width, box });
+  return box;
+}
+
+/** Границы объекта в мире. Для штриха — по точкам, для остальных — x, y, w, h. */
+export function objectBounds(obj) {
+  if (obj?.type !== 'draw') return obj;
+  const box = strokeLocalBounds(obj);
+  return { x: obj.x + box.x, y: obj.y + box.y, w: box.w, h: box.h };
+}
+
+/** Рамка штриха внутри его собственного блока (для обводки выделения). */
+export function strokeOutline(obj) {
+  return strokeLocalBounds(obj);
+}
+
+function nearBox(box, point, margin) {
+  return point.x >= box.x - margin && point.y >= box.y - margin
+    && point.x <= box.x + box.w + margin && point.y <= box.y + box.h + margin;
 }
 
 function hitBox(obj, point) {
@@ -94,6 +142,7 @@ export function hitObject(obj, point, zoom) {
   if (obj.type === 'draw') {
     const pts = obj.props.points || [];
     const limit = ((obj.props.width || 2) / 2 + 8) / zoom;
+    if (!nearBox(objectBounds(obj), point, limit)) return false;
     if (pts.length === 1) {
       return Math.hypot(point.x - (obj.x + pts[0].x), point.y - (obj.y + pts[0].y)) <= limit;
     }
@@ -108,20 +157,18 @@ export function hitObject(obj, point, zoom) {
   return hitBox(obj, point);
 }
 
-export function topHit(objects, point, zoom) {
-  for (let i = objects.length - 1; i >= 0; i -= 1) {
-    if (hitObject(objects[i], point, zoom)) return objects[i];
+export function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const cross = ((yi > point.y) !== (yj > point.y))
+      && (point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (cross) inside = !inside;
   }
-  return null;
-}
-
-export function bringToFront(objects, id) {
-  const index = objects.findIndex((obj) => obj.id === id);
-  if (index < 0 || index === objects.length - 1) return objects;
-  const next = objects.slice();
-  const [item] = next.splice(index, 1);
-  next.push(item);
-  return next;
+  return inside;
 }
 
 export function resizeBox(start, handle, world, anchor, keepRatio = false) {
@@ -163,7 +210,8 @@ export function boundsOf(objects) {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  objects.forEach((obj) => {
+  objects.forEach((item) => {
+    const obj = objectBounds(item);
     minX = Math.min(minX, obj.x);
     minY = Math.min(minY, obj.y);
     maxX = Math.max(maxX, obj.x + (obj.w || 0));
@@ -172,7 +220,8 @@ export function boundsOf(objects) {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
-export function intersects(a, b) {
+export function intersects(a, item) {
+  const b = objectBounds(item);
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
@@ -222,39 +271,6 @@ function round1(value) {
   return Math.round(value * 10) / 10;
 }
 
-function perpendicular(point, a, b) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  if (len === 0) return Math.hypot(point.x - a.x, point.y - a.y);
-  return Math.abs(dy * point.x - dx * point.y + b.x * a.y - b.y * a.x) / len;
-}
-
-export function simplifyPoints(points, epsilon = 0.6) {
-  if (points.length < 3) return points.slice();
-  const keep = new Uint8Array(points.length);
-  keep[0] = 1;
-  keep[points.length - 1] = 1;
-  const stack = [[0, points.length - 1]];
-  while (stack.length) {
-    const [first, last] = stack.pop();
-    let maxDist = 0;
-    let index = -1;
-    for (let i = first + 1; i < last; i += 1) {
-      const dist = perpendicular(points[i], points[first], points[last]);
-      if (dist > maxDist) {
-        maxDist = dist;
-        index = i;
-      }
-    }
-    if (index > 0 && maxDist > epsilon) {
-      keep[index] = 1;
-      stack.push([first, index], [index, last]);
-    }
-  }
-  return points.filter((_, i) => keep[i]).map((p) => ({ x: round1(p.x), y: round1(p.y) }));
-}
-
 export function smoothPath(points) {
   if (!points?.length) return '';
   const first = points[0];
@@ -270,10 +286,11 @@ export function smoothPath(points) {
 }
 
 export function eraseStrokes(objects, point, radius) {
-  return objects.filter((obj) => {
+  const next = objects.filter((obj) => {
     if (obj.type !== 'draw' || obj.props?.locked) return true;
     const pts = obj.props.points || [];
     if (!pts.length) return false;
+    if (!nearBox(objectBounds(obj), point, radius)) return true;
     for (let i = 0; i < pts.length; i += 1) {
       const current = { x: obj.x + pts[i].x, y: obj.y + pts[i].y };
       const prev = i === 0 ? current : { x: obj.x + pts[i - 1].x, y: obj.y + pts[i - 1].y };
@@ -281,25 +298,5 @@ export function eraseStrokes(objects, point, radius) {
     }
     return true;
   });
-}
-
-export function contentBounds(objects) {
-  if (!objects.length) return null;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  objects.forEach((obj) => {
-    minX = Math.min(minX, obj.x);
-    minY = Math.min(minY, obj.y);
-    maxX = Math.max(maxX, obj.x + (obj.w || 0));
-    maxY = Math.max(maxY, obj.y + (obj.h || 0));
-  });
-  const pad = 28;
-  return {
-    minX: minX - pad,
-    minY: minY - pad,
-    w: Math.max(40, maxX - minX + pad * 2),
-    h: Math.max(40, maxY - minY + pad * 2),
-  };
+  return next.length === objects.length ? objects : next;
 }

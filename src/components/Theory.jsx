@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -23,6 +23,7 @@ import {
   MathText,
 } from './TheoryBlocks';
 import { continueOrderedListNumbers, normalizeDisplayMath } from './theoryMath';
+import { useMeasuredHeight } from '../shared/hooks/useMeasuredHeight';
 
 // ========== ЭЛЕМЕНТЫ MARKDOWN ==========
 
@@ -585,15 +586,8 @@ function boardBlockNode(block, key) {
   return null;
 }
 
-export function TheoryBoardBlock({ block }) {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    const body = ref.current;
-    const box = body?.parentElement;
-    if (!body || !box) return;
-    const next = Math.max(80, body.scrollHeight);
-    if (Math.abs(box.offsetHeight - next) > 2) box.style.height = `${next}px`;
-  });
+export function TheoryBoardBlock({ block, onMeasure }) {
+  const ref = useMeasuredHeight(onMeasure);
   if (!block) return null;
   return (
     <div
@@ -614,6 +608,7 @@ function theoryCopyPayload(block) {
     return {
       kind: 'geogebra',
       setup: block.setup || '',
+      materialId: block.id ? String(block.id) : '',
       controls: block.controls || [],
       texts: block.texts || [],
       height: block.height || '400',
@@ -622,16 +617,6 @@ function theoryCopyPayload(block) {
   const copy = cloneBoardBlock(block);
   if (!copy) return null;
   return { kind: 'theory', block: copy };
-}
-
-function blockMarkdown(block) {
-  if (!block || block.type === 'geogebra' || block.type === 'html') return '';
-  if (block.type === 'text') return block.content || '';
-  if (block.type === 'steps') {
-    return (block.steps || []).map((step, index) => `${index + 1}. ${step}`).join('\n');
-  }
-  const inner = (block.blocks || []).map(blockMarkdown).filter(Boolean).join('\n\n');
-  return block.title ? `**${block.title}**\n\n${inner}` : inner;
 }
 
 const renderBlocks = (blocks, onCopy) => {

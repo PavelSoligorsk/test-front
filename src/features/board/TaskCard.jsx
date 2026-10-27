@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { useMeasuredHeight } from '../../shared/hooks/useMeasuredHeight';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -42,8 +43,7 @@ function twoColumns(options) {
 }
 
 export default function TaskCard({ obj, teacher, onMeasure }) {
-  const cardRef = useRef(null);
-  const onMeasureRef = useRef(onMeasure);
+  const cardRef = useMeasuredHeight(onMeasure);
   const [solutionOpen, setSolutionOpen] = useState(false);
   const props = obj.props || {};
   const options = Array.isArray(props.options) ? props.options : [];
@@ -52,20 +52,6 @@ export default function TaskCard({ obj, teacher, onMeasure }) {
   const solution = secret ? String(secret.solution || '').trim() : '';
   const studentAnswers = secret && Array.isArray(secret.studentAnswers) ? secret.studentAnswers : [];
   const fontSize = props.fontSize || 20;
-
-  useLayoutEffect(() => {
-    onMeasureRef.current = onMeasure;
-  });
-
-  useLayoutEffect(() => {
-    const card = cardRef.current;
-    if (!card) return undefined;
-    const report = () => onMeasureRef.current?.(Math.ceil(card.offsetHeight));
-    report();
-    const observer = new ResizeObserver(report);
-    observer.observe(card);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div className="absolute inset-x-0 top-0">

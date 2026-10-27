@@ -10,11 +10,21 @@ export function audienceKey(board) {
   return `s:${ids.join(',')}`;
 }
 
+// Страницы одной доски связывает seriesId с сервера. У ответа старого сервера его нет —
+// тогда серия собирается по аудитории, как раньше.
+export function seriesKey(board) {
+  return board?.seriesId ? `series:${board.seriesId}` : audienceKey(board);
+}
+
+export function sameSeries(a, b) {
+  return seriesKey(a) === seriesKey(b);
+}
+
 export function groupBoardSeries(boards) {
   const order = [];
   const groups = new Map();
   (boards || []).forEach((board) => {
-    const key = audienceKey(board);
+    const key = seriesKey(board);
     if (!groups.has(key)) {
       groups.set(key, []);
       order.push(key);

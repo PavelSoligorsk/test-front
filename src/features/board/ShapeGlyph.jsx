@@ -1,22 +1,20 @@
-import { shapeFigures, shapeToneOpacity } from './shapes';
+import { figureReactProps, figureTag, shapeFigures } from './shapes';
+
+const GLYPH_PAINT = {
+  fill: 'currentColor',
+  stroke: 'currentColor',
+  strokeWidth: 6,
+  dash: '7 5',
+  tone: 'whole',
+  scaling: true,
+};
 
 export default function ShapeGlyph({ id, size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" className="overflow-visible">
       {shapeFigures(id).map((fig, index) => {
-        const props = {
-          fill: fig.fill === 'none' ? 'none' : 'currentColor',
-          stroke: fig.stroke === 'none' ? 'none' : 'currentColor',
-          strokeWidth: 6,
-          strokeLinejoin: 'round',
-          strokeDasharray: fig.dashed ? '7 5' : undefined,
-          opacity: shapeToneOpacity(fig.tone),
-        };
-        if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
-        if (fig.d) return <path key={index} d={fig.d} {...props} />;
-        return <polygon key={index} points={fig.points} {...props} />;
-
-        
+        const Tag = figureTag(fig);
+        return <Tag key={index} {...figureReactProps(fig, GLYPH_PAINT)} />;
       })}
     </svg>
   );

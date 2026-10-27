@@ -14,33 +14,6 @@ function replaceAt(list, index, obj) {
   return next;
 }
 
-// Сжатые точки штриха: целые десятые доли, первая пара абсолютная, дальше разности.
-export function encodePts(points) {
-  const out = [];
-  let px = 0;
-  let py = 0;
-  points.forEach((point) => {
-    const x = Math.round(point.x * 10);
-    const y = Math.round(point.y * 10);
-    out.push(x - px, y - py);
-    px = x;
-    py = y;
-  });
-  return out;
-}
-
-export function decodePts(pts) {
-  const points = [];
-  let x = 0;
-  let y = 0;
-  for (let i = 0; i + 1 < pts.length; i += 2) {
-    x += pts[i];
-    y += pts[i + 1];
-    points.push({ x: x / 10, y: y / 10 });
-  }
-  return points;
-}
-
 export function patchSet(prev, next) {
   const set = {};
   let changed = false;
@@ -69,8 +42,26 @@ export function patchSet(prev, next) {
   return changed ? set : null;
 }
 
+// Частый случай — двигали или правили объекты, состав и порядок те же:
+// сравнение по индексам, без построения словарей на весь документ.
+function sameOrderDiff(before, after) {
+  if (before.length !== after.length) return null;
+  const ops = [];
+  for (let index = 0; index < after.length; index += 1) {
+    const prev = before[index];
+    const next = after[index];
+    if (prev.id !== next.id) return null;
+    if (prev === next) continue;
+    const set = patchSet(prev, next);
+    if (set) ops.push({ type: 'patch', id: next.id, set });
+  }
+  return ops;
+}
+
 export function diffOps(before, after) {
   if (before === after) return [];
+  const fast = sameOrderDiff(before, after);
+  if (fast) return fast;
   const ops = [];
   const beforeMap = byId(before);
   const afterMap = byId(after);
@@ -96,20 +87,6 @@ export function diffOps(before, after) {
   return ops;
 }
 
-function pointCount(obj) {
-  return obj?.type === 'draw' && Array.isArray(obj.props?.points) ? obj.props.points.length : 0;
-}
-
-// Короткий повтор первого куска штриха не должен стирать уже дописанный хвост.
-export function keepLongerStrokes(local, remote) {
-  const byId = new Map((local || []).filter((obj) => obj.type === 'draw').map((obj) => [obj.id, obj]));
-  return (remote || []).map((obj) => {
-    const prev = byId.get(obj.id);
-    if (!prev || obj.type !== 'draw' || pointCount(prev) <= pointCount(obj)) return obj;
-    return { ...obj, props: { ...obj.props, points: prev.props.points } };
-  });
-}
-
 export function applyOp(list, op) {
   switch (op?.type) {
     case 'upsert': {
@@ -117,8 +94,6 @@ export function applyOp(list, op) {
       if (!obj?.id) return list;
       const index = indexOfId(list, obj.id);
       if (index < 0) return [...list, obj];
-      const current = list[index];
-      if (obj.type === 'draw' && current.type === 'draw' && pointCount(obj) < pointCount(current)) return list;
       return replaceAt(list, index, obj);
     }
     case 'patch': {
@@ -129,20 +104,6 @@ export function applyOp(list, op) {
       const obj = { ...current, ...box };
       if (props) obj.props = { ...(current.props || {}), ...props };
       return replaceAt(list, index, obj);
-    }
-    case 'append_points': {
-      const index = indexOfId(list, op.id);
-      let incoming = Array.isArray(op.pts) ? decodePts(op.pts) : op.points;
-      if (index < 0 || !Array.isArray(incoming) || !incoming.length) return list;
-      const current = list[index];
-      const existing = current.props?.points || [];
-      if (Number.isInteger(op.from)) {
-        if (op.from > existing.length) return list;
-        incoming = incoming.slice(existing.length - op.from);
-        if (!incoming.length) return list;
-      }
-      const points = [...existing, ...incoming];
-      return replaceAt(list, index, { ...current, props: { ...current.props, points } });
     }
     case 'delete': {
       const ids = new Set(op.ids || []);

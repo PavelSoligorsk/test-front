@@ -17,7 +17,8 @@ export default function TeacherBoardCanvasPage() {
     (async () => {
       try {
         const remote = await getTeacherBoard(boardId);
-        await saveBoard(remote);
+        // Локальная копия — запасной вариант без сети, ждать её записи незачем.
+        saveBoard(remote).catch(() => {});
         if (cancelled) return;
         setBoard(remote);
       } catch (error) {

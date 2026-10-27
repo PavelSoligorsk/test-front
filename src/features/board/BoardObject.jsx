@@ -4,10 +4,11 @@ import GeoGebraWidget from './GeoGebraWidget';
 import MarkdownBody from './MarkdownBody';
 import { TheoryBoardBlock } from '../../components/Theory';
 import TaskCard from './TaskCard';
-import { smoothPath } from './geometry';
+import { smoothPath, strokeOutline } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
-import { arrowHeadState, isSolid, jointLocal, planeNodes, shapeFigures, shapeHandle, shapeKnobs, shapeToneOpacity, solidAnchors } from './shapes';
+import { geoPixelScale } from './geogebraApi';
+import { arrowHeadState, figureReactProps, figureTag, isSolid, jointLocal, planeNodes, shapeFigures, shapeHandle, shapeKnobs, solidAnchors } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -27,7 +28,7 @@ function counterShift(handle) {
   return { x, y };
 }
 
-function BoxHandles({ zoom }) {
+function BoxHandles() {
   return Object.entries(HANDLE_POS).map(([handle, pos]) => {
     const shift = counterShift(handle);
     return (
@@ -44,7 +45,7 @@ function BoxHandles({ zoom }) {
           bottom: pos.bottom,
           cursor: pos.cursor,
           borderColor: SELECTION_COLOR,
-          transform: `translate(${shift.x}, ${shift.y}) scale(${1 / zoom})`,
+          transform: `translate(${shift.x}, ${shift.y}) scale(var(--inv-zoom, 1))`,
         }}
       />
     );
@@ -55,18 +56,25 @@ function fitCentered(el, kind) {
   const box = el.parentElement;
   if (!box) return DEFAULT_FONT[kind];
   const limit = Math.max(16, box.clientHeight - CENTER_PAD * 2);
-  let size = MAX_FONT[kind] || DEFAULT_FONT[kind];
-  const measure = () => {
-    el.style.height = 'auto';
-    return el.scrollHeight;
-  };
-  el.style.fontSize = `${size}px`;
-  while (measure() > limit && size > MIN_FONT) {
-    size -= 1;
+  const fits = (size) => {
     el.style.fontSize = `${size}px`;
+    el.style.height = 'auto';
+    return el.scrollHeight <= limit;
+  };
+  // Самый крупный кегль, при котором текст влезает: бинарный поиск вместо шага в 1px.
+  let low = MIN_FONT;
+  let high = MAX_FONT[kind] || DEFAULT_FONT[kind];
+  if (fits(high)) low = high;
+  else {
+    while (high - low > 1) {
+      const mid = Math.floor((low + high) / 2);
+      if (fits(mid)) low = mid;
+      else high = mid;
+    }
   }
+  fits(low);
   el.style.height = `${Math.min(el.scrollHeight, limit)}px`;
-  return size;
+  return low;
 }
 
 function TextBody({ obj, editing, onChange, onBlur }) {
@@ -141,28 +149,17 @@ function TextBody({ obj, editing, onChange, onBlur }) {
   );
 }
 
-function shapePaint(fig, fill, stroke, dashed) {
-  return {
-    fill: fig.fill === 'none' ? 'none' : fill,
-    stroke: fig.stroke === 'none' ? 'none' : stroke,
-    strokeWidth: 2,
-    strokeLinejoin: 'round',
-    vectorEffect: 'non-scaling-stroke',
-    fillOpacity: fig.fill === 'none' ? 1 : shapeToneOpacity(fig.tone),
-    strokeDasharray: fig.dashed || dashed ? '4 3' : undefined,
-  };
-}
-
 function ShapeBody({ obj }) {
-  const fill = obj.props.fill || '#ffffff';
-  const stroke = obj.props.stroke || '#18181b';
+  const paint = {
+    fill: obj.props.fill || '#ffffff',
+    stroke: obj.props.stroke || '#18181b',
+    dashed: obj.props.dashed,
+  };
   return (
     <svg data-shape="true" className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
       {shapeFigures(obj.props.shape, obj.props.depth, obj.props).map((fig, index) => {
-        const props = shapePaint(fig, fill, stroke, obj.props.dashed);
-        if (fig.ellipse) return <ellipse key={index} {...fig.ellipse} {...props} />;
-        if (fig.d) return <path key={index} d={fig.d} {...props} />;
-        return <polygon key={index} points={fig.points} {...props} />;
+        const Tag = figureTag(fig);
+        return <Tag key={index} {...figureReactProps(fig, paint)} />;
       })}
     </svg>
   );
@@ -187,6 +184,23 @@ function RoundPoint({ id, x, y, unit = '%' }) {
   );
 }
 
+function StrokeOutline({ obj }) {
+  const box = strokeOutline(obj);
+  return (
+    <div
+      data-outline={1}
+      className="pointer-events-none absolute rounded-sm"
+      style={{
+        left: box.x,
+        top: box.y,
+        width: box.w,
+        height: box.h,
+        outline: `calc(1px * var(--inv-zoom, 1)) dashed ${SELECTION_COLOR}`,
+      }}
+    />
+  );
+}
+
 function BoardObject({
   obj,
   zoom,
@@ -202,10 +216,12 @@ function BoardObject({
   onGeoControls,
   onGeoCamera,
   onGeoCamBind,
-  onGeoInput,
-  onGeoInputBind,
-  onTaskMeasure,
+  onGeoMove,
+  onGeoMoveBind,
+  onMeasure,
   teacher,
+  incoming,
+  lockedBy,
 }) {
   const locked = Boolean(obj.props?.locked);
   const box = obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape' || obj.type === 'geogebra' || obj.type === 'image' || obj.type === 'task';
@@ -235,20 +251,20 @@ function BoardObject({
 
       {obj.type === 'text' && (
         theoryBlock
-          ? <TheoryBoardBlock block={theoryBlock} />
+          ? <TheoryBoardBlock block={theoryBlock} onMeasure={(height) => onMeasure?.(obj.id, height)} />
           : markdown
-            ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} />
+            ? <MarkdownBody text={obj.props.text} fontSize={obj.props.fontSize || 22} onMeasure={(height) => onMeasure?.(obj.id, height)} />
             : <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
       )}
 
       {obj.type === 'task' && (
-        <TaskCard obj={obj} teacher={teacher} onMeasure={(height) => onTaskMeasure?.(obj.id, height)} />
+        <TaskCard obj={obj} teacher={teacher} onMeasure={(height) => onMeasure?.(obj.id, height)} />
       )}
 
       {obj.type === 'shape' && (
         <>
           <ShapeBody obj={obj} />
-          {(obj.props.joints || []).map((joint) => {
+          {[...(obj.props.joints || []), ...(incoming || [])].map((joint) => {
             const [x, y] = jointLocal(obj, joint);
             return <RoundPoint key={joint.id} id={joint.id} x={x} y={y} />;
           })}
@@ -263,7 +279,7 @@ function BoardObject({
               style={{
                 left: `${point[0]}%`,
                 top: `${point[1]}%`,
-                transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                transform: 'translate(-50%, -50%) scale(var(--inv-zoom, 1))',
                 cursor: 'grab',
               }}
             />
@@ -302,7 +318,7 @@ function BoardObject({
           />
         </svg>
       )}
-      {obj.type === 'arrow' && (obj.props.joints || []).map((joint) => (
+      {obj.type === 'arrow' && [...(obj.props.joints || []), ...(incoming || [])].map((joint) => (
         <RoundPoint
           key={joint.id}
           id={joint.id}
@@ -350,7 +366,12 @@ function BoardObject({
             <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
               {geoApp?.title || 'Планиметрия'}
             </span>
-            {!locked && (
+            {!locked && lockedBy && !interactiveGeo && (
+              <span className="truncate rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                Чертит {lockedBy}
+              </span>
+            )}
+            {!locked && !(lockedBy && !interactiveGeo) && (
               <button
                 type="button"
                 data-chrome="true"
@@ -378,6 +399,7 @@ function BoardObject({
               ggbLayout={obj.props.ggbLayout || ''}
               ggbMenu={obj.props.ggbMenu || ''}
               setup={obj.props.setup || ''}
+              materialId={obj.props.materialId || ''}
               controls={obj.props.controls || []}
               texts={obj.props.texts || []}
               zoom={zoom}
@@ -385,10 +407,10 @@ function BoardObject({
               boardObjectId={obj.id}
               onCamera={(wire) => onGeoCamera?.(obj.id, wire)}
               onCamBind={onGeoCamBind}
-              onInput={(body) => onGeoInput?.(obj.id, body)}
-              onInputBind={onGeoInputBind}
+              onMove={(body) => onGeoMove?.(obj.id, body)}
+              onMoveBind={onGeoMoveBind}
               onReady={(api) => onGeoReady(obj.id, api)}
-              onConstructionChange={() => onGeoChange(obj.id)}
+              onConstructionChange={(info) => onGeoChange(obj.id, info)}
               onLayoutChange={() => onGeoLayout?.(obj.id)}
               onControls={locked ? undefined : (controls) => onGeoControls?.(obj.id, controls)}
             />
@@ -401,20 +423,16 @@ function BoardObject({
           data-outline={outlineWidth}
           className="pointer-events-none absolute inset-0"
           style={{
-            outline: `${outlineWidth / zoom}px solid ${interactiveGeo ? '#2563eb' : SELECTION_COLOR}`,
+            outline: `calc(${outlineWidth}px * var(--inv-zoom, 1)) solid ${interactiveGeo ? '#2563eb' : SELECTION_COLOR}`,
           }}
         />
       )}
 
       {selected && obj.type === 'draw' && (
-        <div
-          data-outline={1}
-          className="pointer-events-none absolute inset-0 rounded-sm"
-          style={{ outline: `${1 / zoom}px dashed ${SELECTION_COLOR}` }}
-        />
+        <StrokeOutline obj={obj} />
       )}
 
-      {selected && handles && box && !interactiveGeo && !locked && <BoxHandles zoom={zoom} />}
+      {selected && handles && box && !interactiveGeo && !locked && <BoxHandles />}
 
       {selected && handles && !locked && knobs.length > 0 && (
         <>
@@ -433,7 +451,7 @@ function BoardObject({
               style={{
                 left: `${knob.x}%`,
                 top: `${knob.y}%`,
-                transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                transform: 'translate(-50%, -50%) scale(var(--inv-zoom, 1))',
                 cursor: 'ew-resize',
               }}
             />
@@ -449,7 +467,7 @@ function BoardObject({
           style={{
             left: `${point[0]}%`,
             top: `${point[1]}%`,
-            transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+            transform: 'translate(-50%, -50%) scale(var(--inv-zoom, 1))',
             cursor: 'grab',
           }}
         />
@@ -464,7 +482,7 @@ function BoardObject({
           style={{
             left: `${anchors.apex[0]}%`,
             top: `${anchors.apex[1]}%`,
-            transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+            transform: 'translate(-50%, -50%) scale(var(--inv-zoom, 1))',
             cursor: 'grab',
           }}
         />
@@ -479,7 +497,7 @@ function BoardObject({
           style={{
             left: `${shapeHandle(obj.props.shape, obj.props.depth, obj.props).x}%`,
             top: `${shapeHandle(obj.props.shape, obj.props.depth, obj.props).y}%`,
-            transform: `translate(-50%, -50%) rotate(45deg) scale(${1 / zoom})`,
+            transform: 'translate(-50%, -50%) rotate(45deg) scale(var(--inv-zoom, 1))',
             cursor: 'grab',
           }}
         />
@@ -494,7 +512,7 @@ function BoardObject({
               left: obj.props.x1,
               top: obj.props.y1,
               borderColor: SELECTION_COLOR,
-              transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+              transform: 'translate(-50%, -50%) scale(var(--inv-zoom, 1))',
               cursor: 'crosshair',
             }}
           />
@@ -505,7 +523,7 @@ function BoardObject({
               left: obj.props.x2,
               top: obj.props.y2,
               borderColor: SELECTION_COLOR,
-              transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+              transform: 'translate(-50%, -50%) scale(var(--inv-zoom, 1))',
               cursor: 'crosshair',
             }}
           />
@@ -516,7 +534,7 @@ function BoardObject({
         <span
           data-counter-scale="true"
           className="pointer-events-none absolute bottom-full right-0 mb-1 inline-flex items-center gap-1 rounded-md bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold text-white"
-          style={{ transform: `scale(${1 / zoom})`, transformOrigin: 'bottom right' }}
+          style={{ transform: 'scale(var(--inv-zoom, 1))', transformOrigin: 'bottom right' }}
         >
           <Lock size={10} />
           Закреплено
@@ -531,5 +549,7 @@ export default memo(BoardObject, (prev, next) => (
   && prev.selected === next.selected
   && prev.handles === next.handles
   && prev.editing === next.editing
-  && (next.obj.type !== 'geogebra' || prev.zoom === next.zoom)
+  && prev.incomingKey === next.incomingKey
+  && prev.lockedBy === next.lockedBy
+  && (next.obj.type !== 'geogebra' || geoPixelScale(prev.zoom) === geoPixelScale(next.zoom))
 ));
