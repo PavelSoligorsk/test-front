@@ -15,6 +15,7 @@ import {
   Grid3x3,
   Menu,
   Minus,
+  Circle,
   MousePointer2,
   Pencil,
   Pi,
@@ -48,7 +49,7 @@ import { theoryAppKind } from '../../shared/geogebra/setup';
 import { connectBoard, setRemoteTitle } from './live';
 import { getCurrentUser } from '../../shared/lib/session';
 import { setPenActive } from './penLock';
-import { applyOp, diffOps, reorder } from './ops';
+import { applyOp, diffOps, keepLongerStrokes, reorder, strokeDuration } from './ops';
 import { applyHistory, createdOnly, historyEntry } from './history';
 import {
   arrowBounds,
@@ -90,8 +91,11 @@ import {
   isRegularShape,
   planeDefaults,
   polylineFrame,
+  joinArrows,
+  plantPoint,
   releaseMissingBinds,
   setArrowSide,
+  splitArrowThroughPoints,
   settleSnap,
   shapeFigures,
   snapFigurePoint,
@@ -107,7 +111,11 @@ import { SNAP_PX, dragKindForHandle, followMoved, gestureStep, handleIndex, isEd
 function pickObject(objects, point, zoom) {
   for (let index = objects.length - 1; index >= 0; index -= 1) {
     const obj = objects[index];
-    if (!obj) continue;
+    if (obj?.type === 'point' && hitObject(obj, point, zoom)) return obj;
+  }
+  for (let index = objects.length - 1; index >= 0; index -= 1) {
+    const obj = objects[index];
+    if (!obj || obj.type === 'point') continue;
     const hit = obj.type === 'shape' ? hitShape(obj, point, zoom) : hitObject(obj, point, zoom);
     if (hit) return obj;
   }
@@ -145,6 +153,7 @@ const TOOLS = [
   { id: 'text', label: 'Текст', hint: 'T', icon: Type },
   { id: 'shape', label: 'Фигура', hint: 'R', icon: Square },
   { id: 'arrow', label: 'Отрезок', hint: 'L', icon: Minus },
+  { id: 'point', label: 'Точка', hint: '.', icon: Circle },
   { id: 'pen', label: 'Кисть', hint: 'P', icon: Pencil },
   { id: 'laser', label: 'Указка', hint: 'U', icon: Pointer },
   { id: 'eraser', label: 'Ластик', hint: 'E', icon: Eraser },
@@ -279,6 +288,7 @@ export default function BoardEditor({
   const sentTitleRef = useRef(boardTitle(initialBoard.title));
   const socketRef = useRef(null);
   const geoCamInRef = useRef(new Map());
+  const geoInputInRef = useRef(new Map());
   const geoMoveInRef = useRef(new Map());
   const geoCamLastRef = useRef(new Map());
   const geoSeqRef = useRef(new Map());
@@ -472,7 +482,7 @@ export default function BoardEditor({
   function onSnapshot(message, readPending) {
     flushOps();
     const pendingOps = readPending();
-    let next = Array.isArray(message.board?.objects) ? message.board.objects : [];
+    let next = keepLongerStrokes(store.get(), Array.isArray(message.board?.objects) ? message.board.objects : []);
     pendingOps.forEach((op) => {
       next = applyOp(next, op);
     });
@@ -1540,6 +1550,10 @@ export default function BoardEditor({
           if (!message?.id || message.clientId === clientIdRef.current) return;
           geoMoveInRef.current.get(message.id)?.(message);
         },
+        onGeoInput: (message) => {
+          if (!message?.id || message.clientId === clientIdRef.current) return;
+          geoInputInRef.current.get(message.id)?.(message);
+        },
         onGeocam: (message) => {
           if (!message?.id || !Number.isFinite(message.seq)) return;
           const prevFrom = geoCamFromRef.current.get(message.id);
@@ -1796,6 +1810,40 @@ export default function BoardEditor({
       return true;
     }
     return false;
+  }
+
+  function joinSelected() {
+    if (readOnlyRef.current) return;
+    const ids = selectedList().filter((obj) => obj.type === 'arrow' && canEdit(obj)).map((obj) => obj.id);
+    if (ids.length < 2) return;
+    const next = joinArrows(store.get(), ids);
+    if (next === store.get()) {
+      notify('Эти отрезки не лежат на одной прямой');
+      return;
+    }
+    const kept = ids.find((id) => next.some((obj) => obj.id === id));
+    commit(next);
+    if (kept) selectIds([kept]);
+  }
+
+  function dropPoint(at) {
+    const zoom = cameraRef.current.zoom || 1;
+    const point = createObject('point', {
+      x: at.x,
+      y: at.y,
+      w: 8,
+      h: 8,
+      props: { letter: '', sub: '', cross: null },
+    });
+    const next = plantPoint([...store.get(), point], point.id, zoom, uid);
+    if (next.length > MAX_OBJECTS) {
+      notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+      return;
+    }
+    commit(next);
+    const placed = next.find((obj) => obj.id === point.id);
+    if (placed) selectIds([placed.id]);
+    setTool('select');
   }
 
   function arrowSide(side) {
@@ -2061,6 +2109,11 @@ export default function BoardEditor({
     onGeoMoveBind: (id, fn) => {
       if (fn) geoMoveInRef.current.set(id, fn);
       else geoMoveInRef.current.delete(id);
+    },
+    onGeoInput: (id, body) => socketRef.current?.geoinput({ id, ...body }),
+    onGeoInputBind: (id, fn) => {
+      if (fn) geoInputInRef.current.set(id, fn);
+      else geoInputInRef.current.delete(id);
     },
     onMeasure: (id, height) => liveRef.current.measureObject?.(id, height),
   }), []);
@@ -2347,7 +2400,8 @@ export default function BoardEditor({
     const points = drag.points.map(roundPoint);
     const color = styleRef.current.laserColor || LASER_COLOR;
     const width = styleRef.current.laserWidth || LASER_WIDTH;
-    socketRef.current?.laser(points, color, width);
+    const ms = strokeDuration(performance.now() - (drag.t0 || performance.now())) || 1;
+    socketRef.current?.laser(points, color, width, ms);
     paintDraft(null);
     showLaser({ points, color, width, fadeMs: LASER_FADE_MS });
   }
@@ -2368,7 +2422,12 @@ export default function BoardEditor({
       w: frame.w,
       h: frame.h,
       rotation: 0,
-      props: { points: frame.points, color: drag.color, width: drag.width },
+      props: {
+        points: frame.points,
+        color: drag.color,
+        width: drag.width,
+        ms: strokeDuration(performance.now() - (drag.t0 || performance.now())) || 1,
+      },
     };
     if (draftRef.current?.kind === 'pen') draftRef.current = { ...draftRef.current, strokeId: stroke.id };
     flushOps();
@@ -2535,12 +2594,20 @@ export default function BoardEditor({
           bind1: bindFromHit(startHit),
           bind2: bindFromHit(endHit),
         }));
-        commit([...store.get(), arrow]);
-        selectIds([arrow.id]);
+        let list = [...store.get(), arrow];
+        if (!event.altKey) list = splitArrowThroughPoints(list, [arrow.id], uid, zoom);
+        if (list.length > MAX_OBJECTS) {
+          notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+          return;
+        }
+        const known = new Set(store.get().map((obj) => obj.id));
+        commit(list);
+        const pieces = list.filter((obj) => obj.type === 'arrow' && !known.has(obj.id)).map((obj) => obj.id);
+        selectIds(pieces.length ? pieces : [arrow.id]);
         return;
       }
 
-      store.set(settleGesture(drag, store.get(), { zoom: cameraRef.current.zoom, alt: event.altKey }));
+      store.set(settleGesture(drag, store.get(), { zoom: cameraRef.current.zoom, alt: event.altKey, makeId: uid }));
 
       if (drag.dirty && drag.origin) pushHistory(drag.origin);
       pruneSelection();
@@ -2815,6 +2882,7 @@ export default function BoardEditor({
         pointerId: event.pointerId,
         points: [world],
         origin: world,
+        t0: performance.now(),
         color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
         width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
       };
@@ -2847,6 +2915,12 @@ export default function BoardEditor({
     if (currentTool === 'shape' && styleRef.current.shape === 'polyline') {
       if (hintRef.current) hintRef.current.style.display = 'none';
       placePolylinePoint(world, event.altKey);
+      return;
+    }
+
+    if (currentTool === 'point') {
+      if (hintRef.current) hintRef.current.style.display = 'none';
+      dropPoint(world);
       return;
     }
 
@@ -3094,6 +3168,7 @@ export default function BoardEditor({
             onBack={() => reorderSelected(false)}
             onToggleLock={toggleLock}
             onArrowSide={arrowSide}
+            onJoin={joinSelected}
             onToggleGeo={toggleGeo}
             onRendered={paintSelectionUi}
           />

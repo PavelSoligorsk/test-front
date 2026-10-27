@@ -8,7 +8,7 @@ import { smoothPath, strokeOutline } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
 import { geoPixelScale } from './geogebraApi';
-import { arrowHeadState, figureReactProps, figureTag, isSolid, jointLocal, planeNodes, shapeFigures, shapeHandle, shapeKnobs, solidAnchors } from './shapes';
+import { arrowHeadState, figureReactProps, figureTag, isSolid, jointLocal, labelPlace, labelVertices, planeNodes, shapeFigures, shapeHandle, shapeKnobs, solidAnchors } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -184,6 +184,25 @@ function RoundPoint({ id, x, y, unit = '%' }) {
   );
 }
 
+function LetterMark({ name, x, y }) {
+  const place = labelPlace(name);
+  return (
+    <span
+      className="pointer-events-none absolute z-40 whitespace-nowrap font-semibold leading-none text-zinc-950"
+      style={{
+        left: x,
+        top: y,
+        fontSize: place.size,
+        transform: `translate(${place.dx}px, ${place.dy}px)`,
+        transformOrigin: '0 0',
+      }}
+    >
+      {name.letter}
+      {name.sub ? <sub className="text-[0.72em]">{name.sub}</sub> : null}
+    </span>
+  );
+}
+
 function StrokeOutline({ obj }) {
   const box = strokeOutline(obj);
   return (
@@ -218,6 +237,8 @@ function BoardObject({
   onGeoCamBind,
   onGeoMove,
   onGeoMoveBind,
+  onGeoInput,
+  onGeoInputBind,
   onMeasure,
   teacher,
   incoming,
@@ -284,7 +305,28 @@ function BoardObject({
               }}
             />
           ))}
+          {(labelVertices(obj) || []).map((point, index) => {
+            const name = obj.props.names?.[index];
+            if (!name?.letter) return null;
+            return (
+              <LetterMark
+                key={`name-${index}`}
+                name={name}
+                x={`${point[0]}%`}
+                y={`${point[1]}%`}
+              />
+            );
+          })}
           <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
+        </>
+      )}
+
+      {obj.type === 'point' && (
+        <>
+          <span className="absolute left-0 top-0 z-10 h-[5px] w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-black" />
+          {obj.props.letter && (
+            <LetterMark name={obj.props} x="0" y="0" />
+          )}
         </>
       )}
 
@@ -409,6 +451,8 @@ function BoardObject({
               onCamBind={onGeoCamBind}
               onMove={(body) => onGeoMove?.(obj.id, body)}
               onMoveBind={onGeoMoveBind}
+              onInput={(body) => onGeoInput?.(obj.id, body)}
+              onInputBind={onGeoInputBind}
               onReady={(api) => onGeoReady(obj.id, api)}
               onConstructionChange={(info) => onGeoChange(obj.id, info)}
               onLayoutChange={() => onGeoLayout?.(obj.id)}

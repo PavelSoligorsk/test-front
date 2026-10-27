@@ -77,8 +77,12 @@ export default function GeoGebraWidget({
   onCamBind,
   onMove,
   onMoveBind,
+  onInput,
+  onInputBind,
 }) {
   const frameRef = useRef(null);
+  const onInputRef = useRef(onInput);
+  const [viewCursor, setViewCursor] = useState(null);
   const hostRef = useRef(null);
   const apiRef = useRef(null);
   const fileRef = useRef(ggbBase64 || '');
@@ -904,11 +908,73 @@ export default function GeoGebraWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, boardObjectId, onMoveBind]);
 
+  // В планиметрии и графиках зритель видит курсор ведущего, без передачи нажатий.
+  useEffect(() => {
+    if (!interactive || status !== 'ready' || appName === '3d') return undefined;
+    const host = hostRef.current;
+    if (!host) return undefined;
+    let timer = 0;
+    let pending = null;
+    const place = (event) => {
+      const canvas = host.querySelector('canvas');
+      const rect = (canvas || host).getBoundingClientRect();
+      const span = Math.min(rect.width, rect.height);
+      if (!(span > 0)) return null;
+      return {
+        u: (event.clientX - rect.left - rect.width / 2) / span,
+        v: (event.clientY - rect.top - rect.height / 2) / span,
+      };
+    };
+    const tick = () => {
+      timer = 0;
+      if (!pending) return;
+      const point = place(pending);
+      pending = null;
+      if (!point) return;
+      onInputRef.current?.({ ev: 'hover', b: 0, t: performance.now(), ...point });
+    };
+    const move = (event) => {
+      if (!(event.target instanceof Node) || !host.contains(event.target)) return;
+      pending = event;
+      if (!timer) timer = window.requestAnimationFrame(tick);
+    };
+    host.addEventListener('pointermove', move);
+    return () => {
+      window.cancelAnimationFrame(timer);
+      host.removeEventListener('pointermove', move);
+    };
+  }, [interactive, status, appName]);
+
+  useEffect(() => {
+    if (status !== 'ready' || !onInputBind || !boardObjectId) return undefined;
+    onInputBind(boardObjectId, (message) => {
+      if (interactiveRef.current || appName === '3d') return;
+      if (message?.ev && message.ev !== 'hover') return;
+      if (!Number.isFinite(message?.u) || !Number.isFinite(message?.v)) return;
+      const frame = frameRef.current;
+      const host = hostRef.current;
+      const canvas = host?.querySelector('canvas');
+      const rect = (canvas || frame)?.getBoundingClientRect();
+      const frameRect = frame?.getBoundingClientRect();
+      if (!rect || !frameRect) return;
+      const span = Math.min(rect.width, rect.height);
+      setViewCursor({
+        x: rect.left + rect.width / 2 + message.u * span - frameRect.left,
+        y: rect.top + rect.height / 2 + message.v * span - frameRect.top,
+      });
+    });
+    return () => {
+      onInputBind(boardObjectId, null);
+      setViewCursor(null);
+    };
+  }, [status, appName, boardObjectId, onInputBind]);
+
   useEffect(() => {
     onReadyRef.current = onReady;
     onChangeRef.current = onConstructionChange;
     onLayoutRef.current = onLayoutChange;
-  }, [onReady, onConstructionChange, onLayoutChange]);
+    onInputRef.current = onInput;
+  }, [onReady, onConstructionChange, onLayoutChange, onInput]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -1245,6 +1311,12 @@ export default function GeoGebraWidget({
         <div ref={hostRef} className="h-full w-full" />
       </div>
       {!interactive && <div className="absolute inset-0 z-10" style={{ cursor: 'inherit' }} />}
+      {viewCursor && !interactive && appName !== '3d' && (
+        <span
+          className="pointer-events-none absolute z-20 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-600 shadow"
+          style={{ left: viewCursor.x, top: viewCursor.y }}
+        />
+      )}
       {appName === '3d' && !interactive && !follow && (
         <button
           type="button"

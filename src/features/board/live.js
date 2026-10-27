@@ -141,6 +141,9 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
       case 'geomove':
         handlers.onGeoMove?.(message);
         break;
+      case 'geoinput':
+        handlers.onGeoInput?.(message);
+        break;
       case 'join':
         if (message.peer) handlers.onJoin?.(message.peer);
         break;
@@ -236,8 +239,8 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
     hideCursor() {
       raw({ type: 'cursor', hidden: true });
     },
-    laser(points, color, width) {
-      raw({ type: 'laser', points, color, width });
+    laser(points, color, width, ms) {
+      raw({ type: 'laser', points, color, width, ms });
     },
     cursors(enabled) {
       raw({ type: 'cursors', enabled: Boolean(enabled) });
@@ -250,6 +253,9 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
     },
     geomove(body) {
       raw({ type: 'geomove', ...body });
+    },
+    geoinput(body) {
+      raw({ type: 'geoinput', ...body });
     },
     pendingCount: () => pending.size,
     close() {

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUp,
   BringToFront,
+  Combine,
   Copy,
   Lock,
   LockOpen,
@@ -13,7 +14,7 @@ import {
 } from 'lucide-react';
 import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TASK_FONT, TASK_SIZES, TEXT_SIZES } from './model';
 import ShapeGlyph from './ShapeGlyph';
-import { SHAPE_KINDS, arrowHeadSides, arrowHeadState, defaultDepth, planeDefaults } from './shapes';
+import { SHAPE_KINDS, arrowHeadSides, arrowHeadState, canJoinArrows, defaultDepth, planeDefaults } from './shapes';
 
 function Divider() {
   return <span className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-700" />;
@@ -70,6 +71,7 @@ export default function SelectionToolbar({
   onBack,
   onToggleLock,
   onArrowSide,
+  onJoin,
   onToggleGeo,
 }) {
   if (!objects.length) return null;
@@ -113,6 +115,14 @@ export default function SelectionToolbar({
     const sides = arrowHeadSides(first);
     specific = (
       <>
+        {objects.length > 1 && (
+          <ToolButton
+            label={canJoinArrows(objects) ? 'Соединить в один отрезок' : 'Отрезки не на одной прямой'}
+            onClick={() => onJoin?.()}
+          >
+            <Combine size={15} />
+          </ToolButton>
+        )}
         {objects.length === 1 && (
           <ToolButton
             label="Поменять начало и конец"
@@ -168,7 +178,7 @@ export default function SelectionToolbar({
     specific = (
       <>
         <div className="flex max-w-56 gap-0.5 overflow-x-auto">
-          {SHAPE_KINDS.map((kind) => (
+          {SHAPE_KINDS.filter((kind) => kind.id !== 'point').map((kind) => (
             <ToolButton
               key={kind.id}
               label={kind.label}
@@ -269,7 +279,12 @@ export default function SelectionToolbar({
       <ToolButton label="На передний план (PageUp)" onClick={onFront}><BringToFront size={15} /></ToolButton>
       <ToolButton label="На задний план (PageDown)" onClick={onBack}><SendToBack size={15} /></ToolButton>
       <ToolButton label="Дублировать (Ctrl+D)" onClick={onDuplicate}><Copy size={15} /></ToolButton>
-      {canLock && <ToolButton label="Закрепить (Ctrl+Shift+L)" onClick={onToggleLock}><Lock size={15} /></ToolButton>}
+      {canLock && (
+        <ToolButton label="Закрепить фигуру (Ctrl+Shift+L)" onClick={onToggleLock}>
+          <Lock size={15} />
+          {only === 'shape' && <span className="ml-1">Закрепить</span>}
+        </ToolButton>
+      )}
       <ToolButton label="Удалить (Delete)" onClick={onDelete} danger><Trash2 size={15} /></ToolButton>
     </div>
   );
