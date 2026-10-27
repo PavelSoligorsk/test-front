@@ -156,8 +156,8 @@ export function connectBoard({ audience, boardId, shareToken = null, handlers })
     hideCursor() {
       raw({ type: 'cursor', hidden: true });
     },
-    laser(points, color, width) {
-      raw({ type: 'laser', points, color, width });
+    laser(points, color, width, ms) {
+      raw({ type: 'laser', points, color, width, ms });
     },
     cursors(enabled) {
       raw({ type: 'cursors', enabled: Boolean(enabled) });

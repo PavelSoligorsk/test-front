@@ -43,7 +43,7 @@ import {
 import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, stripCamera, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
 import { setPenActive } from './penLock';
-import { applyOp, diffOps, keepLongerStrokes, reorder } from './ops';
+import { applyOp, diffOps, keepLongerStrokes, reorder, strokeDuration } from './ops';
 import { applyHistory, historyEntry } from './history';
 import {
   arrowBounds,
@@ -88,13 +88,27 @@ import {
   bindPyramidBase,
   moveApex,
   movePolylineVertex,
+  moveShapeVertex,
   movePyramidBase,
+  nearestCrossing,
+  arrowUnderPoint,
+  plantPoint,
+  refreshPointHold,
+  slideSharedPoints,
+  splitArrowThroughPoints,
+  nearestVertex,
+  setVertexName,
+  moveVertexLabel,
+  labelPlace,
+  labelVertices,
+  shapeVertexLocals,
   solidAnchors,
   polylineFrame,
   pruneJoints,
   releaseMissingBinds,
   retargetBound,
   setArrowSide,
+  joinArrows,
   shapeFigures,
   hitShapeContour,
   shapeHandle,
@@ -121,10 +135,55 @@ function isHiddenBoardObject(obj) {
   return isPagesMeta(obj) || isSurfaceMeta(obj);
 }
 
+function applyFigureNode(node, fig, fill, stroke, dashed) {
+  if (fig.ellipse) {
+    node.setAttribute('cx', fig.ellipse.cx);
+    node.setAttribute('cy', fig.ellipse.cy);
+    node.setAttribute('rx', fig.ellipse.rx);
+    node.setAttribute('ry', fig.ellipse.ry);
+    node.removeAttribute('d');
+    node.removeAttribute('points');
+  } else if (fig.d) {
+    node.setAttribute('d', fig.d);
+    node.removeAttribute('points');
+  } else {
+    node.setAttribute('points', fig.points);
+    node.removeAttribute('d');
+  }
+  node.setAttribute('fill', fig.fill === 'none' ? 'none' : fill);
+  node.setAttribute('stroke', fig.stroke === 'none' ? 'none' : stroke);
+  node.setAttribute('stroke-width', '2');
+  node.setAttribute('stroke-linejoin', 'round');
+  node.setAttribute('vector-effect', 'non-scaling-stroke');
+  if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
+  else node.removeAttribute('fill-opacity');
+  if (fig.dashed || dashed) node.setAttribute('stroke-dasharray', '4 3');
+  else node.removeAttribute('stroke-dasharray');
+}
+
+function figureTag(fig) {
+  if (fig.ellipse) return 'ellipse';
+  if (fig.d) return 'path';
+  return 'polygon';
+}
+
+function paintLabelNode(node, name) {
+  if (!node || !name?.letter) return;
+  const place = labelPlace(name);
+  node.dataset.dx = String(place.dx);
+  node.dataset.dy = String(place.dy);
+  node.style.fontSize = `${place.size}px`;
+  node.style.transform = `translate(${place.dx}px, ${place.dy}px)`;
+}
+
 function pickObject(objects, point, zoom) {
   for (let index = objects.length - 1; index >= 0; index -= 1) {
     const obj = objects[index];
-    if (!obj) continue;
+    if (obj?.type === 'point' && hitObject(obj, point, zoom)) return obj;
+  }
+  for (let index = objects.length - 1; index >= 0; index -= 1) {
+    const obj = objects[index];
+    if (!obj || obj.type === 'point') continue;
     const hit = obj.type === 'shape' ? hitShapeContour(obj, point, zoom) : hitObject(obj, point, zoom);
     if (hit) return obj;
   }
@@ -141,13 +200,184 @@ function readSurface(objects) {
 }
 import { deleteBoard } from './storage';
 
-const LASER_COLOR = '#fde047';
-const LASER_WIDTH = 18;
-const LASER_COLORS = [LASER_COLOR, '#18181b', '#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
-const LASER_WIDTHS = [10, 18, 32, 56];
-const LASER_FADE_MS = 2000;
+const LASER_COLOR = '#ff2d2d';
+const LASER_WIDTH = 12;
+const LASER_COLORS = ['#ff2d2d', '#f5c518', '#18181b', '#2563eb', '#16a34a', '#f97316', '#7c3aed'];
+const LASER_WIDTHS = [8, 12, 18];
+const LASER_HOLD_MS = 450;
+const LASER_EAT_SPEED = 2.5;
+const LASER_GAP_CAP_MS = 400;
 const LASER_MAX_POINTS = 2000;
 const INK_SPEED = 720;
+
+function laserLook(width, zoom) {
+  const z = Math.max(0.25, Number(zoom) || 1);
+  const size = Math.max(6, Math.min(20, Number(width) || LASER_WIDTH));
+  return {
+    halo: (size * 2.2) / z,
+    glow: (size * 0.9) / z,
+    core: Math.max(1.4, size * 0.2) / z,
+    head: (size * 0.55) / z,
+    blur: (size * 0.7) / z,
+  };
+}
+
+function inkDuration(ms, length) {
+  const given = strokeDuration(ms);
+  return given || Math.min(4000, Math.max(280, (length / INK_SPEED) * 1000));
+}
+
+function svgNode(name) {
+  return document.createElementNS('http://www.w3.org/2000/svg', name);
+}
+
+function createLaserNode(origin) {
+  const wrap = document.createElement('div');
+  wrap.dataset.laser = `${origin.x},${origin.y}`;
+  Object.assign(wrap.style, {
+    position: 'absolute',
+    left: `${origin.x}px`,
+    top: `${origin.y}px`,
+    width: '12px',
+    height: '12px',
+    overflow: 'visible',
+    pointerEvents: 'none',
+    opacity: '1',
+  });
+  const svg = svgNode('svg');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
+  svg.style.display = 'block';
+  svg.style.overflow = 'visible';
+
+  const halo = svgNode('path');
+  const glow = svgNode('path');
+  const core = svgNode('path');
+  [halo, glow, core].forEach((path) => {
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+  });
+  halo.setAttribute('opacity', '0.4');
+  glow.setAttribute('opacity', '0.75');
+  core.setAttribute('stroke', '#ffffff');
+
+  const headGlow = svgNode('circle');
+  const head = svgNode('circle');
+  head.setAttribute('fill', '#ffffff');
+  headGlow.setAttribute('opacity', '0.55');
+
+  svg.append(halo, glow, core, headGlow, head);
+  wrap.appendChild(svg);
+  wrap.laserParts = { halo, glow, core, head, headGlow };
+  return wrap;
+}
+
+function moveLaserHead(parts, point, look) {
+  [parts.head, parts.headGlow].forEach((node) => {
+    node.setAttribute('cx', String(point.x));
+    node.setAttribute('cy', String(point.y));
+  });
+  parts.head.setAttribute('r', String(look.head * 0.55));
+  parts.headGlow.setAttribute('r', String(look.head * 1.5));
+}
+
+function updateLaserNode(wrap, local, color, look) {
+  const parts = wrap.laserParts;
+  if (!parts) return;
+  const d = smoothPath(local);
+  [parts.halo, parts.glow, parts.core].forEach((path) => {
+    path.setAttribute('d', d);
+    path.style.strokeDasharray = '';
+    path.style.strokeDashoffset = '';
+  });
+  parts.halo.setAttribute('stroke', color);
+  parts.glow.setAttribute('stroke', color);
+  parts.headGlow.setAttribute('fill', color);
+  parts.halo.setAttribute('stroke-width', String(look.halo));
+  parts.glow.setAttribute('stroke-width', String(look.glow));
+  parts.core.setAttribute('stroke-width', String(look.core));
+  parts.halo.style.filter = `blur(${look.blur}px)`;
+  parts.headGlow.style.filter = `blur(${look.blur * 0.6}px)`;
+  wrap.laserLook = look;
+  moveLaserHead(parts, local[local.length - 1] || { x: 0, y: 0 }, look);
+}
+
+function setLaserDash(parts, length, offset) {
+  [parts.halo, parts.glow, parts.core].forEach((path) => {
+    path.style.strokeDasharray = String(length);
+    path.style.strokeDashoffset = String(offset);
+  });
+}
+
+function laserTimeline(points) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  if (!points.every((point) => Number.isFinite(Number(point.t)))) return null;
+  const times = [0];
+  const dist = [0];
+  let sum = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    sum += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    dist.push(sum);
+    const gap = Math.max(0, Number(points[i].t) - Number(points[i - 1].t));
+    times.push(times[i - 1] + Math.min(gap, LASER_GAP_CAP_MS));
+  }
+  const total = times[times.length - 1];
+  if (!sum || total <= 0) return null;
+  return { times, fracs: dist.map((d) => d / sum), total };
+}
+
+function laserFrac(tl, elapsed) {
+  if (elapsed <= 0) return 0;
+  if (elapsed >= tl.total) return 1;
+  let i = 1;
+  while (i < tl.times.length - 1 && tl.times[i] < elapsed) i += 1;
+  const t0 = tl.times[i - 1];
+  const t1 = tl.times[i];
+  const k = t1 > t0 ? (elapsed - t0) / (t1 - t0) : 1;
+  return tl.fracs[i - 1] + (tl.fracs[i] - tl.fracs[i - 1]) * k;
+}
+
+function playLaser(wrap, { duration = 600, draw = true } = {}) {
+  const parts = wrap.laserParts;
+  if (!parts) return;
+  const length = parts.core.getTotalLength() || 1;
+  const tl = wrap.laserTimeline;
+  const total = tl ? tl.total : Math.max(1, duration);
+  const frac = (elapsed) => (tl ? laserFrac(tl, elapsed) : Math.min(1, Math.max(0, elapsed / total)));
+  const drawEnd = draw ? total : 0;
+  const holdEnd = drawEnd + LASER_HOLD_MS;
+  const eatMs = Math.max(250, total / LASER_EAT_SPEED);
+  let started = 0;
+  let headSet = false;
+  const tick = (now) => {
+    if (!wrap.isConnected) return;
+    if (!started) started = now;
+    const elapsed = now - started;
+    if (elapsed < drawEnd) {
+      const f = frac(elapsed);
+      setLaserDash(parts, length, length * (1 - f));
+      moveLaserHead(parts, parts.core.getPointAtLength(length * f), wrap.laserLook);
+    } else if (elapsed < holdEnd) {
+      setLaserDash(parts, length, 0);
+      if (!headSet) {
+        moveLaserHead(parts, parts.core.getPointAtLength(length), wrap.laserLook);
+        headSet = true;
+      }
+    } else {
+      const progress = Math.min(1, (elapsed - holdEnd) / eatMs);
+      const eaten = tl ? frac(progress * total) : progress;
+      setLaserDash(parts, length, -length * eaten);
+      wrap.style.opacity = String(progress < 0.7 ? 1 : 1 - (progress - 0.7) / 0.3);
+      if (progress >= 1) {
+        wrap.remove();
+        return;
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
 
 const TOOLS = [
   { id: 'select', label: 'Выбор', hint: 'V', icon: MousePointer2 },
@@ -194,7 +424,7 @@ const TOOL_CODES = {
 
 const MAX_OBJECTS = 10000;
 const SNAP_PX = 6;
-const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'shape-knob', 'poly-point', 'apex', 'base-point', 'marquee', 'pinch']);
+const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'shape-knob', 'poly-point', 'vert-point', 'label-move', 'label-size', 'apex', 'base-point', 'marquee', 'pinch']);
 const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
 const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
 const SEND_MS = 50;
@@ -323,6 +553,7 @@ export default function BoardEditor({
   const dragCleanupRef = useRef(null);
   const touchesRef = useRef(new Map());
   const pointerClientRef = useRef(null);
+  const labelArmRef = useRef(null);
   const editOriginRef = useRef(null);
   const editingIdRef = useRef(null);
   const selectedIdsRef = useRef([]);
@@ -352,6 +583,7 @@ export default function BoardEditor({
   const [tool, setTool] = useState('select');
   const [selectedIds, setSelectedIds] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [activeLabel, setActiveLabel] = useState(null);
   const [link, setLink] = useState({ state: 'connecting', pending: 0 });
   const [peers, setPeers] = useState([]);
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
@@ -538,51 +770,13 @@ export default function BoardEditor({
     if (!host || points.length < 2) return;
     if (message.clientId && message.clientId === clientIdRef.current) return;
     const origin = points[0];
-    const wrap = document.createElement('div');
-    wrap.style.position = 'absolute';
-    wrap.style.left = `${origin.x}px`;
-    wrap.style.top = `${origin.y}px`;
-    wrap.style.width = '12px';
-    wrap.style.height = '12px';
-    wrap.style.overflow = 'visible';
-    wrap.style.pointerEvents = 'none';
-    wrap.style.opacity = '1';
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '12');
-    svg.setAttribute('height', '12');
-    svg.style.display = 'block';
-    svg.style.overflow = 'visible';
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     const local = points.map((point) => ({ x: Number(point.x) - origin.x, y: Number(point.y) - origin.y }));
-    path.setAttribute('d', smoothPath(local.slice(0, 2)));
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', message.color || LASER_COLOR);
-    path.setAttribute('stroke-width', String(message.width || LASER_WIDTH));
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(path);
-    wrap.appendChild(svg);
+    const color = message.color || LASER_COLOR;
+    const wrap = createLaserNode(origin);
+    wrap.laserTimeline = laserTimeline(points);
+    updateLaserNode(wrap, local, color, laserLook(message.width, cameraRef.current.zoom));
     host.appendChild(wrap);
-    const drawMs = Math.min(1600, Math.max(400, local.length * 6));
-    const fadeMs = Math.max(1, Number(message.fadeMs) || LASER_FADE_MS);
-    let started = 0;
-    const tick = (now) => {
-      if (!wrap.isConnected) return;
-      if (!started) started = now;
-      const elapsed = now - started;
-      if (elapsed < drawMs) {
-        const count = Math.max(2, Math.ceil(local.length * (elapsed / drawMs)));
-        path.setAttribute('d', smoothPath(local.slice(0, count)));
-        requestAnimationFrame(tick);
-        return;
-      }
-      path.setAttribute('d', smoothPath(local));
-      const fade = Math.min(1, (elapsed - drawMs) / fadeMs);
-      wrap.style.opacity = String(1 - fade);
-      if (fade < 1) requestAnimationFrame(tick);
-      else wrap.remove();
-    };
-    requestAnimationFrame(tick);
+    playLaser(wrap, { duration: inkDuration(message.ms, wrap.laserParts.core.getTotalLength() || 1) });
   }
 
   function paintInk(now) {
@@ -600,7 +794,7 @@ export default function BoardEditor({
         alive = true;
         return;
       }
-      if (!item.duration) item.duration = Math.min(4000, Math.max(280, (length / INK_SPEED) * 1000));
+      if (!item.duration) item.duration = inkDuration(item.ms, length);
       if (!item.at) item.at = now;
       const progress = Math.min(1, (now - item.at) / item.duration);
       path.style.strokeDasharray = String(length);
@@ -615,10 +809,10 @@ export default function BoardEditor({
     return alive;
   }
 
-  function startInk(id) {
+  function startInk(id, ms) {
     if (!id) return;
     const ink = inkRef.current;
-    ink.items.set(id, { at: 0 });
+    ink.items.set(id, { at: 0, ms });
     if (ink.raf) return;
     const tick = (now) => {
       ink.last = now;
@@ -917,7 +1111,8 @@ export default function BoardEditor({
   }
 
   function canSelect(obj) {
-    return audienceRef.current === 'teacher' || !obj.props?.locked;
+    if (!obj.props?.locked) return true;
+    return audienceRef.current === 'teacher' || !readOnlyRef.current;
   }
 
   function canEdit(obj) {
@@ -1007,7 +1202,7 @@ export default function BoardEditor({
       paintSurface(cam);
       viewport.querySelectorAll('[data-handle]').forEach((handle) => {
         const kind = handle.dataset.handle;
-        if (kind === 'start' || kind === 'end' || kind === 'skew' || kind === 'slantL' || kind === 'slantR' || kind === 'spin' || kind === 'lean' || kind === 'apex' || kind === 'joint' || kind?.startsWith('poly-') || kind?.startsWith('base-')) {
+        if (kind === 'start' || kind === 'end' || kind === 'skew' || kind === 'slantL' || kind === 'slantR' || kind === 'spin' || kind === 'lean' || kind === 'apex' || kind === 'joint' || kind?.startsWith('poly-') || kind?.startsWith('vert-') || kind?.startsWith('base-')) {
           handle.style.transform = `translate(-50%, -50%) scale(${inv})`;
           return;
         }
@@ -1042,6 +1237,7 @@ export default function BoardEditor({
     el.style.top = `${obj.y}px`;
     el.style.width = `${obj.w}px`;
     el.style.height = `${obj.h}px`;
+    if (obj.type === 'point') paintLabelNode(el.querySelector('[data-label="point"]'), obj.props);
     if (obj.type === 'arrow') {
       const svg = el.querySelector('svg');
       const line = el.querySelector('line');
@@ -1076,26 +1272,17 @@ export default function BoardEditor({
     if (obj.type === 'shape') {
       const svg = el.querySelector('[data-shape]');
       if (svg) {
-        svg.replaceChildren();
         const fill = obj.props.fill || '#ffffff';
         const stroke = obj.props.stroke || '#18181b';
-        shapeFigures(obj.props.shape, obj.props.depth, obj.props).forEach((fig) => {
-          const node = document.createElementNS('http://www.w3.org/2000/svg', fig.ellipse ? 'ellipse' : fig.d ? 'path' : 'polygon');
-          if (fig.ellipse) {
-            node.setAttribute('cx', fig.ellipse.cx);
-            node.setAttribute('cy', fig.ellipse.cy);
-            node.setAttribute('rx', fig.ellipse.rx);
-            node.setAttribute('ry', fig.ellipse.ry);
-          } else if (fig.d) node.setAttribute('d', fig.d);
-          else node.setAttribute('points', fig.points);
-          node.setAttribute('fill', fig.fill === 'none' ? 'none' : fill);
-          node.setAttribute('stroke', fig.stroke === 'none' ? 'none' : stroke);
-          node.setAttribute('stroke-width', '2');
-          node.setAttribute('stroke-linejoin', 'round');
-          node.setAttribute('vector-effect', 'non-scaling-stroke');
-          if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
-          if (fig.dashed || obj.props.dashed) node.setAttribute('stroke-dasharray', '4 3');
-          svg.appendChild(node);
+        const figures = shapeFigures(obj.props.shape, obj.props.depth, obj.props);
+        const existing = [...svg.children];
+        const same = existing.length === figures.length && figures.every((fig, index) => existing[index]?.localName === figureTag(fig));
+        if (!same) svg.replaceChildren();
+        figures.forEach((fig, index) => {
+          const node = same
+            ? existing[index]
+            : svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', figureTag(fig)));
+          applyFigureNode(node, fig, fill, stroke, obj.props.dashed);
         });
       }
       (obj.props.joints || []).forEach((joint) => {
@@ -1104,6 +1291,19 @@ export default function BoardEditor({
         const [x, y] = jointLocal(obj, joint);
         dot.style.left = `${x}%`;
         dot.style.top = `${y}%`;
+      });
+      (labelVertices(obj) || shapeVertexLocals(obj) || []).forEach((point, index) => {
+        const handle = el.querySelector(`[data-handle="vert-${index}"]`);
+        const label = el.querySelector(`[data-label="v${index}"]`);
+        if (handle) {
+          handle.style.left = `${point[0]}%`;
+          handle.style.top = `${point[1]}%`;
+        }
+        if (label) {
+          label.style.left = `${point[0]}%`;
+          label.style.top = `${point[1]}%`;
+          paintLabelNode(label, obj.props.names?.[index]);
+        }
       });
       if (obj.props.shape === 'polyline') {
         (obj.props.points || []).forEach((point, index) => {
@@ -1398,10 +1598,29 @@ export default function BoardEditor({
     setLink((prev) => (prev.state === 'denied' ? prev : held));
   }
 
+  function paintLaserDraft(host, draft) {
+    const origin = draft.origin || draft.points[0];
+    const key = `${origin.x},${origin.y}`;
+    [...host.children].forEach((node) => {
+      if (node.dataset.laser !== key) node.remove();
+    });
+    let wrap = [...host.children].find((node) => node.dataset.laser === key);
+    if (!wrap) {
+      wrap = createLaserNode(origin);
+      host.appendChild(wrap);
+    }
+    const local = draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }));
+    updateLaserNode(wrap, local, draft.color || LASER_COLOR, laserLook(draft.width, cameraRef.current.zoom));
+  }
+
   function paintDraft(draft) {
     draftRef.current = draft;
     const host = draftHostRef.current;
     if (!host) return;
+    if (draft?.kind === 'pen' && draft.laser && draft.points.length) {
+      paintLaserDraft(host, draft);
+      return;
+    }
     if (draft?.kind === 'pen' && draft.points.length) {
       const origin = draft.origin || draft.points[0];
       const wrap = host.firstChild;
@@ -1467,6 +1686,21 @@ export default function BoardEditor({
         dot.setAttribute('fill', '#18181b');
         svg.appendChild(dot);
       });
+      host.appendChild(svg);
+      return;
+    }
+    if (draft.kind === 'dot') {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
+      svg.style.left = '0';
+      svg.style.top = '0';
+      svg.style.overflow = 'visible';
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', draft.x);
+      dot.setAttribute('cy', draft.y);
+      dot.setAttribute('r', '3');
+      dot.setAttribute('fill', '#18181b');
+      svg.appendChild(dot);
       host.appendChild(svg);
       return;
     }
@@ -1974,7 +2208,9 @@ export default function BoardEditor({
       movePeerToStroke(message?.clientId, op.object.id);
       const current = objectsRef.current.find((item) => item.id === op.object.id);
       const incoming = op.object.props?.points?.length || 0;
-      if (current && (current.props?.points?.length || 0) === incoming) startInk(op.object.id);
+      if (current && (current.props?.points?.length || 0) === incoming && message?.clientId !== clientIdRef.current) {
+        startInk(op.object.id, op.object.props?.ms);
+      }
     }
   }
 
@@ -2018,15 +2254,27 @@ export default function BoardEditor({
     commit(next);
   }
 
-  function followMoved(next, movedIds) {
+  function followMoved(next, movedIds, releasePoint) {
     const moved = new Set(movedIds);
-    const hostIds = next.filter((obj) => moved.has(obj.id) && (obj.type === 'shape' || obj.type === 'arrow')).map((obj) => obj.id);
+    const hostIds = next.filter((obj) => moved.has(obj.id) && (obj.type === 'shape' || obj.type === 'arrow' || obj.type === 'point')).map((obj) => obj.id);
+    if (releasePoint && hostIds.length === 1 && next.find((obj) => obj.id === hostIds[0])?.type === 'point') {
+      const pointId = hostIds[0];
+      const detached = next.map((obj) => {
+        if (obj.type !== 'arrow') return obj;
+        const bind1 = obj.props.bind1?.point && obj.props.bind1.id === pointId ? null : obj.props.bind1 || null;
+        const bind2 = obj.props.bind2?.point && obj.props.bind2.id === pointId ? null : obj.props.bind2 || null;
+        if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
+        return { ...obj, props: { ...obj.props, bind1, bind2 } };
+      });
+      return pruneJoints(detached);
+    }
     const hostSet = new Set(hostIds);
     const result = next.map((obj) => {
       if (!moved.has(obj.id)) return obj;
       if (obj.type === 'arrow') {
-        const bind1 = obj.props.bind1 && hostSet.has(obj.props.bind1.id) ? obj.props.bind1 : null;
-        const bind2 = obj.props.bind2 && hostSet.has(obj.props.bind2.id) ? obj.props.bind2 : null;
+        const keep = (bind) => (bind && (hostSet.has(bind.id) || bind.point) ? bind : null);
+        const bind1 = keep(obj.props.bind1);
+        const bind2 = keep(obj.props.bind2);
         if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
         return { ...obj, props: { ...obj.props, bind1, bind2 } };
       }
@@ -2042,11 +2290,12 @@ export default function BoardEditor({
       }
       return obj;
     });
-    return hostIds.length ? retargetBound(result, hostIds) : pruneJoints(result);
+    const slid = slideSharedPoints(result, movedIds);
+    return hostIds.length ? retargetBound(slid, hostIds) : pruneJoints(slid);
   }
 
-  function gestureFollow(base, movedIds, changed) {
-    const settled = followMoved(base, movedIds);
+  function gestureFollow(base, movedIds, changed, releasePoint) {
+    const settled = followMoved(base, movedIds, releasePoint);
     const known = new Set(changed.map((obj) => obj.id));
     const extra = settled.filter((obj, index) => obj !== base[index] && !known.has(obj.id));
     gesture(settled, [...changed, ...extra]);
@@ -2063,7 +2312,7 @@ export default function BoardEditor({
   }
 
   function toggleLock() {
-    if (readOnlyRef.current || audienceRef.current !== 'teacher') return;
+    if (readOnlyRef.current) return;
     const list = selectedList();
     if (!list.length) return;
     const lock = !list.every((obj) => obj.props?.locked);
@@ -2124,6 +2373,20 @@ export default function BoardEditor({
       return true;
     }
     return false;
+  }
+
+  function joinSelected() {
+    if (readOnlyRef.current) return;
+    const ids = selectedList().filter((obj) => obj.type === 'arrow' && canEdit(obj)).map((obj) => obj.id);
+    if (ids.length < 2) return;
+    const next = joinArrows(objectsRef.current, ids);
+    if (next === objectsRef.current) {
+      notify('Эти отрезки не лежат на одной прямой');
+      return;
+    }
+    const kept = ids.find((id) => next.some((obj) => obj.id === id));
+    commit(next);
+    if (kept) selectIds([kept.id]);
   }
 
   function arrowSide(side) {
@@ -2438,6 +2701,8 @@ export default function BoardEditor({
       styleKeys,
       arrowSide,
       finishChain,
+      namePoint,
+      eraseName,
       fitAll,
       zoomTo,
       pasteObjects,
@@ -2538,6 +2803,7 @@ export default function BoardEditor({
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
+        if (actions.eraseName?.()) return;
         actions.deleteSelected();
         return;
       }
@@ -2558,6 +2824,10 @@ export default function BoardEditor({
         return;
       }
       if (mod || event.altKey) return;
+      if (actions.namePoint?.(event.key)) {
+        event.preventDefault();
+        return;
+      }
       const nextTool = TOOL_CODES[event.code];
       if (!nextTool) return;
       if (event.code === 'KeyO' || event.code === 'KeyR') {
@@ -2636,18 +2906,169 @@ export default function BoardEditor({
     };
   }, []);
 
+  function namePoint(key) {
+    if (readOnlyRef.current) return false;
+    const letter = /^[a-zA-Z]$/.test(key) ? key.toUpperCase() : '';
+    const digit = /^[0-9]$/.test(key) ? key : '';
+    if (!letter && !digit) return false;
+    const selectedId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const selected = objectsRef.current.find((obj) => obj.id === selectedId && obj.type === 'point');
+    const cursorVertex = () => {
+      const client = pointerClientRef.current;
+      if (!client) return null;
+      const world = clientToWorld(client.x, client.y);
+      if (!world) return null;
+      return nearestVertex(objectsRef.current, world, cameraRef.current.zoom);
+    };
+    if (digit) {
+      if (selected?.props.letter) {
+        const sub = `${selected.props.sub || ''}${digit}`.slice(0, 3);
+        labelArmRef.current = { kind: 'point', id: selected.id };
+        commit(objectsRef.current.map((obj) => (obj.id === selected.id ? { ...obj, props: { ...obj.props, sub } } : obj)));
+        return true;
+      }
+      const arm = labelArmRef.current;
+      if (arm?.kind !== 'vertex') return false;
+      const shape = objectsRef.current.find((obj) => obj.id === arm.id);
+      const current = shape?.props.names?.[arm.index];
+      if (!current?.letter) return false;
+      const sub = `${current.sub || ''}${digit}`.slice(0, 3);
+      commit(objectsRef.current.map((obj) => (obj.id === shape.id ? setVertexName(obj, arm.index, current.letter, sub) : obj)));
+      return true;
+    }
+    const vertex = cursorVertex();
+    if (vertex) {
+      labelArmRef.current = { kind: 'vertex', id: vertex.id, index: vertex.index };
+      commit(objectsRef.current.map((obj) => (obj.id === vertex.id ? setVertexName(obj, vertex.index, letter, '') : obj)));
+      return true;
+    }
+    if (selected) {
+      labelArmRef.current = { kind: 'point', id: selected.id };
+      commit(objectsRef.current.map((obj) => (
+        obj.id === selected.id ? { ...obj, props: { ...obj.props, letter, sub: '' } } : obj
+      )));
+      return true;
+    }
+    const client = pointerClientRef.current;
+    if (!client) return false;
+    const world = clientToWorld(client.x, client.y);
+    if (!world) return false;
+    const point = dropPoint(world, letter, false);
+    if (!point) return false;
+    labelArmRef.current = { kind: 'point', id: point.id };
+    selectIds([point.id]);
+    return true;
+  }
+
+  function dropPoint(at, letter = '', free = true) {
+    const zoom = cameraRef.current.zoom || 1;
+    const hit = nearestCrossing(objectsRef.current, at, zoom);
+    const onArrow = hit ? null : arrowUnderPoint(objectsRef.current, at, zoom);
+    if (!free && !hit && !onArrow) return null;
+    const place = hit?.point || onArrow?.point || at;
+    const point = createObject('point', {
+      x: place.x,
+      y: place.y,
+      w: 8,
+      h: 8,
+      props: { letter, sub: '', cross: null },
+    });
+    const next = plantPoint([...objectsRef.current, point], point.id, zoom, uid);
+    commit(next);
+    return next.find((obj) => obj.id === point.id) || point;
+  }
+
+  function eraseName() {
+    if (readOnlyRef.current) return false;
+    const client = pointerClientRef.current;
+    if (!client) return false;
+    const world = clientToWorld(client.x, client.y);
+    if (!world) return false;
+    const zoom = cameraRef.current.zoom || 1;
+    const vertex = nearestVertex(objectsRef.current, world, zoom, 36);
+    const shape = vertex && objectsRef.current.find((obj) => obj.id === vertex.id);
+    const named = shape?.props.names?.[vertex.index]?.letter ? vertex : null;
+    let point = null;
+    let pointDist = Infinity;
+    let letterHit = null;
+    objectsRef.current.forEach((obj) => {
+      if (obj.type === 'point' && obj.props.letter) {
+        const place = labelPlace(obj.props);
+        const dist = Math.hypot(world.x - (obj.x + place.dx), world.y - (obj.y + place.dy));
+        if (dist <= place.size && (!letterHit || dist < letterHit.dist)) {
+          letterHit = { kind: 'point', obj, dist };
+        }
+      }
+      (labelVertices(obj) || []).forEach((local, index) => {
+        const item = obj.props.names?.[index];
+        if (!item?.letter) return;
+        const place = labelPlace(item);
+        const x = obj.x + (local[0] / 100) * obj.w + place.dx;
+        const y = obj.y + (local[1] / 100) * obj.h + place.dy;
+        const dist = Math.hypot(world.x - x, world.y - y);
+        if (dist <= place.size && (!letterHit || dist < letterHit.dist)) {
+          letterHit = { kind: 'vertex', obj, index, dist };
+        }
+      });
+      if (obj.type !== 'point') return;
+      const dist = Math.hypot(world.x - obj.x, world.y - obj.y);
+      if (dist <= 36 / zoom && dist < pointDist) {
+        point = obj;
+        pointDist = dist;
+      }
+    });
+    const vertexDist = named ? named.dist : Infinity;
+    if (letterHit?.kind === 'vertex' && letterHit.dist <= vertexDist && letterHit.dist <= pointDist) {
+      setActiveLabel((current) => (current?.id === letterHit.obj.id && current.key === `v${letterHit.index}` ? null : current));
+      commit(objectsRef.current.map((obj) => (obj.id === letterHit.obj.id ? setVertexName(obj, letterHit.index, '', '') : obj)));
+      return true;
+    }
+    if (named && vertexDist <= pointDist) {
+      if (labelArmRef.current?.kind === 'vertex' && labelArmRef.current.id === named.id && labelArmRef.current.index === named.index) {
+        labelArmRef.current = null;
+      }
+      setActiveLabel((current) => (current?.id === shape.id && current.key === `v${named.index}` ? null : current));
+      commit(objectsRef.current.map((obj) => (obj.id === shape.id ? setVertexName(obj, named.index, '', '') : obj)));
+      return true;
+    }
+    const doomed = letterHit?.kind === 'point' && letterHit.dist <= pointDist ? letterHit.obj : point;
+    if (!doomed) return false;
+    if (labelArmRef.current?.kind === 'point' && labelArmRef.current.id === doomed.id) labelArmRef.current = null;
+    setActiveLabel((current) => (current?.id === doomed.id ? null : current));
+    commit(releaseMissingBinds(objectsRef.current.filter((obj) => obj.id !== doomed.id)));
+    selectIds(selectedIdsRef.current.filter((id) => id !== doomed.id));
+    return true;
+  }
+
   function strokePoints(drag) {
     return drag.points.map((point) => roundPoint({ x: point.x - drag.origin.x, y: point.y - drag.origin.y }));
   }
 
   function finishLaser(drag) {
-    if (drag.points.length < 2) return;
-    const points = drag.points.map(roundPoint);
+    if (drag.points.length < 2) {
+      paintDraft(null);
+      return;
+    }
+    const t0 = drag.points[0].t ?? drag.t0;
+    const points = drag.points.map((point) => ({
+      ...roundPoint(point),
+      t: Math.max(0, Math.round((point.t ?? t0) - t0)),
+    }));
     const color = styleRef.current.laserColor || LASER_COLOR;
     const width = styleRef.current.laserWidth || LASER_WIDTH;
-    socketRef.current?.laser(points, color, width);
+    const ms = strokeDuration(performance.now() - drag.t0) || 1;
+    socketRef.current?.laser(points, color, width, ms);
+    const key = `${drag.origin.x},${drag.origin.y}`;
+    const wrap = [...(draftHostRef.current?.children || [])].find((node) => node.dataset.laser === key);
+    const laserHost = laserHostRef.current;
+    if (wrap && laserHost) laserHost.appendChild(wrap);
     paintDraft(null);
-    showLaser({ points, color, width, fadeMs: LASER_FADE_MS });
+    if (!wrap?.isConnected) {
+      showLaser({ points, color, width, ms });
+      return;
+    }
+    wrap.laserTimeline = laserTimeline(points);
+    playLaser(wrap, { draw: false });
   }
 
   // Штрих живёт только на экране, пока перо не отпущено. В сеть уходит один раз, целиком.
@@ -2665,7 +3086,12 @@ export default function BoardEditor({
       w: 12,
       h: 12,
       rotation: 0,
-      props: { points: strokePoints(drag), color: drag.color, width: drag.width },
+      props: {
+        points: strokePoints(drag),
+        color: drag.color,
+        width: drag.width,
+        ms: strokeDuration(performance.now() - drag.t0) || 1,
+      },
     };
     flushOps();
     const upsert = { type: 'upsert', object: stroke };
@@ -2796,6 +3222,13 @@ export default function BoardEditor({
         return;
       }
 
+      if (drag.kind === 'shape' && currentStyle.shape === 'point') {
+        const point = dropPoint(world, '', true);
+        if (point) selectIds([point.id]);
+        setTool('select');
+        return;
+      }
+
       if (drag.kind === 'shape') {
         const rect = rectFromPoints(drag.start, world);
         const zoom = cameraRef.current.zoom;
@@ -2840,13 +3273,25 @@ export default function BoardEditor({
           bind1: startBind.bind,
           bind2: endBind.bind,
         }));
-        commit([...next, arrow]);
-        selectIds([arrow.id]);
+        let list = [...next, arrow];
+        if (!event.altKey) list = splitArrowThroughPoints(list, [arrow.id], uid, zoom);
+        if (list.length > MAX_OBJECTS) {
+          notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+          return;
+        }
+        commit(list);
+        const known = new Set(next.map((obj) => obj.id));
+        selectIds(list.filter((obj) => obj.type === 'arrow' && !known.has(obj.id)).map((obj) => obj.id));
         return;
       }
 
       if (drag.kind === 'arrow-end' && drag.dirty && !event.altKey) {
-        objectsRef.current = bindArrowEnds(objectsRef.current, drag.id, cameraRef.current.zoom, uid);
+        const bound = bindArrowEnds(objectsRef.current, drag.id, cameraRef.current.zoom, uid);
+        const known = new Set(bound.map((obj) => obj.id));
+        const split = splitArrowThroughPoints(bound, [drag.id], uid, cameraRef.current.zoom);
+        objectsRef.current = split;
+        const pieces = split.filter((obj) => obj.type === 'arrow' && !known.has(obj.id));
+        if (pieces.length) selectIds(pieces.map((obj) => obj.id));
       }
 
       if (drag.kind === 'poly-point' && drag.dirty && !event.altKey) {
@@ -2855,6 +3300,27 @@ export default function BoardEditor({
 
       if (drag.kind === 'base-point' && drag.dirty && !event.altKey) {
         objectsRef.current = bindPyramidBase(objectsRef.current, drag.id, drag.index, cameraRef.current.zoom, uid);
+      }
+
+      if (drag.kind === 'move' && drag.dirty && !event.altKey && drag.starts?.size) {
+        const moved = new Set(drag.starts.keys());
+        let next = objectsRef.current;
+        if (moved.size === 1) {
+          const only = [...moved][0];
+          if (next.some((obj) => obj.id === only && obj.type === 'point')) next = refreshPointHold(next, only);
+        }
+        const arrowIds = [...moved].filter((id) => next.some((obj) => obj.id === id && obj.type === 'arrow'));
+        let pieces = [];
+        if (arrowIds.length) {
+          const known = new Set(next.map((obj) => obj.id));
+          next = splitArrowThroughPoints(next, arrowIds, uid, cameraRef.current.zoom, moved);
+          pieces = next.filter((obj) => obj.type === 'arrow' && !known.has(obj.id)).map((obj) => obj.id);
+        }
+        objectsRef.current = next;
+        if (pieces.length) {
+          const alive = new Set(next.map((obj) => obj.id));
+          selectIds([...selectedIdsRef.current.filter((id) => alive.has(id)), ...pieces]);
+        }
       }
 
       if (drag.dirty && drag.origin) pushHistory(drag.origin);
@@ -2900,14 +3366,16 @@ export default function BoardEditor({
       samples.forEach((sample) => {
         if (drag.laser && drag.points.length >= LASER_MAX_POINTS) return;
         const point = toWorld(sample);
+        if (!point) return;
         const last = drag.points[drag.points.length - 1];
         if (last && Math.hypot(point.x - last.x, point.y - last.y) < min) return;
-        drag.points.push(point);
+        drag.points.push(drag.laser ? { x: point.x, y: point.y, t: performance.now() } : point);
         added = true;
       });
       if (!added) return;
       paintDraft({
         kind: 'pen',
+        laser: Boolean(drag.laser),
         points: drag.points,
         origin: drag.origin,
         color: drag.laser ? (styleRef.current.laserColor || LASER_COLOR) : currentStyle.pen,
@@ -2922,6 +3390,11 @@ export default function BoardEditor({
         drag.dirty = true;
         hideErased(objectsRef.current, next);
       }
+      return;
+    }
+
+    if (drag.kind === 'shape' && currentStyle.shape === 'point') {
+      paintDraft({ kind: 'dot', x: world.x, y: world.y });
       return;
     }
 
@@ -2952,6 +3425,25 @@ export default function BoardEditor({
       return;
     }
 
+    if (drag.kind === 'label-move' || drag.kind === 'label-size') {
+      const rawX = event.clientX - drag.cx;
+      const rawY = event.clientY - drag.cy;
+      if (!drag.dirty && Math.hypot(rawX, rawY) < 2) return;
+      drag.dirty = true;
+      const sx = rawX / zoom;
+      const sy = rawY / zoom;
+      const patch = drag.kind === 'label-move'
+        ? { dx: drag.dx + sx, dy: drag.dy + sy }
+        : { size: Math.min(96, Math.max(14, drag.size + (sx - sy) * 0.45)) };
+      const next = objectsRef.current.map((obj) => {
+        if (obj.id !== drag.id) return obj;
+        if (drag.index < 0) return { ...obj, props: { ...obj.props, ...patch } };
+        return moveVertexLabel(obj, drag.index, patch);
+      });
+      gesture(next, [next.find((obj) => obj.id === drag.id)]);
+      return;
+    }
+
     let dx = world.x - drag.start.x;
     let dy = world.y - drag.start.y;
     if (!drag.dirty && Math.hypot(dx, dy) < 3 / zoom) return;
@@ -2961,7 +3453,8 @@ export default function BoardEditor({
     }
 
     if (drag.kind === 'move') {
-      if (!event.altKey && drag.others.length && drag.bounds) {
+      const lonePoint = drag.starts.size === 1 && [...drag.starts.values()].every((obj) => obj.type === 'point');
+      if (!event.altKey && !lonePoint && drag.others.length && drag.bounds) {
         const snap = snapMove(
           { x: drag.bounds.x + dx, y: drag.bounds.y + dy, w: drag.bounds.w, h: drag.bounds.h },
           drag.others,
@@ -2978,10 +3471,11 @@ export default function BoardEditor({
         const start = drag.starts.get(obj.id);
         if (!start) return obj;
         const moved = { ...start, x: start.x + dx, y: start.y + dy };
+        if (start.type === 'point' && drag.starts.size === 1) moved.props = { ...start.props, cross: null };
         changed.push(moved);
         return moved;
       });
-      gestureFollow(next, changed.map((obj) => obj.id), changed);
+      gestureFollow(next, changed.map((obj) => obj.id), changed, event.altKey && lonePoint);
       return;
     }
 
@@ -3031,9 +3525,11 @@ export default function BoardEditor({
       return;
     }
 
-    if (drag.kind === 'poly-point') {
+    if (drag.kind === 'poly-point' || drag.kind === 'vert-point') {
       const hit = aimPoint(world, null, event.altKey, drag.id);
-      const moved = movePolylineVertex(drag.obj, drag.index, hit.point);
+      const moved = drag.kind === 'poly-point'
+        ? movePolylineVertex(drag.obj, drag.index, hit.point)
+        : moveShapeVertex(drag.obj, drag.index, hit.point);
       const base = objectsRef.current.map((obj) => (obj.id === drag.id ? moved : obj));
       const settled = retargetBound(base, [drag.id]);
       const known = new Set([drag.id]);
@@ -3135,6 +3631,36 @@ export default function BoardEditor({
 
     if (chainRef.current && !(currentTool === 'shape' && styleRef.current.shape === 'polyline')) finishChain();
 
+    const sizeEl = target?.closest('[data-label-size]');
+    const labelEl = target?.closest('[data-label]');
+    if ((sizeEl || labelEl) && !panButton && currentTool !== 'hand' && !spaceRef.current) {
+      const id = labelEl.closest('[data-object]')?.dataset.object;
+      const obj = objectsRef.current.find((item) => item.id === id);
+      if (obj && canEdit(obj)) {
+        const key = labelEl.dataset.label;
+        const index = key === 'point' ? -1 : Number(key.slice(1));
+        const name = index < 0 ? obj.props : obj.props.names?.[index];
+        const place = labelPlace(name);
+        setActiveLabel({ id, key });
+        dragRef.current = {
+          kind: sizeEl ? 'label-size' : 'label-move',
+          pointerId: event.pointerId,
+          id,
+          index,
+          cx: event.clientX,
+          cy: event.clientY,
+          dx: place.dx,
+          dy: place.dy,
+          size: place.size,
+          origin: objectsRef.current,
+          dirty: false,
+        };
+        selectIds([id]);
+        trackPointer(event);
+        return;
+      }
+    }
+
     const drawingLine = currentTool === 'arrow' || (currentTool === 'shape' && styleRef.current.shape === 'polyline');
     const polyHandle = handleEl?.dataset.handle?.startsWith('poly-');
     if ((((currentTool === 'select' || handleEl) && !drawingLine) || polyHandle)) {
@@ -3145,10 +3671,11 @@ export default function BoardEditor({
         const handle = handleEl.dataset.handle;
         const knob = handle === 'skew' || handle === 'slantL' || handle === 'slantR' || handle === 'spin' || handle === 'lean';
         const polyIndex = handle.startsWith('poly-') ? Number(handle.slice(5)) : -1;
+        const vertIndex = handle.startsWith('vert-') ? Number(handle.slice(5)) : -1;
         const baseIndex = handle.startsWith('base-') ? Number(handle.slice(5)) : -1;
         dragRef.current = {
-          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : handle === 'depth' ? 'depth' : handle === 'apex' ? 'apex' : knob ? 'shape-knob' : polyIndex >= 0 ? 'poly-point' : baseIndex >= 0 ? 'base-point' : 'resize',
-          index: polyIndex >= 0 ? polyIndex : baseIndex,
+          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : handle === 'depth' ? 'depth' : handle === 'apex' ? 'apex' : knob ? 'shape-knob' : polyIndex >= 0 ? 'poly-point' : vertIndex >= 0 ? 'vert-point' : baseIndex >= 0 ? 'base-point' : 'resize',
+          index: polyIndex >= 0 ? polyIndex : vertIndex >= 0 ? vertIndex : baseIndex,
           pointerId: event.pointerId,
           id,
           handle,
@@ -3166,6 +3693,7 @@ export default function BoardEditor({
       if (!hit) {
         if (event.pointerType === 'touch') {
           selectIds([]);
+          setActiveLabel(null);
           setEditingId(null);
           startPan(event);
           return;
@@ -3173,6 +3701,7 @@ export default function BoardEditor({
         const base = event.shiftKey ? selectedIdsRef.current : [];
         if (!event.shiftKey) {
           selectIds([]);
+          setActiveLabel(null);
           setEditingId(null);
         }
         dragRef.current = { kind: 'marquee', pointerId: event.pointerId, start: world, base };
@@ -3188,6 +3717,7 @@ export default function BoardEditor({
       } else if (!ids.includes(hit.id)) {
         ids = [hit.id];
         selectIds(ids);
+        setActiveLabel(null);
       }
       if (editingIdRef.current && editingIdRef.current !== hit.id) setEditingId(null);
       if (hit.type === 'geogebra' && editingIdRef.current === hit.id) return;
@@ -3223,8 +3753,9 @@ export default function BoardEditor({
         kind: 'pen',
         laser,
         pointerId: event.pointerId,
-        points: [world],
+        points: [laser ? { x: world.x, y: world.y, t: performance.now() } : world],
         origin: world,
+        t0: performance.now(),
         color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
         width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
       };
@@ -3232,6 +3763,7 @@ export default function BoardEditor({
       if (hintRef.current) hintRef.current.style.display = 'none';
       paintDraft({
         kind: 'pen',
+        laser,
         points: [world],
         origin: world,
         color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
@@ -3439,6 +3971,7 @@ export default function BoardEditor({
               teacher={audience === 'teacher'}
               selected={selectedSet.has(obj.id)}
               handles={selectedIds.length === 1 && selectedSet.has(obj.id)}
+              activeLabel={activeLabel?.id === obj.id ? activeLabel.key : ''}
               editing={obj.id === editingId}
               onChangeText={changeText}
               onBlurText={commitEdit}
@@ -3517,7 +4050,7 @@ export default function BoardEditor({
         {!readOnly && selectedObjects.length > 0 && (
           <SelectionToolbar
             objects={selectedObjects}
-            canLock={audience === 'teacher'}
+            canLock
             geoEditing={geoEditing}
             onPatch={patchSelected}
             onDuplicate={duplicateSelected}
@@ -3526,6 +4059,7 @@ export default function BoardEditor({
             onBack={() => reorderSelected(false)}
             onToggleLock={toggleLock}
             onArrowSide={arrowSide}
+            onJoin={joinSelected}
             onToggleGeo={() => selectedObjects[0] && toggleGeo(selectedObjects[0].id)}
           />
         )}
@@ -4020,10 +4554,11 @@ function StyleTray({ context, style, onStyle }) {
             <button
               key={width}
               type="button"
+              title={width === 8 ? 'Тонкая' : width === 18 ? 'Широкая' : 'Средняя'}
               onClick={() => onStyle((prev) => ({ ...prev, laserWidth: width }))}
-              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.laserWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.laserWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
             >
-              {width}
+              <span className="rounded-full bg-current" style={{ width: width * 0.55, height: width * 0.55 }} />
             </button>
           ))}
         </div>

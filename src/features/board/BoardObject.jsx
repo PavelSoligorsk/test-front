@@ -7,7 +7,7 @@ import TaskCard from './TaskCard';
 import { smoothPath } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
-import { arrowHeadState, isSolid, jointLocal, planeNodes, shapeFigures, shapeHandle, shapeKnobs, shapeToneOpacity, solidAnchors } from './shapes';
+import { arrowHeadState, isSolid, jointLocal, labelPlace, labelVertices, planeNodes, shapeFigures, shapeHandle, shapeKnobs, shapeToneOpacity, shapeVertexLocals, solidAnchors } from './shapes';
 
 const HANDLE_POS = {
   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -187,11 +187,41 @@ function RoundPoint({ id, x, y, unit = '%' }) {
   );
 }
 
+function LetterMark({ name, x, y, mark, active }) {
+  const place = labelPlace(name);
+  return (
+    <span
+      data-label={mark}
+      data-dx={place.dx}
+      data-dy={place.dy}
+      className="absolute z-40 cursor-grab whitespace-nowrap font-semibold leading-none text-zinc-950"
+      style={{
+        left: x,
+        top: y,
+        fontSize: place.size,
+        transform: `translate(${place.dx}px, ${place.dy}px)`,
+        transformOrigin: '0 0',
+      }}
+    >
+      {name.letter}
+      {name.sub ? <sub className="text-[0.72em]">{name.sub}</sub> : null}
+      {active && (
+        <span
+          data-label-size=""
+          className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border border-zinc-950 bg-white"
+          style={{ cursor: 'nesw-resize' }}
+        />
+      )}
+    </span>
+  );
+}
+
 function BoardObject({
   obj,
   zoom,
   selected,
   handles,
+  activeLabel,
   editing,
   onChangeText,
   onBlurText,
@@ -255,6 +285,33 @@ function BoardObject({
           {obj.props.shape === 'polyline' && !obj.props.closed && !(selected && handles) && polylineLocals(obj).map((point, index) => (
             <RoundPoint key={`v${index}`} id={`v${index}`} x={point[0]} y={point[1]} />
           ))}
+          {selected && handles && !locked && (shapeVertexLocals(obj) || []).map((point, index) => (
+            <span
+              key={`vert-${index}`}
+              data-handle={`vert-${index}`}
+              className="absolute z-30 h-2 w-2 rounded-full bg-black"
+              style={{
+                left: `${point[0]}%`,
+                top: `${point[1]}%`,
+                transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                cursor: 'grab',
+              }}
+            />
+          ))}
+          {(labelVertices(obj) || []).map((point, index) => {
+            const name = obj.props.names?.[index];
+            if (!name?.letter) return null;
+            return (
+              <LetterMark
+                key={`name-${index}`}
+                name={name}
+                x={`${point[0]}%`}
+                y={`${point[1]}%`}
+                mark={`v${index}`}
+                active={activeLabel === `v${index}`}
+              />
+            );
+          })}
           {selected && handles && !locked && obj.props.shape === 'polyline' && polylineLocals(obj).map((point, index) => (
             <span
               key={`poly-${index}`}
@@ -269,6 +326,21 @@ function BoardObject({
             />
           ))}
           <TextBody obj={obj} editing={editing} onChange={onChangeText} onBlur={onBlurText} />
+        </>
+      )}
+
+      {obj.type === 'point' && (
+        <>
+          <span className="absolute left-0 top-0 z-10 h-[5px] w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-black" />
+          {obj.props.letter && (
+            <LetterMark
+              name={obj.props}
+              x="0"
+              y="0"
+              mark="point"
+              active={activeLabel === 'point'}
+            />
+          )}
         </>
       )}
 

@@ -14,6 +14,31 @@ function replaceAt(list, index, obj) {
   return next;
 }
 
+// Контракт штриха с сервером: props.points — весь массив точек,
+// props.ms — одно целое время на этот массив (мс от нажатия до отпускания).
+// У лазерной указки то же поле ms на сообщении laser. Старые штрихи без ms остаются как есть.
+//
+// Имена точек идут обычным upsert/patch, отдельного типа сообщения нет.
+// Новый объект type "point": x,y — центр в мире, w,h = 8.
+// props.letter — одна латинская буква, props.sub — до трёх цифр нижнего индекса ("" если нет).
+// props.cross — [{id, edge}, {id, edge}] ребра фигуры и отрезка (или двух отрезков).
+// Точка остаётся на этом пересечении, когда двигают фигуру или отрезок.
+// Несколько отрезков клеятся к одной точке: bind {id точки, point: true} на каждом конце.
+// Вершины фигуры (type "shape") подписываются на месте: props.names[i] = {letter, sub, dx, dy, size} или null.
+// dx, dy и size — в координатах доски, как клетки (клетка 20). У точки те же dx, dy, size в props.
+// Разрез отрезка: вместо одного arrow несколько, общий конец bind {id точки, point: true}.
+// Так же, если новый отрезок проходит через уже стоящие точки: куски по порядку, каждый приклеен.
+// Отделённое ребро фигуры: props.skipEdges — номера рёбер, которые больше не рисуются.
+// Индекс i совпадает с вершиной: polyline.points, verts, либо узлы многогранника.
+// Сдвинутые вершины лежат в props.verts: [[u, v], ...] в локальных 0..100.
+const STROKE_MS_MAX = 600000;
+
+export function strokeDuration(ms) {
+  const n = Math.round(Number(ms));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, STROKE_MS_MAX);
+}
+
 // Сжатые точки штриха: целые десятые доли, первая пара абсолютная, дальше разности.
 export function encodePts(points) {
   const out = [];
@@ -106,7 +131,9 @@ export function keepLongerStrokes(local, remote) {
   return (remote || []).map((obj) => {
     const prev = byId.get(obj.id);
     if (!prev || obj.type !== 'draw' || pointCount(prev) <= pointCount(obj)) return obj;
-    return { ...obj, props: { ...obj.props, points: prev.props.points } };
+    const props = { ...obj.props, points: prev.props.points };
+    if (prev.props?.ms != null) props.ms = prev.props.ms;
+    return { ...obj, props };
   });
 }
 
