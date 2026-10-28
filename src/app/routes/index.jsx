@@ -149,6 +149,7 @@ export default function AppRoutes() {
                 <Route path="access" element={<AdminAccessPage />} />
               </Route>
               <Route path="/admin/results/:resultId" element={<PrivateRoute allowedRoles={['admin']}><AdminResultView mode="view" /></PrivateRoute>} />
+              {/* Известное: учитель сюда проходит, а эндпоинты профиля только для админа — будет 403. */}
               <Route path="/admin/users/:userId" element={<PrivateRoute allowedRoles={['admin', 'teacher']}><UserProfile /></PrivateRoute>} />
 
               <Route path="/test/:testId" element={<PrivateRoute><TestPassing /></PrivateRoute>} />

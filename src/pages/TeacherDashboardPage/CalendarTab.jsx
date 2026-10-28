@@ -170,7 +170,7 @@ export default function CalendarTab({ students, groups, onRefresh }) {
     if (api) api.today();
   };
 
-  // Callback after lesson action → refresh calendar
+  // Известное: любое изменение закрывает окно, сообщение об успехе внутри него не видно.
   const handleLessonUpdated = useCallback(() => {
     setSelectedLesson(null);
     reloadCalendar();

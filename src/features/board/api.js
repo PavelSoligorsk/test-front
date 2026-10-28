@@ -66,6 +66,7 @@ export function uploadTeacherBoardImage(file) {
   return apiClient.post(ENDPOINTS.TEACHER_BOARD_IMAGES, body).then((response) => response.data);
 }
 
+// Известное: этого DELETE нет в бэкенде. Вызов оставлен как есть.
 export function deleteTeacherBoardImage(fileId) {
   return apiClient.delete(`${ENDPOINTS.TEACHER_BOARD_IMAGES}/${encodeURIComponent(fileId)}`);
 }

@@ -1224,6 +1224,7 @@ export default function BoardEditor({
     selectIds(selectedIdsRef.current.filter((id) => !set.has(id)));
     setEditingId(null);
     if (audienceRef.current !== 'teacher') return;
+    // Известное: файла на сервере после этого может не стать, а Ctrl+Z вернёт объект со ссылкой на него.
     unusedImageIds(removed, next).forEach((fileId) => {
       deleteTeacherBoardImage(fileId).catch(() => {});
     });
