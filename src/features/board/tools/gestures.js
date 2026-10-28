@@ -10,8 +10,11 @@ import {
   movePolylineVertex,
   movePyramidBase,
   pruneJoints,
+  refreshPointHold,
   retargetBound,
   shapeKnobPatch,
+  slideSharedPoints,
+  splitArrowThroughPoints,
 } from '../shapes';
 
 // Жесты над объектами доски. На каждое движение указателя жест получает документ,
@@ -46,11 +49,22 @@ export function handleIndex(handle) {
  * Сдвинутые вместе объекты сохраняют привязки только к хостам, которые едут с ними;
  * привязанные к сдвинутым хостам отрезки и вершины пересчитываются.
  */
-export function followMoved(next, movedIds) {
+export function followMoved(next, movedIds, releasePoint) {
   const moved = new Set(movedIds);
-  const hostIds = next.filter((obj) => moved.has(obj.id) && (obj.type === 'shape' || obj.type === 'arrow')).map((obj) => obj.id);
+  const hostIds = next.filter((obj) => moved.has(obj.id) && (obj.type === 'shape' || obj.type === 'arrow' || obj.type === 'point')).map((obj) => obj.id);
+  if (releasePoint && hostIds.length === 1 && next.find((obj) => obj.id === hostIds[0])?.type === 'point') {
+    const pointId = hostIds[0];
+    const result = next.map((obj) => {
+      if (obj.type !== 'arrow') return obj;
+      const bind1 = obj.props.bind1?.point && obj.props.bind1.id === pointId ? null : obj.props.bind1;
+      const bind2 = obj.props.bind2?.point && obj.props.bind2.id === pointId ? null : obj.props.bind2;
+      if ((obj.props.bind1 || null) === (bind1 || null) && (obj.props.bind2 || null) === (bind2 || null)) return obj;
+      return { ...obj, props: { ...obj.props, bind1, bind2 } };
+    });
+    return pruneJoints(result);
+  }
   const hostSet = new Set(hostIds);
-  const keep = (bind) => (bind && hostSet.has(bind.id) ? bind : null);
+  const keep = (bind) => (bind && (hostSet.has(bind.id) || bind.point) ? bind : null);
   const result = next.map((obj) => {
     if (!moved.has(obj.id)) return obj;
     if (obj.type === 'arrow') {
@@ -71,11 +85,12 @@ export function followMoved(next, movedIds) {
     }
     return obj;
   });
-  return hostIds.length ? retargetBound(result, hostIds) : pruneJoints(result);
+  const slid = slideSharedPoints(result, movedIds);
+  return hostIds.length ? retargetBound(slid, hostIds) : pruneJoints(slid);
 }
 
-function withFollow(base, movedIds, changed) {
-  const next = followMoved(base, movedIds);
+function withFollow(base, movedIds, changed, releasePoint) {
+  const next = followMoved(base, movedIds, releasePoint);
   const known = new Set(changed.map((obj) => obj.id));
   const extra = next.filter((obj, index) => obj !== base[index] && !known.has(obj.id));
   return { next, changed: [...changed, ...extra] };
@@ -94,7 +109,8 @@ const STEPS = {
     let dx = world.x - drag.start.x;
     let dy = world.y - drag.start.y;
     let guides = null;
-    if (!env.alt && drag.others.length && drag.bounds) {
+    const lonePoint = drag.starts.size === 1 && [...drag.starts.values()].every((obj) => obj.type === 'point');
+    if (!env.alt && !lonePoint && drag.others.length && drag.bounds) {
       const snap = snapMove(
         { x: drag.bounds.x + dx, y: drag.bounds.y + dy, w: drag.bounds.w, h: drag.bounds.h },
         drag.others,
@@ -109,10 +125,11 @@ const STEPS = {
       const start = drag.starts.get(obj.id);
       if (!start) return obj;
       const moved = { ...start, x: start.x + dx, y: start.y + dy };
+      if (start.type === 'point' && lonePoint) moved.props = { ...start.props, cross: null };
       changed.push(moved);
       return moved;
     });
-    return { ...withFollow(next, changed.map((obj) => obj.id), changed), guides };
+    return { ...withFollow(next, changed.map((obj) => obj.id), changed, env.alt && lonePoint), guides };
   },
 
   resize(drag, world, objects, env) {
@@ -194,9 +211,25 @@ export function gestureStep(drag, world, objects, env) {
 }
 
 /** Конец жеста: отпущенный конец отрезка или вершина садится на ближайшую фигуру. */
-export function settleGesture(drag, objects, { zoom, alt }) {
-  if (!drag.dirty || alt) return objects;
-  if (drag.kind === 'arrow-end') return bindArrowEnds(objects, drag.id, zoom);
+export function settleGesture(drag, objects, { zoom, alt, makeId }) {
+  if (!drag.dirty) return objects;
+  if (drag.kind === 'move') {
+    const ids = [...(drag.starts?.keys() || [])];
+    let next = objects;
+    if (ids.length === 1 && next.some((obj) => obj.id === ids[0] && obj.type === 'point')) {
+      next = refreshPointHold(next, ids[0]);
+    }
+    if (!alt && makeId) {
+      const arrowIds = ids.filter((id) => next.some((obj) => obj.id === id && obj.type === 'arrow'));
+      if (arrowIds.length) next = splitArrowThroughPoints(next, arrowIds, makeId, zoom, new Set(ids));
+    }
+    return next;
+  }
+  if (alt) return objects;
+  if (drag.kind === 'arrow-end') {
+    const bound = bindArrowEnds(objects, drag.id, zoom);
+    return makeId ? splitArrowThroughPoints(bound, [drag.id], makeId, zoom) : bound;
+  }
   if (drag.kind === 'poly-point') return bindPolylineVertex(objects, drag.id, drag.index, zoom);
   if (drag.kind === 'base-point') return bindPyramidBase(objects, drag.id, drag.index, zoom);
   return objects;

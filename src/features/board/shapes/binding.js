@@ -1,5 +1,6 @@
 import { arrowBounds, clamp, distToSegment, pointInPolygon } from '../geometry';
 import { convexHull, isSolid, modelOf, planeNodes, pyramidBaseOf } from './kinds';
+import { retargetMarks } from './points';
 
 // Привязки концов отрезков, вершин ломаной и основания пирамиды к фигурам.
 //
@@ -145,6 +146,11 @@ export function snapFigurePoint(point, hosts, zoom, ignoreId) {
   let edgeHit = null;
   hosts.forEach((host) => {
     if (!host || host.id === ignoreId) return;
+    if (host.type === 'point') {
+      const dist = Math.hypot(point.x - host.x, point.y - host.y);
+      if (dist <= nodeR) nodeHit = considerNode(nodeHit, dist, { x: host.x, y: host.y }, { id: host.id, point: true });
+      return;
+    }
     if ((host.type !== 'arrow' && host.type !== 'shape') || !nearHost(host, point, nodeR)) return;
     if (host.type === 'arrow') {
       const [start, end] = arrowEnds(host);
@@ -258,6 +264,7 @@ export function boundPoint(bind, objects, index = null) {
   if (!bind) return null;
   const host = index ? index.get(bind.id) : objects.find((obj) => obj.id === bind.id);
   if (!host) return null;
+  if (bind.point) return host.type === 'point' ? { x: host.x, y: host.y } : null;
   if (host.type === 'arrow') {
     const [start, end] = arrowEnds(host);
     if (bind.index === 0) return start;
@@ -590,7 +597,7 @@ export function bindArrowEnds(objects, arrowId, zoom) {
 }
 
 export function releaseMissingBinds(objects) {
-  const hosts = new Set(objects.filter((obj) => obj.type === 'shape' || obj.type === 'arrow').map((obj) => obj.id));
+  const hosts = new Set(objects.filter((obj) => obj.type === 'shape' || obj.type === 'arrow' || obj.type === 'point').map((obj) => obj.id));
   const next = objects.map((obj) => {
     if (obj.type === 'arrow') {
       const bind1 = obj.props.bind1 && hosts.has(obj.props.bind1.id) ? obj.props.bind1 : null;
@@ -688,6 +695,7 @@ export function retargetBound(objects, hostIds) {
     next = retargetArrows(next, pending);
     next = retargetPolylines(next, pending);
     next = retargetPyramids(next, pending);
+    next = retargetMarks(next, pending);
     pending = next.flatMap((obj, index) => (obj !== before[index] && !seen.has(obj.id) ? [obj.id] : []));
   }
   return pruneJoints(next);

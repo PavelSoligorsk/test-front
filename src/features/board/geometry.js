@@ -139,6 +139,10 @@ export function hitObject(obj, point, zoom) {
     return distToSegment(point, a, b) <= Math.max(10, (obj.props.width || 2) + 8) / zoom;
   }
 
+  if (obj.type === 'point') {
+    return Math.hypot(point.x - obj.x, point.y - obj.y) <= 14 / zoom;
+  }
+
   if (obj.type === 'draw') {
     const pts = obj.props.points || [];
     const limit = ((obj.props.width || 2) / 2 + 8) / zoom;

@@ -14,6 +14,30 @@ function replaceAt(list, index, obj) {
   return next;
 }
 
+// Контракт штриха: props.points — весь массив, props.ms — время штриха в миллисекундах.
+const STROKE_MS_MAX = 600000;
+
+export function strokeDuration(ms) {
+  const n = Math.round(Number(ms));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, STROKE_MS_MAX);
+}
+
+function pointCount(obj) {
+  return obj?.type === 'draw' && Array.isArray(obj.props?.points) ? obj.props.points.length : 0;
+}
+
+export function keepLongerStrokes(local, remote) {
+  const localById = new Map((local || []).filter((obj) => obj.type === 'draw').map((obj) => [obj.id, obj]));
+  return (remote || []).map((obj) => {
+    const prev = localById.get(obj.id);
+    if (!prev || obj.type !== 'draw' || pointCount(prev) <= pointCount(obj)) return obj;
+    const props = { ...obj.props, points: prev.props.points };
+    if (prev.props?.ms != null) props.ms = prev.props.ms;
+    return { ...obj, props };
+  });
+}
+
 export function patchSet(prev, next) {
   const set = {};
   let changed = false;
