@@ -235,5 +235,6 @@ export function useBoardCamera({ boardId, viewportRef, worldRef, zoomLabelRef, s
     };
   }, [api, viewportRef]);
 
-  return { camera, viewSize, cameraRef, saved, ...api };
+  // api — стабильный набор методов (для модулей вне React), остальное — для рендера.
+  return { camera, viewSize, cameraRef, saved, api, ...api };
 }
