@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../shared/api';
 import { Download, Sparkles, RotateCcw } from 'lucide-react';
 import { MarkdownRenderer as MarkdownViewer, ThemeToggle } from '../shared/ui';
 
@@ -39,7 +39,7 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
     try {
       const RENDER_SERVICE = 'https://tg-production-cc61.up.railway.app';
       
-      const response = await axios.post(
+      const response = await apiClient.post(
         `${RENDER_SERVICE}/render-report`,
         {
           test: {

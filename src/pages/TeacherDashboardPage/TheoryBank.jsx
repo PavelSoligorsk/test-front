@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { API_BASE } from '../../shared/api';
+import apiClient from '../../shared/api';
 import { useState, useEffect, useMemo } from 'react';
 import { Search, BookOpen, ChevronRight } from 'lucide-react';
 import { MarkdownRenderer } from '../../shared/ui';
@@ -30,13 +29,6 @@ const getDifficultyColor = (lvl) => {
 };
 
 // Настройки axios с токеном сессии (раньше сюда по ошибке уходили голые заголовки как config).
-function authConfig() {
-  try {
-    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-    const token = session?.access_token || session?.token;
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-  } catch { return {}; }
-}
 
 export default function TheoryBank({ 
   tasksMeta, 
@@ -95,9 +87,7 @@ export default function TheoryBank({
         const batch = entries.slice(i, i + BATCH);
         const results = await Promise.allSettled(
           batch.map(({ topicKey, section }) =>
-            axios.get(
-              `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topicKey)}/section/${encodeURIComponent(section)}`,
-              authConfig()
+            apiClient.get(`/teacher/tasks/by-topic/${encodeURIComponent(topicKey)}/section/${encodeURIComponent(section)}`
             )
           )
         );
@@ -167,10 +157,7 @@ export default function TheoryBank({
     setLoadingTasks(true);
     setTaskSearch("");
     try {
-      const res = await axios.get(
-        `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
-        authConfig()
-      );
+      const res = await apiClient.get(`/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`);
       setSectionTasks((prev) => ({ ...prev, [`${topic}/${section}`]: res.data }));
     } catch (e) {
       console.error('Error loading tasks:', e);

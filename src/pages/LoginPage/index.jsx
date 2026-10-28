@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../shared/config';
+import apiClient from '../../shared/api';
 import { saveSession } from '../../shared/lib/session';
 import AuthShell, { AuthPasswordField, authButton, authField, authLabel, authLink } from '../../shared/ui/AuthShell';
 
@@ -23,7 +22,7 @@ export default function LoginPage() {
       params.append('password', form.password);
       params.append('scope', '');
 
-      const res = await axios.post(`${API_URL}/login`, params, {
+      const res = await apiClient.post(`/login`, params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
 

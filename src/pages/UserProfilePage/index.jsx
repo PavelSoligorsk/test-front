@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../shared/config';
+import apiClient from '../../shared/api';
 import { ChevronLeft, Phone, MessageSquare, History, ArrowRight, Trophy, Target, Calendar, Search, BarChart3, Shield } from 'lucide-react';
 
 export default function UserProfile() {
@@ -13,23 +12,14 @@ export default function UserProfile() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const getAuthHeaders = () => {
-    try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.token || session?.access_token;
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    } catch { return {}; }
-  };
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const headers = getAuthHeaders();
         const [profileRes, historyRes] = await Promise.all([
-          axios.get(`${API_URL}/admin/users/${userId}/profile`, { headers }),
-          axios.get(`${API_URL}/admin/users/${userId}/history`, { headers })
+          apiClient.get(`/admin/users/${userId}/profile`),
+          apiClient.get(`/admin/users/${userId}/history`)
         ]);
         setProfile(profileRes.data);
         setHistory(historyRes.data || []);

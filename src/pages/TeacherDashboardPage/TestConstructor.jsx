@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { XCircle, Send, Database, BookOpen, Sparkles, Trash2 } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
 import { MarkdownPreview } from './MarkdownPreview';
 
 const getDifficultyColor = (lvl) => {
@@ -46,12 +44,6 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
     setTestForm(testFormFrom(editingTest));
   }
 
-  const getAuthHeaders = () => {
-    const user = restoreSession();
-    const token = user?.token || user?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
@@ -66,9 +58,9 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
     };
     try {
       if (testForm.id) {
-        await axios.put(`${API_BASE}/teacher/tests/${testForm.id}`, payload, { headers: getAuthHeaders() });
+        await apiClient.put(`/teacher/tests/${testForm.id}`, payload);
       } else {
-        await axios.post(`${API_BASE}/teacher/tests`, payload, { headers: getAuthHeaders() });
+        await apiClient.post(`/teacher/tests`, payload);
       }
       setTestForm(EMPTY_FORM);
       if (onClearEditing) onClearEditing();

@@ -1,8 +1,7 @@
 // components/TheoryAIChat.jsx
 import { useState, useRef, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import apiClient from '../shared/api';
 import 'katex/dist/katex.min.css';
-import { API_URL } from '../shared/config';
 import { ENDPOINTS } from '../shared/api/endpoints';
 import MarkdownWithGeoGebra from '../shared/ui/MarkdownWithGeoGebra';
 import {
@@ -221,16 +220,12 @@ const TheoryAIChat = ({
     setLoading(true);
 
     try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.token || session?.access_token;
-      const res = await axios.post(
-        `${API_URL}${ENDPOINTS.STUDENT_THEORY_ASK_AI}`,
+      const res = await apiClient.post(ENDPOINTS.STUDENT_THEORY_ASK_AI,
         {
           theory_id: theoryId || null,
           theory_content: theoryId ? null : theoryContent,
           question: q
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+        }
       );
 
       // Проверяем и исправляем ответ от AI

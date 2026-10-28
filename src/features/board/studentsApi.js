@@ -1,15 +1,7 @@
-import axios from 'axios';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
-
-function auth() {
-  const user = restoreSession();
-  const token = user?.token || user?.access_token;
-  return { headers: token ? { Authorization: `Bearer ${token}` } : {} };
-}
+import apiClient from '../../shared/api';
 
 async function get(path) {
-  const res = await axios.get(`${API_BASE}${path}`, auth());
+  const res = await apiClient.get(path);
   return res.data;
 }
 

@@ -1,18 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { Search, XCircle, CheckCircle2, Clock, Users, CheckSquare, Square, Send, FileText, Trash2, Layers } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
 import { useAsyncData } from '../../shared/hooks';
 
 const NO_ASSIGNMENTS = [];
-
-function getAuthHeaders() {
-  const user = restoreSession();
-  const token = user?.token || user?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 export default function TestManageModal({ test, students, groups, onClose, onAssign, onAssignToGroup }) {
   const navigate = useNavigate();
@@ -27,7 +19,7 @@ export default function TestManageModal({ test, students, groups, onClose, onAss
 
   const assignmentsQuery = useAsyncData(test.id ?? null, async () => {
     try {
-      const res = await axios.get(`${API_BASE}/teacher/test/${test.id}/assignments`, { headers: getAuthHeaders() });
+      const res = await apiClient.get(`/teacher/test/${test.id}/assignments`);
       return res.data;
     } catch (e) {
       console.error(e);
@@ -85,7 +77,7 @@ export default function TestManageModal({ test, students, groups, onClose, onAss
   const handleDelete = async (assignmentId) => {
     if (!confirm('Отменить назначение?')) return;
     try {
-      await axios.delete(`${API_BASE}/teacher/assignments/${assignmentId}`, { headers: getAuthHeaders() });
+      await apiClient.delete(`/teacher/assignments/${assignmentId}`);
       setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
     } catch (e) { console.error(e); throw e; }
   };

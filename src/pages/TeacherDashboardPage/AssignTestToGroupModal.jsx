@@ -1,16 +1,8 @@
 import { useMemo, useState } from 'react';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { Search, XCircle, CheckCircle2, Clock, BookOpen, FileText } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
 import { useAsyncData } from '../../shared/hooks';
 import { InlineNotice, formatApiDetail, fieldClass, secondaryBtnClass } from '../../shared/ui';
-
-function authHeaders() {
-  const user = restoreSession();
-  const token = user?.token || user?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 function studentName(row) {
   if (row.student_name) return row.student_name;
@@ -25,9 +17,7 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
 
   const groupId = group?.id;
   const assignmentsQuery = useAsyncData(groupId ?? null, async () => {
-    const res = await axios.get(`${API_BASE}/teacher/groups/${groupId}/assignments`, {
-      headers: authHeaders(),
-    });
+    const res = await apiClient.get(`/teacher/groups/${groupId}/assignments`);
     return res.data;
   });
   const fetchAssignments = assignmentsQuery.reload;
@@ -62,9 +52,7 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
     setBusyId(testId);
     setNotice(null);
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${group.id}/assignments/${testId}`, {
-        headers: authHeaders(),
-      });
+      await apiClient.delete(`/teacher/groups/${group.id}/assignments/${testId}`);
       await fetchAssignments();
       setNotice({ tone: 'success', text: 'Тест снят с группы' });
     } catch (e) {

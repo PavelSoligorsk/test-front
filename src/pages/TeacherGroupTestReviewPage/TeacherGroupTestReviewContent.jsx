@@ -1,19 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { ChevronLeft, FileText, Users } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
 import { InlineNotice, MarkdownRenderer, QuestionMap, ThemeToggle, formatApiDetail } from '../../shared/ui';
-
-function authHeaders() {
-  try {
-    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-    const token = session?.token || session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
 
 function displayName(row) {
   if (row.student_name) return row.student_name;
@@ -228,10 +217,7 @@ export default function TeacherGroupTestReviewContent() {
       setLoading(true);
       setError(null);
       try {
-        const res = await axios.get(
-          `${API_BASE}/teacher/groups/${groupId}/tests/${testId}/review`,
-          { headers: authHeaders() }
-        );
+        const res = await apiClient.get(`/teacher/groups/${groupId}/tests/${testId}/review`);
         setData(res.data);
       } catch (err) {
         if (err.response?.status === 401) {

@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import axios from 'axios';
-import { API_URL } from '../../shared/config';
+import apiClient from '../../shared/api';
 import { QuestionMap, ThemeToggle } from '../../shared/ui';
 import { getHomeRoute, getUserRole } from '../../features/auth';
 import DifficultyStats from './DifficultyStats';
@@ -34,12 +33,8 @@ export default function TestResultDetailContent() {
     setLoadingHint(prev => ({ ...prev, [taskId]: true }));
     setHintError(prev => ({ ...prev, [taskId]: null }));
     try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.token || session?.access_token;
-      const response = await axios.post(
-        `${API_URL}/student/tasks/${taskId}/hint`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await apiClient.post(`/student/tasks/${taskId}/hint`,
+        {}
       );
       setHintData(prev => ({ ...prev, [taskId]: response.data }));
     } catch (err) {
@@ -58,12 +53,8 @@ export default function TestResultDetailContent() {
     setLoadingSolution(prev => ({ ...prev, [taskId]: true }));
     setSolutionError(prev => ({ ...prev, [taskId]: null }));
     try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.token || session?.access_token;
-      const response = await axios.post(
-        `${API_URL}/student/tasks/${taskId}/ai-solve`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await apiClient.post(`/student/tasks/${taskId}/ai-solve`,
+        {}
       );
       setSolutionData(prev => ({ ...prev, [taskId]: response.data }));
     } catch (err) {
@@ -81,11 +72,7 @@ export default function TestResultDetailContent() {
   useEffect(() => {
     const fetchResult = async () => {
       try {
-        const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-        const token = session?.token || session?.access_token;
-        const res = await axios.get(`${API_URL}/student/results/${resultId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await apiClient.get(`/student/results/${resultId}`);
         setData(res.data);
       } catch (err) {
         console.error('Ошибка загрузки результата:', err);

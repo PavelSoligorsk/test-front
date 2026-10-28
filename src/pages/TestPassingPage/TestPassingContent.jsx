@@ -2,7 +2,8 @@ import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useSta
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, BookOpen, ClipboardList } from 'lucide-react';
 import { ThemeToggle } from '../../shared/ui';
-import axios from 'axios';
+import apiClient from '../../shared/api';
+import { getToken } from '../../shared/lib/session';
 import { API_URL } from '../../shared/config';
 import { retakeTest } from '../StudentDashboardPage/api';
 import { ENDPOINTS } from '../../shared/api/endpoints';
@@ -18,13 +19,6 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function getToken() {
-  try {
-    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-    return session?.token || session?.access_token || null;
-  } catch { return null; }
 }
 
 // Сначала тестовые задания, потом открытые; внутри — по id и сложности.
@@ -160,13 +154,10 @@ export default function TestPassingContent() {
     const effectiveAnswers = answersOverride || userAnswers;
     if (Object.keys(effectiveAnswers).length === 0) return;
     const effectiveTestId = test?.id ?? parseInt(testId);
-    const token = getToken();
     try {
       const payload = buildAnswersPayload(effectiveAnswers);
-      await axios.post(
-        `${API_URL}${ENDPOINTS.STUDENT_SAVE_PROGRESS(effectiveTestId)}`,
-        { answers: payload },
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      await apiClient.post(ENDPOINTS.STUDENT_SAVE_PROGRESS(effectiveTestId),
+        { answers: payload }
       );
       savedToServerRef.current = true;
     } catch (e) {
@@ -250,7 +241,6 @@ export default function TestPassingContent() {
     submittedRef.current = true;
     setIsSubmitting(true);
     try {
-      const token = getToken();
       const effectiveTestId = testDbId ?? parseInt(testId);
 
       const hasSavedToServer = savedToServerRef.current;
@@ -265,9 +255,7 @@ export default function TestPassingContent() {
         payload = buildAnswersPayload(answers);
       }
 
-      await axios.post(`${API_URL}/student/tests/${effectiveTestId}/submit`, payload, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      await apiClient.post(`/student/tests/${effectiveTestId}/submit`, payload);
       localStorage.removeItem(`test_progress_${testId}`);
       localStorage.removeItem(`test_restored_${testId}`);
       finishedRef.current = true;
@@ -322,12 +310,10 @@ export default function TestPassingContent() {
 
       try {
         const startUrl = isAi
-          ? `${API_URL}/student/start-ai-test/${testId}`
-          : `${API_URL}/student/start-test/${testId}`;
+          ? `/student/start-ai-test/${testId}`
+          : `/student/start-test/${testId}`;
 
-        const res = await axios.post(startUrl, {}, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiClient.post(startUrl, {});
         if (cancelled) return;
 
         const next = readAttempt(res.data, {
@@ -402,11 +388,8 @@ export default function TestPassingContent() {
     setHintUsed(prev => ({ ...prev, [taskId]: true }));
     setHintLoading(prev => ({ ...prev, [taskId]: true }));
     try {
-      const token = getToken();
-      const res = await axios.post(
-        `${API_URL}/student/tasks/${taskId}/hint`,
-        {},
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      const res = await apiClient.post(`/student/tasks/${taskId}/hint`,
+        {}
       );
       if (res.data?.hint) {
         setHintData(prev => ({ ...prev, [taskId]: { hint: res.data.hint, geogebra: res.data.geogebra || null } }));

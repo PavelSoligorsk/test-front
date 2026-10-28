@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_URL } from '../config';
-import { clearSession } from '../lib/session';
+import { clearSession, readStoredSession } from '../lib/session';
 
 const PUBLIC_AUTH = /\/(login|register|forgot-password|reset-password)(?:\?|$)/i;
 
@@ -12,12 +12,13 @@ function isPublicAuth(config) {
   return PUBLIC_AUTH.test(requestUrl(config));
 }
 
+// Токен из той же сессии, что видят страницы (localStorage, затем sessionStorage).
 function readStoredToken() {
   try {
-    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+    const session = JSON.parse(readStoredSession() || '{}');
     return session?.token || session?.access_token || localStorage.getItem('edu_token') || null;
   } catch {
-    return localStorage.getItem('edu_token');
+    return null;
   }
 }
 

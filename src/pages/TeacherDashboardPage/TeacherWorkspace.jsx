@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
 import { formatApiDetail } from '../../shared/ui';
 import { TEACHER_PATHS } from './teacherPaths';
 import { TeacherWorkspaceContext } from './teacherWorkspaceContext';
 
 function getTeacher(path) {
-  return axios.get(`${API_BASE}/teacher/${path}`, { headers: authHeaders() }).then((res) => res.data);
-}
-
-function authHeaders() {
-  const user = restoreSession();
-  const token = user?.token || user?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return apiClient.get(`/teacher/${path}`).then((res) => res.data);
 }
 
 export function TeacherWorkspaceProvider({ children }) {
@@ -66,13 +58,13 @@ export function TeacherWorkspaceProvider({ children }) {
     try {
       let groupId = data.id;
       if (data.id) {
-        await axios.put(`${API_BASE}/teacher/groups/${data.id}`, { name: data.name, description: data.description }, { headers: authHeaders() });
+        await apiClient.put(`/teacher/groups/${data.id}`, { name: data.name, description: data.description });
       } else {
-        const res = await axios.post(`${API_BASE}/teacher/groups/`, { name: data.name, description: data.description }, { headers: authHeaders() });
+        const res = await apiClient.post(`/teacher/groups/`, { name: data.name, description: data.description });
         groupId = res.data.id;
       }
       if (data.student_ids?.length && groupId) {
-        await axios.post(`${API_BASE}/teacher/groups/${groupId}/students`, { student_ids: data.student_ids }, { headers: authHeaders() });
+        await apiClient.post(`/teacher/groups/${groupId}/students`, { student_ids: data.student_ids });
       }
       setGroupCreateModal(null);
       fetchGroups();
@@ -86,7 +78,7 @@ export function TeacherWorkspaceProvider({ children }) {
   const handleDeleteGroup = async (groupId, groupName) => {
     if (!confirm(`Удалить группу "${groupName || groupId}"? Это действие нельзя отменить.`)) return;
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${groupId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/groups/${groupId}`);
       fetchGroups();
     } catch (e) {
       showError(e, 'Ошибка при удалении группы');
@@ -95,7 +87,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleAddStudentsToGroup = async (groupId, studentIds) => {
     try {
-      await axios.post(`${API_BASE}/teacher/groups/${groupId}/students`, { student_ids: studentIds }, { headers: authHeaders() });
+      await apiClient.post(`/teacher/groups/${groupId}/students`, { student_ids: studentIds });
       fetchGroups();
       setGroupStudentsModal(null);
     } catch (e) {
@@ -105,7 +97,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleRemoveStudentFromGroup = async (groupId, studentId) => {
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${groupId}/students/${studentId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/groups/${groupId}/students/${studentId}`);
       await fetchGroups();
       return true;
     } catch (e) {
@@ -116,7 +108,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleAssignTestToGroup = async (testId, groupId) => {
     try {
-      await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId }, { headers: authHeaders() });
+      await apiClient.post(`/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId });
       showSuccess('Тест назначен группе');
     } catch (e) {
       showError(e, 'Ошибка при назначении теста');
@@ -126,7 +118,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleAssignTest = async (data) => {
     try {
-      await axios.post(`${API_BASE}/teacher/assign-test`, data, { headers: authHeaders() });
+      await apiClient.post(`/teacher/assign-test`, data);
     } catch (e) {
       console.error(e);
       throw e;
@@ -135,7 +127,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleGenerateAiTest = async (aiParams) => {
     try {
-      const res = await axios.post(`${API_BASE}/teacher/generate-test`, aiParams, { headers: authHeaders() });
+      const res = await apiClient.post(`/teacher/generate-test`, aiParams);
       const generated = res.data;
       if (generated.tasks?.length) {
         setSelectedTasks(generated.tasks);
@@ -165,7 +157,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleEditTest = async (test) => {
     try {
-      const res = await axios.get(`${API_BASE}/teacher/tests/${test.id}`, { headers: authHeaders() });
+      const res = await apiClient.get(`/teacher/tests/${test.id}`);
       setSelectedTasks(res.data.tasks || []);
       setEditingTest(res.data);
       navigate(TEACHER_PATHS.constructor);
@@ -177,7 +169,7 @@ export function TeacherWorkspaceProvider({ children }) {
   const handleDeleteTest = async (testId) => {
     if (!confirm('Удалить тест? Это действие нельзя отменить.')) return;
     try {
-      await axios.delete(`${API_BASE}/teacher/tests/${testId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/tests/${testId}`);
       fetchTests();
     } catch (e) {
       showError(e, 'Ошибка при удалении теста');
