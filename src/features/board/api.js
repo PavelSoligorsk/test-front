@@ -66,6 +66,10 @@ export function uploadTeacherBoardImage(file) {
   return apiClient.post(ENDPOINTS.TEACHER_BOARD_IMAGES, body).then((response) => response.data);
 }
 
+export function deleteTeacherBoardImage(fileId) {
+  return apiClient.delete(`${ENDPOINTS.TEACHER_BOARD_IMAGES}/${encodeURIComponent(fileId)}`);
+}
+
 export function boardSocketUrl(audience, boardId, token, shareToken) {
   const path = audience === 'teacher'
     ? ENDPOINTS.TEACHER_BOARD_WS(boardId)
