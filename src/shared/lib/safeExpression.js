@@ -600,4 +600,3 @@ export function compileLambda(source) {
   };
 }
 
-export { ExpressionError };

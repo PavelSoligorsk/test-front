@@ -90,12 +90,8 @@ export const ENDPOINTS = {
   TEACHER_BOARD_SHARE: (id) => `/teacher/boards/${id}/share`,
   TEACHER_BOARD_WS: (id) => `/teacher/boards/${id}/ws`,
   TEACHER_BOARD_IMAGES: '/teacher/boards/images',
-  TEACHER_GEOGEBRA_TEMPLATES: '/teacher/geogebra-templates',
-  TEACHER_GEOGEBRA_TEMPLATE: (id) => `/teacher/geogebra-templates/${id}`,
   BOARD_SHARED: (token) => `/board/shared/${token}`,
   BOARD_SHARED_WS: (token) => `/board/shared/${token}/ws`,
-  BOARD_GEOGEBRA_TEMPLATES: '/board/geogebra-templates',
-  BOARD_GEOGEBRA_TEMPLATE: (id) => `/board/geogebra-templates/${id}`,
 
   // Учитель — оплаты
   TEACHER_PAYMENTS: '/teacher/payments',

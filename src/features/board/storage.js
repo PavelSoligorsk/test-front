@@ -1,5 +1,3 @@
-import { createBoard } from './model';
-
 const DB_NAME = 'edu-student-boards';
 const STORE = 'boards';
 
@@ -31,13 +29,6 @@ function requestToPromise(request) {
   });
 }
 
-export async function listBoards() {
-  const db = await openDb();
-  const tx = db.transaction(STORE, 'readonly');
-  const rows = await requestToPromise(tx.objectStore(STORE).getAll());
-  return (rows || []).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-}
-
 export async function loadBoard(id) {
   const db = await openDb();
   const tx = db.transaction(STORE, 'readonly');
@@ -67,8 +58,3 @@ export async function deleteBoard(id) {
   });
 }
 
-export async function createBoardRecord(title) {
-  const board = createBoard(title);
-  await saveBoard(board);
-  return board;
-}

@@ -83,7 +83,6 @@ export default function GeoGebraWidget({
   const apiRef = useRef(null);
   const fileRef = useRef(ggbBase64 || '');
   const xmlRef = useRef(ggbXml || '');
-  const perspectiveRef = useRef(ggbPerspective || '');
   const viewRef = useRef(ggbView || null);
   const layoutRef = useRef(ggbLayout || '');
   const menuRef = useRef(ggbMenu || '');
@@ -149,7 +148,6 @@ export default function GeoGebraWidget({
   useEffect(() => {
     fileRef.current = ggbBase64 || '';
     xmlRef.current = ggbXml || '';
-    perspectiveRef.current = ggbPerspective || '';
     viewRef.current = ggbView || null;
     layoutRef.current = ggbLayout || '';
     menuRef.current = ggbMenu || '';

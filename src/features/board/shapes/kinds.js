@@ -419,7 +419,6 @@ function linePath(points) {
   return `M ${points.map((point) => point.join(' ')).join(' L ')}`;
 }
 
-
 function solidLean(props) {
   return clamp(Number.isFinite(Number(props?.lean)) ? Number(props.lean) : 0, -1, 1);
 }
@@ -595,10 +594,6 @@ function clampDepth(value, id) {
 /** Значения props по умолчанию для нового объекта этого вида. */
 export function planeDefaults(id) {
   return KINDS[id]?.defaults?.() || {};
-}
-
-export function shapeParams(id, props = {}) {
-  return KINDS[id]?.params?.(props) || {};
 }
 
 export function planeNodes(id, props) {

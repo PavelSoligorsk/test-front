@@ -63,32 +63,6 @@ export function boardCountLabel(count) {
   return `${count} ${word}`;
 }
 
-export function formatUpdated(iso) {
-  if (!iso) return '';
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-export function createBoard(title = 'Доска') {
-  const now = new Date().toISOString();
-  return {
-    id: uid(),
-    title,
-    teacherId: null,
-    groupId: null,
-    studentIds: [],
-    revision: null,
-    createdAt: now,
-    updatedAt: now,
-    camera: { x: 0, y: 0, zoom: 1 },
-    objects: [],
-  };
-}
-
 export const STICKY_COLORS = [
   { id: 'amber', label: 'Жёлтый', bg: '#fde68a' },
   { id: 'rose', label: 'Розовый', bg: '#fecdd3' },

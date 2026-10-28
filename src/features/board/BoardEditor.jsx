@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -9,7 +9,6 @@ import {
   EyeOff,
   Hand,
   Image,
-  Link2,
   LocateFixed,
   Maximize2,
   Grid3x3,
@@ -25,14 +24,12 @@ import {
   StickyNote,
   Type,
   Undo2,
-  WifiOff,
   X,
 } from 'lucide-react';
 import ObjectLayer from './ObjectLayer';
-import { cullingRect } from './culling';
-import { createBoardStore, sameIdList, useStoreSelector } from './store';
+import { useBoardCamera } from './useBoardCamera';
+import { createBoardStore, useStoreSelector } from './store';
 import { createMotion } from './motion';
-import SelectionToolbar from './SelectionToolbar';
 import {
   boardErrorMessage,
   createTeacherBoard,
@@ -59,18 +56,14 @@ import {
   rectFromPoints,
   strokeBounds,
   hitObject,
-  smoothPath,
 } from './geometry';
-import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
+import { MAX_ZOOM, MIN_ZOOM } from './camera';
 import { cloneObjects, parseObjects, serializeObjects } from './clipboard';
 import {
-  GEOGEBRA_APPS,
   PEN_COLORS,
-  PEN_WIDTHS,
   SELECTION_COLOR,
   SHAPE_FILLS,
   STICKY_COLORS,
-  TEXT_SIZES,
   createObject,
   geogebraApp,
   sameSeries,
@@ -78,10 +71,7 @@ import {
   uid,
 } from './model';
 import { boardImageSrc } from './images';
-import ShapeGlyph from './ShapeGlyph';
 import {
-  SHAPE_GROUPS,
-  appendFigures,
   bindFromHit,
   defaultDepth,
   dropBindsTo,
@@ -93,15 +83,25 @@ import {
   releaseMissingBinds,
   setArrowSide,
   settleSnap,
-  shapeFigures,
   snapFigurePoint,
 } from './shapes';
 import { DEFAULT_SURFACE, SURFACE_COLORS, SURFACE_MARK, isHiddenBoardObject, isSurfaceMeta, readSurface } from './meta';
 import { deleteBoard } from './storage';
-import BoardTheoryPane from './BoardTheoryPane';
-import BoardTasksPane from './BoardTasksPane';
-import BoardStudentsPane from './BoardStudentsPane';
 import { taskOptions } from './taskBankApi';
+import { LASER_COLOR, LASER_FADE_MS, LASER_MAX_POINTS, LASER_WIDTH } from './constants';
+import BoardSidePanes from './ui/BoardSidePanes';
+import { renderDraft } from './paint/draft';
+import { paintGuides as renderGuides } from './paint/guides';
+import { createInk } from './paint/ink';
+import { playLaser } from './paint/laser';
+import IconButton from './ui/IconButton';
+import LinkStatus from './ui/LinkStatus';
+import PeerList from './ui/PeerList';
+import SelectionBar from './ui/SelectionBar';
+import ShareButton from './ui/ShareButton';
+import StyleTray from './ui/StyleTray';
+import SurfacePanel from './ui/SurfacePanel';
+import { peerColor, peerName } from './ui/peers';
 import { SNAP_PX, dragKindForHandle, followMoved, gestureStep, handleIndex, isEditGesture, settleGesture, squareFrom } from './tools/gestures';
 
 function pickObject(objects, point, zoom) {
@@ -130,13 +130,7 @@ function isMeasured(obj) {
 }
 
 
-const LASER_COLOR = '#fde047';
-const LASER_WIDTH = 18;
-const LASER_COLORS = [LASER_COLOR, '#18181b', '#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
-const LASER_WIDTHS = [10, 18, 32, 56];
-const LASER_FADE_MS = 2000;
-const LASER_MAX_POINTS = 2000;
-const INK_SPEED = 720;
+const EMPTY_STUDENTS = [];
 
 const TOOLS = [
   { id: 'select', label: 'Выбор', hint: 'V', icon: MousePointer2 },
@@ -163,7 +157,6 @@ const INITIAL_STYLE = {
   arrow: PEN_COLORS[0],
   textSize: 22,
   appName: 'geometry',
-  templateId: '',
 };
 
 const TOOL_CODES = {
@@ -184,32 +177,15 @@ const TOOL_CODES = {
 const MAX_OBJECTS = 10000;
 const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'shape-knob', 'poly-point', 'apex', 'base-point', 'marquee', 'pinch']);
 const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
-const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
 const SEND_MS = 50;
 const GEO_XML_MS = 200;
 const GEO_XML_MOVING_MS = 1000;
 const GEO_SAVE_MS = 4000;
 const TASK_CARD_W = 560;
 const TASK_CARD_GAP = 32;
-const PEER_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#9333ea', '#0891b2', '#db2777', '#4f46e5'];
 
 function boardTitle(value) {
   return (value || '').trim() || 'Доска';
-}
-
-function peerColor(clientId) {
-  let hash = 0;
-  for (const char of String(clientId || '')) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return PEER_COLORS[Math.abs(hash) % PEER_COLORS.length];
-}
-
-function peerName(peer) {
-  return peer?.name || (peer?.role === 'teacher' ? 'Учитель' : 'Ученик');
-}
-
-function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-  return (parts.length > 1 ? parts[0][0] + parts[1][0] : (parts[0] || '?').slice(0, 2)).toUpperCase();
 }
 
 function roundPoint(point) {
@@ -254,25 +230,19 @@ export default function BoardEditor({
   shareToken = null,
 }) {
   const navigate = useNavigate();
-  const [savedCamera] = useState(() => loadLocalCamera(initialBoard.id));
 
   const viewportRef = useRef(null);
   const worldRef = useRef(null);
   const draftHostRef = useRef(null);
   const laserHostRef = useRef(null);
-  const inkRef = useRef({ items: new Map(), raf: 0 });
+  const [ink] = useState(createInk);
   const guideHostRef = useRef(null);
   const groupBoxRef = useRef(null);
   const barRef = useRef(null);
   const zoomLabelRef = useRef(null);
   const hintRef = useRef(null);
-  const cameraSyncRef = useRef(0);
-  const cameraFrameRef = useRef(0);
-  const surfacePaintRef = useRef('');
-  const wheelRef = useRef(() => {});
   const [store] = useState(() => createBoardStore(initialBoard.objects || []));
   const [motion] = useState(() => createMotion());
-  const cameraRef = useRef(savedCamera || DEFAULT_CAMERA);
   const titleRef = useRef(boardTitle(initialBoard.title));
   const boardIdRef = useRef(initialBoard.id);
   const sentRef = useRef(initialBoard.objects || []);
@@ -325,10 +295,6 @@ export default function BoardEditor({
   const imagePointRef = useRef(null);
   const noticeTimerRef = useRef(0);
 
-  const [camera, setCamera] = useState(savedCamera || DEFAULT_CAMERA);
-  const [viewSize, setViewSize] = useState({ w: 0, h: 0 });
-  const renderedRectRef = useRef(null);
-  const cullFollowRef = useRef(false);
   const [title, setTitle] = useState(boardTitle(initialBoard.title));
   const [tool, setTool] = useState('select');
   const [selectedIds, setSelectedIds] = useState([]);
@@ -344,7 +310,7 @@ export default function BoardEditor({
   const [surfaceOpen, setSurfaceOpen] = useState(false);
   const [sidePane, setSidePane] = useState(null);
   const [keptPanes, setKeptPanes] = useState({ theory: false, tasks: false, students: false });
-  const sideStudentsRef = useRef(initialBoard.studentIds || EMPTY_STUDENTS);
+  const [sideStudents] = useState(() => initialBoard.studentIds || EMPTY_STUDENTS);
   const [cursorsOn, setCursorsOn] = useState(true);
   const [shareAccess, setShareAccess] = useState(initialBoard.shareAccess || 'off');
   const [shareTokenState, setShareTokenState] = useState(initialBoard.shareToken || null);
@@ -352,6 +318,21 @@ export default function BoardEditor({
   const theoryOpen = sidePane !== null;
   const [surface, setSurface] = useState(() => readSurface(initialBoard.objects));
   const surfaceRef = useRef(surface);
+  const isDragging = useCallback(() => Boolean(dragRef.current), []);
+  const paintCameraOverlays = useCallback(() => {
+    liveRef.current.paintSelectionUi?.();
+    liveRef.current.paintPeerCursors?.();
+  }, []);
+  const cam = useBoardCamera({
+    boardId: initialBoard.id,
+    viewportRef,
+    worldRef,
+    zoomLabelRef,
+    surfaceRef,
+    isDragging,
+    onPaint: paintCameraOverlays,
+  });
+  const { camera, viewSize, cameraRef } = cam;
   const [series, setSeries] = useState([]);
   const [editingPageId, setEditingPageId] = useState(null);
   const [editingPageTitle, setEditingPageTitle] = useState('');
@@ -392,7 +373,7 @@ export default function BoardEditor({
   function applySurface(next) {
     surfaceRef.current = next;
     setSurface(next);
-    paintSurface(cameraRef.current);
+    cam.paintSurface(cameraRef.current);
     if (readOnlyRef.current) return;
     const props = { system: SURFACE_MARK, text: '', color: next.color, grid: next.grid };
     const existing = store.get().find(isSurfaceMeta);
@@ -511,101 +492,8 @@ export default function BoardEditor({
   }
 
   function showLaser(message) {
-    const host = laserHostRef.current;
-    const points = Array.isArray(message?.points) ? message.points : [];
-    if (!host || points.length < 2) return;
-    if (message.clientId && message.clientId === clientIdRef.current) return;
-    const origin = points[0];
-    const wrap = document.createElement('div');
-    wrap.style.position = 'absolute';
-    wrap.style.left = `${origin.x}px`;
-    wrap.style.top = `${origin.y}px`;
-    wrap.style.width = '12px';
-    wrap.style.height = '12px';
-    wrap.style.overflow = 'visible';
-    wrap.style.pointerEvents = 'none';
-    wrap.style.opacity = '1';
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '12');
-    svg.setAttribute('height', '12');
-    svg.style.display = 'block';
-    svg.style.overflow = 'visible';
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    const local = points.map((point) => ({ x: Number(point.x) - origin.x, y: Number(point.y) - origin.y }));
-    path.setAttribute('d', smoothPath(local.slice(0, 2)));
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', message.color || LASER_COLOR);
-    path.setAttribute('stroke-width', String(message.width || LASER_WIDTH));
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(path);
-    wrap.appendChild(svg);
-    host.appendChild(wrap);
-    const drawMs = Math.min(1600, Math.max(400, local.length * 6));
-    const fadeMs = Math.max(1, Number(message.fadeMs) || LASER_FADE_MS);
-    let started = 0;
-    const tick = (now) => {
-      if (!wrap.isConnected) return;
-      if (!started) started = now;
-      const elapsed = now - started;
-      if (elapsed < drawMs) {
-        const count = Math.max(2, Math.ceil(local.length * (elapsed / drawMs)));
-        path.setAttribute('d', smoothPath(local.slice(0, count)));
-        requestAnimationFrame(tick);
-        return;
-      }
-      path.setAttribute('d', smoothPath(local));
-      const fade = Math.min(1, (elapsed - drawMs) / fadeMs);
-      wrap.style.opacity = String(1 - fade);
-      if (fade < 1) requestAnimationFrame(tick);
-      else wrap.remove();
-    };
-    requestAnimationFrame(tick);
-  }
-
-  function paintInk(now) {
-    const ink = inkRef.current;
-    const viewport = viewportRef.current;
-    let alive = false;
-    ink.items.forEach((item, id) => {
-      const path = viewport?.querySelector(`[data-object="${CSS.escape(id)}"] path`);
-      if (!path) {
-        // Штрих ещё не отрисован или ушёл за экран: ждём недолго и бросаем анимацию.
-        item.missing = (item.missing || 0) + 1;
-        if (item.missing > 120) ink.items.delete(id);
-        else alive = true;
-        return;
-      }
-      const length = path.getTotalLength();
-      if (!length) {
-        alive = true;
-        return;
-      }
-      if (!item.duration) item.duration = Math.min(4000, Math.max(280, (length / INK_SPEED) * 1000));
-      if (!item.at) item.at = now;
-      const progress = Math.min(1, (now - item.at) / item.duration);
-      path.style.strokeDasharray = String(length);
-      path.style.strokeDashoffset = String(length * (1 - progress));
-      if (progress < 1) alive = true;
-      else {
-        path.style.strokeDasharray = '';
-        path.style.strokeDashoffset = '';
-        ink.items.delete(id);
-      }
-    });
-    return alive;
-  }
-
-  function startInk(id) {
-    if (!id) return;
-    const ink = inkRef.current;
-    ink.items.set(id, { at: 0 });
-    if (ink.raf) return;
-    const tick = (now) => {
-      ink.last = now;
-      ink.raf = paintInk(now) ? requestAnimationFrame(tick) : 0;
-    };
-    ink.raf = requestAnimationFrame(tick);
+    if (message?.clientId && message.clientId === clientIdRef.current) return;
+    playLaser(laserHostRef.current, message);
   }
 
   function onAckObject(obj) {
@@ -662,7 +550,7 @@ export default function BoardEditor({
       lastCursorRef.current = performance.now();
       const client = pointerClientRef.current;
       if (!client || !viewportRef.current) return;
-      const world = clientToWorld(client.x, client.y);
+      const world = cam.clientToWorld(client.x, client.y);
       if (!world) return;
       socket.cursor(Math.round(world.x), Math.round(world.y));
     };
@@ -686,7 +574,7 @@ export default function BoardEditor({
   }
 
   function placeTheoryBlock(payload) {
-    const point = viewportCenterWorld();
+    const point = cam.centerWorld();
     if (!point) return;
     if (payload?.kind === 'geogebra') {
       const height = Math.max(220, parseInt(payload.height, 10) || 400);
@@ -712,7 +600,7 @@ export default function BoardEditor({
       const viewport = viewportRef.current;
       if (!viewport) return;
       const rect = viewport.getBoundingClientRect();
-      const origin = clientToWorld(rect.left + 16, rect.top + 96);
+      const origin = cam.clientToWorld(rect.left + 16, rect.top + 96);
       const obj = createObject('text', {
         x: origin.x,
         y: origin.y,
@@ -745,7 +633,7 @@ export default function BoardEditor({
 
   function placeTasks(items, source) {
     if (!Array.isArray(items) || !items.length) return;
-    const point = viewportCenterWorld();
+    const point = cam.centerWorld();
     let y = point.y - 160;
     const list = items.map(({ task, number }) => {
       const teacherOnly = {};
@@ -956,66 +844,6 @@ export default function BoardEditor({
     bar.style.visibility = 'visible';
   }
 
-  function paintSurface(cam) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const look = surfaceRef.current || DEFAULT_SURFACE;
-    const zoom = cam?.zoom || 1;
-    const step = 28 * zoom;
-    const line = look.color === '#2c2c2e' ? 'rgba(255,255,255,0.28)' : 'rgba(120, 132, 148, 0.45)';
-    // Картинку сетки пересобираем только при смене вида или масштаба, при сдвиге — только позицию.
-    const key = `${look.color}|${look.grid}|${step}`;
-    if (surfacePaintRef.current !== key) {
-      surfacePaintRef.current = key;
-      viewport.style.backgroundColor = look.color;
-      if (look.grid === 'empty') {
-        viewport.style.backgroundImage = 'none';
-      } else if (look.grid === 'rule') {
-        viewport.style.backgroundImage = `linear-gradient(to bottom, transparent ${step - 1}px, ${line} ${step - 1}px)`;
-        viewport.style.backgroundSize = `100% ${step}px`;
-      } else {
-        viewport.style.backgroundImage = `linear-gradient(to right, ${line} 1px, transparent 1px), linear-gradient(to bottom, ${line} 1px, transparent 1px)`;
-        viewport.style.backgroundSize = `${step}px ${step}px`;
-      }
-    }
-    if (look.grid === 'rule') viewport.style.backgroundPosition = `0px ${cam.y}px`;
-    else if (look.grid === 'cell') viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
-  }
-
-  // Камера меняется на каждое событие колеса и указателя, а красится раз в кадр.
-  function paintCamera(cam) {
-    cameraRef.current = cam;
-    if (cameraFrameRef.current) return;
-    cameraFrameRef.current = requestAnimationFrame(() => {
-      cameraFrameRef.current = 0;
-      paintCameraNow();
-    });
-  }
-
-  function paintCameraNow() {
-    if (cameraFrameRef.current) {
-      cancelAnimationFrame(cameraFrameRef.current);
-      cameraFrameRef.current = 0;
-    }
-    const cam = cameraRef.current;
-    const world = worldRef.current;
-    if (world) {
-      world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})`;
-    }
-    const viewport = viewportRef.current;
-    if (viewport) {
-      // Ручки, обводки и плашки держат экранный размер через одну переменную, без обхода DOM.
-      viewport.style.setProperty('--inv-zoom', String(1 / cam.zoom));
-      paintSurface(cam);
-    }
-    if (zoomLabelRef.current) {
-      zoomLabelRef.current.textContent = `${Math.round(cam.zoom * 100)}%`;
-    }
-    paintSelectionUi();
-    paintPeerCursors();
-    liveRef.current.followCulling?.(cam);
-  }
-
   function live(next) {
     store.set(next);
     scheduleSend();
@@ -1045,39 +873,7 @@ export default function BoardEditor({
 
   function publishGesture() {
     store.flush();
-    const cam = cameraRef.current;
-    setCamera((prev) => (
-      prev.x === cam.x && prev.y === cam.y && prev.zoom === cam.zoom ? prev : cam
-    ));
-    saveLocalCamera(boardIdRef.current, cam);
-  }
-
-  // Камеру в состояние React пишем после жеста, но если экран уехал за отрисованную
-  // полосу, перерисовываем сразу — иначе на краю появится пустота.
-  function followCulling(cam) {
-    const rect = renderedRectRef.current;
-    if (!rect || cullFollowRef.current) return;
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const w = viewport.clientWidth / cam.zoom;
-    const h = viewport.clientHeight / cam.zoom;
-    const x = -cam.x / cam.zoom;
-    const y = -cam.y / cam.zoom;
-    const inside = x >= rect.x && y >= rect.y && x + w <= rect.x + rect.w && y + h <= rect.y + rect.h;
-    if (inside && Math.abs(cam.zoom / rect.zoom - 1) < 0.5) return;
-    cullFollowRef.current = true;
-    setCamera({ ...cam });
-  }
-
-  function scheduleCameraCommit() {
-    window.clearTimeout(cameraSyncRef.current);
-    cameraSyncRef.current = window.setTimeout(() => {
-      if (dragRef.current) {
-        scheduleCameraCommit();
-        return;
-      }
-      publishGesture();
-    }, 120);
+    cam.publish();
   }
 
   function paintCursor() {
@@ -1097,28 +893,7 @@ export default function BoardEditor({
   }
 
   function paintGuides(guides) {
-    const host = guideHostRef.current;
-    if (!host) return;
-    host.replaceChildren();
-    if (!guides?.length) return;
-    const thickness = 1 / cameraRef.current.zoom;
-    guides.forEach((guide) => {
-      const line = document.createElement('div');
-      line.className = 'pointer-events-none absolute';
-      line.style.background = '#f43f5e';
-      if (guide.axis === 'x') {
-        line.style.left = `${guide.at - thickness / 2}px`;
-        line.style.top = `${guide.from}px`;
-        line.style.width = `${thickness}px`;
-        line.style.height = `${guide.to - guide.from}px`;
-      } else {
-        line.style.left = `${guide.from}px`;
-        line.style.top = `${guide.at - thickness / 2}px`;
-        line.style.width = `${guide.to - guide.from}px`;
-        line.style.height = `${thickness}px`;
-      }
-      host.appendChild(line);
-    });
+    renderGuides(guideHostRef.current, guides, cameraRef.current.zoom);
   }
 
   function flushHeldLink() {
@@ -1130,215 +905,20 @@ export default function BoardEditor({
 
   function paintDraft(draft) {
     draftRef.current = draft;
-    const host = draftHostRef.current;
-    if (!host) return;
-    if (draft?.kind === 'pen' && draft.points.length) {
-      const origin = draft.origin || draft.points[0];
-      const wrap = host.firstChild;
-      const path = wrap?.dataset?.pen === `${origin.x},${origin.y}` ? wrap.querySelector('path') : null;
-      if (path) {
-        path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }))));
-        path.setAttribute('stroke', draft.color);
-        path.setAttribute('stroke-width', draft.width);
-        return;
-      }
-    }
-    host.replaceChildren();
-    if (!draft) return;
-    const inv = 1 / cameraRef.current.zoom;
-    if (draft.kind === 'marquee') {
-      const node = document.createElement('div');
-      node.className = 'pointer-events-none absolute';
-      node.style.left = `${draft.x}px`;
-      node.style.top = `${draft.y}px`;
-      node.style.width = `${draft.w}px`;
-      node.style.height = `${draft.h}px`;
-      node.style.border = `${inv}px solid ${SELECTION_COLOR}`;
-      node.style.background = 'rgba(66, 98, 255, 0.08)';
-      host.appendChild(node);
-      return;
-    }
-    if (draft.kind === 'chain') {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('width', '1');
-      svg.setAttribute('height', '1');
-      svg.style.position = 'absolute';
-      svg.style.left = '0';
-      svg.style.top = '0';
-      svg.style.overflow = 'visible';
-      const addLine = (x1, y1, x2, y2, dashed) => {
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1);
-        line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2);
-        line.setAttribute('y2', y2);
-        line.setAttribute('stroke', draft.stroke || '#18181b');
-        line.setAttribute('stroke-width', '2');
-        line.setAttribute('stroke-linecap', 'round');
-        if (dashed) line.setAttribute('stroke-dasharray', '6 4');
-        svg.appendChild(line);
-      };
-      draft.points.forEach((point, index) => {
-        if (index) addLine(draft.points[index - 1].x, draft.points[index - 1].y, point.x, point.y, false);
-      });
-      if (draft.closing && draft.points.length) {
-        const last = draft.points[draft.points.length - 1];
-        addLine(last.x, last.y, draft.points[0].x, draft.points[0].y, false);
-      } else if (draft.hover && draft.points.length) {
-        const last = draft.points[draft.points.length - 1];
-        addLine(last.x, last.y, draft.hover.x, draft.hover.y, false);
-      }
-      if (draft.guide) addLine(draft.guide.x1, draft.guide.y1, draft.guide.x2, draft.guide.y2, true);
-      draft.points.forEach((point, index) => {
-        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('cx', point.x);
-        dot.setAttribute('cy', point.y);
-        dot.setAttribute('r', index === 0 ? '3.5' : '2.5');
-        dot.setAttribute('fill', '#18181b');
-        svg.appendChild(dot);
-      });
-      host.appendChild(svg);
-      return;
-    }
-    if (draft.kind === 'shape') {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
-      svg.style.position = 'absolute';
-      svg.setAttribute('viewBox', '0 0 100 100');
-      svg.setAttribute('preserveAspectRatio', 'none');
-      svg.style.left = `${draft.x}px`;
-      svg.style.top = `${draft.y}px`;
-      svg.style.width = `${Math.max(draft.w, 1)}px`;
-      svg.style.height = `${Math.max(draft.h, 1)}px`;
-      svg.style.opacity = '0.85';
-      appendFigures(svg, shapeFigures(draft.shape), { fill: draft.fill, stroke: draft.stroke });
-      host.appendChild(svg);
-      return;
-    }
-    if (draft.kind === 'pen' && draft.points.length) {
-      // Та же схема, что у зрителя: рамка в первой точке, точки от неё. Рамка по bbox раздувает холст и сдвигает уже нарисованное.
-      const origin = draft.origin || draft.points[0];
-      const wrap = document.createElement('div');
-      wrap.dataset.pen = `${origin.x},${origin.y}`;
-      wrap.style.position = 'absolute';
-      wrap.style.left = `${origin.x}px`;
-      wrap.style.top = `${origin.y}px`;
-      wrap.style.width = '12px';
-      wrap.style.height = '12px';
-      wrap.style.overflow = 'visible';
-      wrap.style.pointerEvents = 'none';
-      const pen = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      pen.setAttribute('width', '12');
-      pen.setAttribute('height', '12');
-      pen.style.display = 'block';
-      pen.style.overflow = 'visible';
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }))));
-      path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', draft.color);
-      path.setAttribute('stroke-width', draft.width);
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
-      pen.appendChild(path);
-      wrap.appendChild(pen);
-      host.appendChild(wrap);
-      return;
-    }
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
-    svg.style.position = 'absolute';
-    if (draft.kind === 'arrow') {
-      const left = Math.min(draft.x1, draft.x2);
-      const top = Math.min(draft.y1, draft.y2);
-      svg.style.left = `${left}px`;
-      svg.style.top = `${top}px`;
-      svg.setAttribute('width', Math.max(Math.abs(draft.x2 - draft.x1), 1));
-      svg.setAttribute('height', Math.max(Math.abs(draft.y2 - draft.y1), 1));
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', draft.x1 - left);
-      line.setAttribute('y1', draft.y1 - top);
-      line.setAttribute('x2', draft.x2 - left);
-      line.setAttribute('y2', draft.y2 - top);
-      line.setAttribute('stroke', draft.color);
-      line.setAttribute('stroke-width', draft.width);
-      line.setAttribute('stroke-linecap', 'round');
-      svg.appendChild(line);
-      if (draft.guide) {
-        const guide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        guide.setAttribute('x1', draft.guide.x1 - left);
-        guide.setAttribute('y1', draft.guide.y1 - top);
-        guide.setAttribute('x2', draft.guide.x2 - left);
-        guide.setAttribute('y2', draft.guide.y2 - top);
-        guide.setAttribute('stroke', draft.color);
-        guide.setAttribute('stroke-width', '1.5');
-        guide.setAttribute('stroke-dasharray', '6 4');
-        svg.appendChild(guide);
-      }
-    }
-    host.appendChild(svg);
+    renderDraft(draftHostRef.current, draft, cameraRef.current.zoom);
   }
 
   function toWorld(event) {
-    return clientToWorld(event.clientX, event.clientY);
-  }
-
-  function clientToWorld(clientX, clientY) {
-    const viewport = viewportRef.current;
-    if (!viewport) return null;
-    const rect = viewport.getBoundingClientRect();
-    const cam = cameraRef.current;
-    return {
-      x: (clientX - rect.left - cam.x) / cam.zoom,
-      y: (clientY - rect.top - cam.y) / cam.zoom,
-    };
-  }
-
-  function viewportCenterWorld() {
-    const viewport = viewportRef.current;
-    if (!viewport) return null;
-    const rect = viewport.getBoundingClientRect();
-    return clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return cam.clientToWorld(event.clientX, event.clientY);
   }
 
   function pasteTarget() {
     const client = pointerClientRef.current;
-    return client ? clientToWorld(client.x, client.y) : viewportCenterWorld();
-  }
-
-  function zoomAt(nextZoom, clientX, clientY) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    const cam = cameraRef.current;
-    const zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
-    const px = clientX - rect.left;
-    const py = clientY - rect.top;
-    const worldX = (px - cam.x) / cam.zoom;
-    const worldY = (py - cam.y) / cam.zoom;
-    paintCamera({ zoom, x: px - worldX * zoom, y: py - worldY * zoom });
-    scheduleCameraCommit();
-  }
-
-  function zoomBy(factor) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    zoomAt(cameraRef.current.zoom * factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
-  }
-
-  function zoomTo(zoom) {
-    zoomBy(zoom / cameraRef.current.zoom);
+    return client ? cam.clientToWorld(client.x, client.y) : cam.centerWorld();
   }
 
   function fitAll() {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const bounds = boundsOf(canvasList());
-    const cam = bounds
-      ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 2 })
-      : { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2, zoom: 1 };
-    paintCamera(cam);
-    scheduleCameraCommit();
+    cam.fit(boundsOf(canvasList()), 2);
   }
 
   function changedGeoBase64(obj, base64) {
@@ -1553,14 +1133,7 @@ export default function BoardEditor({
         },
         onPull: (message) => {
           if (!message?.camera || message.clientId === clientIdRef.current) return;
-          const next = {
-            x: Number(message.camera.x) || 0,
-            y: Number(message.camera.y) || 0,
-            zoom: clamp(Number(message.camera.zoom) || 1, MIN_ZOOM, MAX_ZOOM),
-          };
-          paintCamera(next);
-          setCamera(next);
-          saveLocalCamera(boardIdRef.current, next);
+          liveRef.current.pullCamera?.(message.camera);
           notify(`${message.name || 'Участник'} притянул вас к своему виду`);
         },
         onJoin: (peer) => {
@@ -1599,26 +1172,24 @@ export default function BoardEditor({
     surfaceRef.current = next;
     setSurface(next);
     liveRef.current.paintSurface?.(cameraRef.current);
-  }), [store]);
+  }), [store, cameraRef]);
 
   useEffect(() => {
     mountedRef.current = true;
-    const ink = inkRef.current;
+    ink.attach(viewportRef.current);
     return () => {
       mountedRef.current = false;
       window.clearTimeout(noticeTimerRef.current);
-      window.clearTimeout(cameraSyncRef.current);
       window.clearTimeout(geoTimerRef.current);
       window.clearTimeout(geoXmlTimerRef.current);
       window.clearTimeout(cursorTimerRef.current);
-      cancelAnimationFrame(cameraFrameRef.current);
       setPenActive(false);
-      cancelAnimationFrame(ink.raf);
+      ink.stop();
       dragCleanupRef.current?.();
       motion.dispose();
       store.dispose();
     };
-  }, [motion, store]);
+  }, [ink, motion, store]);
 
   // Любая правка документа (своя или после отмены) уходит в сеть через общий diff.
   useEffect(() => store.subscribe(() => liveRef.current.scheduleSend?.()), [store]);
@@ -1627,24 +1198,9 @@ export default function BoardEditor({
     scheduleSend();
   }, [title]);
 
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return undefined;
-    const onWheel = (event) => wheelRef.current(event);
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-
   useLayoutEffect(() => {
-    if (savedCamera) return;
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const bounds = boundsOf(canvasList());
-    const cam = bounds
-      ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 1 })
-      : { x: Math.round(viewport.clientWidth / 2), y: Math.round(viewport.clientHeight / 2), zoom: 1 };
-    paintCamera(cam);
-    scheduleCameraCommit();
+    if (cam.saved) return;
+    cam.fit(boundsOf(canvasList()), 1);
     // Камера подбирается один раз при открытии доски.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1689,7 +1245,7 @@ export default function BoardEditor({
       movePeerToStroke(message?.clientId, op.object.id);
       const current = store.get().find((item) => item.id === op.object.id);
       const incoming = op.object.props?.points?.length || 0;
-      if (current && (current.props?.points?.length || 0) === incoming) startInk(op.object.id);
+      if (current && (current.props?.points?.length || 0) === incoming) ink.start(op.object.id);
     }
   }
 
@@ -2031,12 +1587,8 @@ export default function BoardEditor({
     }
   }
 
-  const sideActionsRef = useRef({});
-  sideActionsRef.current.theory = placeTheoryBlock;
-  sideActionsRef.current.tasks = placeTasks;
-  const copyTheoryToBoard = useCallback((payload) => sideActionsRef.current.theory?.(payload), []);
-  const copyTasksToBoard = useCallback((payload) => sideActionsRef.current.tasks?.(payload), []);
-  const isDragging = useCallback(() => Boolean(dragRef.current), []);
+  const copyTheoryToBoard = useCallback((payload) => actionsRef.current.placeTheoryBlock?.(payload), []);
+  const copyTasksToBoard = useCallback((payload) => actionsRef.current.placeTasks?.(payload), []);
   // Колбэки объектов не меняются между рендерами: они зовут свежие функции через ref-ы.
   const objectCallbacks = useMemo(() => ({
     onChangeText: (...args) => actionsRef.current.changeText?.(...args),
@@ -2072,104 +1624,13 @@ export default function BoardEditor({
   useLayoutEffect(() => {
     toolRef.current = tool;
     if (dragRef.current?.kind === 'pen') {
-      if (inkRef.current.last) paintInk(inkRef.current.last);
+      ink.repaint();
       return;
     }
-    paintCameraNow();
+    cam.paintNow();
     paintCursor();
     if (draftRef.current && draftRef.current.kind !== 'pen' && dragRef.current?.kind !== 'pen') paintDraft(draftRef.current);
-    if (inkRef.current.last) paintInk(inkRef.current.last);
-  });
-
-  useLayoutEffect(() => {
-    renderedRectRef.current = cullingRect(camera, viewSize);
-    cullFollowRef.current = false;
-  });
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el || typeof ResizeObserver !== 'function') return undefined;
-    const observer = new ResizeObserver(([entry]) => {
-      const w = Math.round(entry.contentRect.width);
-      const h = Math.round(entry.contentRect.height);
-      setViewSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    titleRef.current = title;
-    editingIdRef.current = editingId;
-    selectedIdsRef.current = selectedIds;
-    toolRef.current = tool;
-    styleRef.current = style;
-    liveRef.current = {
-      flushOps,
-      scheduleSend,
-      paintSurface,
-      geoChanged: (id, info) => {
-        if (editingIdRef.current !== id || readOnlyRef.current) return;
-        scheduleGeoSave(id, info?.settled ? 0 : info?.moving ? GEO_XML_MOVING_MS : GEO_XML_MS);
-      },
-      saveGeoXml,
-      saveGeoChanges,
-      geoLayoutChanged,
-      restackTasks,
-      measureObject,
-      onSnapshot,
-      onAckObject,
-      onOpError,
-      applyRemote,
-      onClosed,
-      paintPeerCursors,
-      followCulling,
-      showLaser,
-      onGeocam: (message) => geoCamInRef.current.get(message.id)?.(message),
-    };
-    actionsRef.current = {
-      changeText,
-      toggleGeo,
-      changeGeoControls,
-      undo,
-      redo,
-      deleteSelected,
-      commitEdit,
-      beginEdit,
-      duplicateSelected,
-      selectAll,
-      toggleLock,
-      reorderSelected,
-      nudge,
-      styleKeys,
-      arrowSide,
-      finishChain,
-      fitAll,
-      zoomTo,
-      pasteObjects,
-      pasteText,
-      insertImages,
-      pasteTarget,
-      pinchMove,
-      endPinch,
-      selectedList,
-    };
-    readOnlyRef.current = readOnly;
-    audienceRef.current = audience;
-    wheelRef.current = (event) => {
-      if (!event.isTrusted) return;
-      if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
-      event.preventDefault();
-      const cam = cameraRef.current;
-      const scale = event.deltaMode === 1 ? 16 : 1;
-      if (event.ctrlKey || event.metaKey) {
-        const delta = clamp(event.deltaY * scale, -60, 60);
-        zoomAt(cam.zoom * Math.exp(-delta * 0.006), event.clientX, event.clientY);
-        return;
-      }
-      paintCamera({ ...cam, x: cam.x - event.deltaX * scale, y: cam.y - event.deltaY * scale });
-      scheduleCameraCommit();
-    };
+    ink.repaint();
   });
 
   useEffect(() => {
@@ -2412,7 +1873,7 @@ export default function BoardEditor({
     const zoom = clamp(drag.camera.zoom * (dist / drag.dist), MIN_ZOOM, MAX_ZOOM);
     const worldX = (drag.mid.x - drag.camera.x) / drag.camera.zoom;
     const worldY = (drag.mid.y - drag.camera.y) / drag.camera.zoom;
-    paintCamera({ zoom, x: mid.x - worldX * zoom, y: mid.y - worldY * zoom });
+    cam.paint({ zoom, x: mid.x - worldX * zoom, y: mid.y - worldY * zoom });
   }
 
   function endPinch() {
@@ -2460,7 +1921,7 @@ export default function BoardEditor({
     dragRef.current = null;
     if (drag?.kind === 'pen') setPenActive(false);
     flushHeldLink();
-    window.clearTimeout(cameraSyncRef.current);
+    cam.cancelCommit();
     if (drag?.kind !== 'pen') paintDraft(null);
     paintGuides(null);
     paintCursor();
@@ -2559,7 +2020,7 @@ export default function BoardEditor({
     else sendCursor(event.clientX, event.clientY);
 
     if (drag.kind === 'pan') {
-      paintCamera({
+      cam.paint({
         ...cameraRef.current,
         x: drag.camera.x + (event.clientX - drag.client.x),
         y: drag.camera.y + (event.clientY - drag.client.y),
@@ -2993,6 +2454,70 @@ export default function BoardEditor({
     };
   }, [initialBoard.id, audience]);
 
+  // Свежие версии обработчиков для подписок, таймеров и колбэков объектов.
+  useEffect(() => {
+    titleRef.current = title;
+    editingIdRef.current = editingId;
+    selectedIdsRef.current = selectedIds;
+    toolRef.current = tool;
+    styleRef.current = style;
+    liveRef.current = {
+      flushOps,
+      scheduleSend,
+      paintSurface: cam.paintSurface,
+      pullCamera: cam.jumpTo,
+      paintSelectionUi,
+      geoChanged: (id, info) => {
+        if (editingIdRef.current !== id || readOnlyRef.current) return;
+        scheduleGeoSave(id, info?.settled ? 0 : info?.moving ? GEO_XML_MOVING_MS : GEO_XML_MS);
+      },
+      saveGeoXml,
+      saveGeoChanges,
+      geoLayoutChanged,
+      restackTasks,
+      measureObject,
+      onSnapshot,
+      onAckObject,
+      onOpError,
+      applyRemote,
+      onClosed,
+      paintPeerCursors,
+      showLaser,
+      onGeocam: (message) => geoCamInRef.current.get(message.id)?.(message),
+    };
+    actionsRef.current = {
+      placeTheoryBlock,
+      placeTasks,
+      changeText,
+      toggleGeo,
+      changeGeoControls,
+      undo,
+      redo,
+      deleteSelected,
+      commitEdit,
+      beginEdit,
+      duplicateSelected,
+      selectAll,
+      toggleLock,
+      reorderSelected,
+      nudge,
+      styleKeys,
+      arrowSide,
+      finishChain,
+      fitAll,
+      zoomTo: cam.zoomTo,
+      pasteObjects,
+      pasteText,
+      insertImages,
+      pasteTarget,
+      pinchMove,
+      endPinch,
+      selectedList,
+    };
+    readOnlyRef.current = readOnly;
+    audienceRef.current = audience;
+  });
+
   const pages = series.length ? series : [{
     id: initialBoard.id,
     title: initialBoard.title,
@@ -3209,17 +2734,17 @@ export default function BoardEditor({
             <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={18} /></IconButton>
           </div>
           <div className="hidden items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm min-[720px]:flex dark:border-zinc-800 dark:bg-zinc-950/95">
-            <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
+            <IconButton label="Уменьшить" onClick={() => cam.zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
             <button
               ref={zoomLabelRef}
               type="button"
               title="100% (Shift+0)"
-              onClick={() => zoomTo(1)}
+              onClick={() => cam.zoomTo(1)}
               className="h-8 w-12 text-center text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-300"
             >
               {Math.round(camera.zoom * 100)}%
             </button>
-            <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={18} /></IconButton>
+            <IconButton label="Увеличить" onClick={() => cam.zoomBy(1.2)}><Plus size={18} /></IconButton>
             <IconButton label="Показать всё (Shift+1)" onClick={fitAll}><Maximize2 size={16} /></IconButton>
           </div>
         </div>
@@ -3374,455 +2899,11 @@ export default function BoardEditor({
           pane={sidePane}
           kept={keptPanes}
           groupId={initialBoard.groupId ?? null}
-          studentIds={sideStudentsRef.current}
+          studentIds={sideStudents}
           onTheory={copyTheoryToBoard}
           onTasks={copyTasksToBoard}
         />
       )}
-    </div>
-  );
-}
-
-const EMPTY_STUDENTS = [];
-
-const BoardSidePanes = memo(function BoardSidePanes({ pane, kept, groupId, studentIds, onTheory, onTasks }) {
-  if (!kept.theory && !kept.tasks && !kept.students) return null;
-  const open = pane != null;
-  return (
-    <aside
-      hidden={!open}
-      inert={!open}
-      className={`h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 [contain:layout_paint] dark:border-zinc-800 ${open ? 'hidden min-[720px]:block' : 'hidden'}`}
-    >
-      {kept.theory && (
-        <div className="h-full" hidden={pane !== 'theory'} inert={pane !== 'theory'}>
-          <BoardTheoryPane onCopy={onTheory} />
-        </div>
-      )}
-      {kept.tasks && (
-        <div className="h-full" hidden={pane !== 'tasks'} inert={pane !== 'tasks'}>
-          <BoardTasksPane onCopy={onTasks} />
-        </div>
-      )}
-      {kept.students && (
-        <div className="h-full" hidden={pane !== 'students'} inert={pane !== 'students'}>
-          <BoardStudentsPane groupId={groupId} studentIds={studentIds || EMPTY_STUDENTS} onCopy={onTasks} />
-        </div>
-      )}
-    </aside>
-  );
-});
-
-// Панель выделения подписана на выделенные объекты сама: при их правке не
-// перерисовывается весь редактор. Пока идёт жест, она скрыта и не обновляется.
-function SelectionBar({ store, selectedIds, editingId, frozen, onRendered, onToggleGeo, ...actions }) {
-  const selectObjects = useCallback((objects) => {
-    const ids = new Set(selectedIds);
-    return objects.filter((obj) => ids.has(obj.id));
-  }, [selectedIds]);
-  const isEqual = useCallback((a, b) => sameIdList(a, b) || frozen(), [frozen]);
-  const objects = useStoreSelector(store, selectObjects, isEqual);
-  useLayoutEffect(() => {
-    onRendered?.();
-  });
-  if (!objects.length) return null;
-  const first = objects[0];
-  const geoEditing = objects.length === 1 && editingId === first.id && first.type === 'geogebra';
-  return (
-    <SelectionToolbar
-      objects={objects}
-      geoEditing={geoEditing}
-      onToggleGeo={() => onToggleGeo(first.id)}
-      {...actions}
-    />
-  );
-}
-
-function ShareButton({ open, access, token, onToggle, onClose, onApply }) {
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
-  const link = token ? `${window.location.origin}/board/shared/${token}` : '';
-  async function apply(next, resetLink = false) {
-    setBusy(true);
-    setNote('');
-    try {
-      await onApply(next, resetLink);
-      setNote(resetLink ? 'Новая ссылка' : '');
-    } catch (error) {
-      setNote(boardErrorMessage(error, 'Не удалось изменить ссылку'));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        title="Ссылка на доску"
-        aria-pressed={open}
-        onClick={onToggle}
-        className={`flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/95 shadow-sm hover:bg-zinc-50 min-[720px]:h-8 dark:border-zinc-800 dark:bg-zinc-950/95 ${access === 'off' ? 'text-zinc-400' : 'text-zinc-800 dark:text-zinc-100'}`}
-      >
-        <Link2 size={16} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-11 z-50 w-72 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold">Ссылка</p>
-            <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"><X size={14} /></button>
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            {[['off', 'Выкл'], ['view', 'Смотреть'], ['edit', 'Править']].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                disabled={busy}
-                onClick={() => apply(id)}
-                className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${access === id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {access !== 'off' && link && (
-            <div className="mt-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => navigator.clipboard?.writeText(link).then(() => setNote('Ссылка скопирована')).catch(() => setNote(link))}
-                className="w-full truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-left text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-              >
-                {link}
-              </button>
-              <button type="button" disabled={busy} onClick={() => apply(access, true)} className="text-xs font-medium text-zinc-500 hover:text-zinc-800">
-                Новая ссылка, старая перестанет работать
-              </button>
-            </div>
-          )}
-          {note && <p className="mt-2 text-xs text-zinc-500">{note}</p>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LinkStatus({ link }) {
-  if (link.state !== 'offline') return null;
-  const base = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium';
-  const text = link.pending ? `Потеряно соединение · ${link.pending} в очереди` : 'Потеряно соединение';
-  return (
-    <span className={`${base} text-amber-600`} title="Правки отправятся после переподключения">
-      <WifiOff size={13} />
-      <span className="hidden sm:inline">{text}</span>
-    </span>
-  );
-}
-
-function PeerList({ peers, compact = false }) {
-  if (!peers.length) return null;
-  const shown = peers.slice(0, 4);
-  const rest = peers.length - shown.length;
-  return (
-    <div
-      className={`flex shrink-0 items-center ${compact ? 'pr-1' : 'rounded-2xl border border-zinc-200/80 bg-white/90 py-1 pl-1 pr-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90'}`}
-      title={peers.map(peerName).join(', ')}
-    >
-      <div className="flex -space-x-1.5">
-        {shown.map((peer) => (
-          <span
-            key={peer.clientId}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white ring-2 ring-white dark:ring-zinc-950"
-            style={{ background: peerColor(peer.clientId) }}
-          >
-            {initials(peerName(peer))}
-          </span>
-        ))}
-      </div>
-      {rest > 0 && <span className="ml-1.5 text-[11px] font-medium text-zinc-500">+{rest}</span>}
-    </div>
-  );
-}
-
-function IconButton({ label, onClick, disabled, className = '', children }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 min-[720px]:h-8 min-[720px]:w-8 dark:text-zinc-200 dark:hover:bg-zinc-900 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function StyleTray({ context, style, onStyle }) {
-  if (context === 'sticky') {
-    return (
-      <SwatchCard label="Цвет стикера">
-        <div className="flex flex-wrap gap-1.5">
-          {STICKY_COLORS.map((color) => (
-            <ColorDot
-              key={color.id}
-              color={color.bg}
-              label={color.label}
-              active={style.sticky === color.bg}
-              onClick={() => onStyle((prev) => ({ ...prev, sticky: color.bg }))}
-            />
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'text') {
-    return (
-      <SwatchCard label="Текст">
-        <div className="flex gap-1">
-          {TEXT_SIZES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, textSize: item.size }))}
-              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.textSize === item.size ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'laser') {
-    return (
-      <SwatchCard label="Указка">
-        <div className="flex flex-wrap gap-1.5">
-          {LASER_COLORS.map((color) => (
-            <ColorDot
-              key={color}
-              color={color}
-              label={color}
-              active={style.laserColor === color}
-              onClick={() => onStyle((prev) => ({ ...prev, laserColor: color }))}
-            />
-          ))}
-        </div>
-        <div className="mt-2 flex gap-1">
-          {LASER_WIDTHS.map((width) => (
-            <button
-              key={width}
-              type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, laserWidth: width }))}
-              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.laserWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-            >
-              {width}
-            </button>
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'pen' || context === 'eraser') {
-    return (
-      <SwatchCard label={context === 'eraser' ? 'Ластик стирает штрихи кисти' : 'Кисть'}>
-        {context === 'pen' && (
-          <>
-            <div className="flex flex-wrap gap-1.5">
-              {PEN_COLORS.map((color) => (
-                <ColorDot
-                  key={color}
-                  color={color}
-                  label={color}
-                  active={style.pen === color}
-                  onClick={() => onStyle((prev) => ({ ...prev, pen: color }))}
-                />
-              ))}
-            </div>
-            <div className="mt-2 flex gap-1">
-              {PEN_WIDTHS.map((width) => (
-                <button
-                  key={width}
-                  type="button"
-                  onClick={() => onStyle((prev) => ({ ...prev, penWidth: width }))}
-                  className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.penWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                >
-                  {width}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'shape') {
-    return (
-      <SwatchCard label="Стереометрия" wide>
-        <div className="max-h-64 space-y-2 overflow-y-auto">
-          {SHAPE_GROUPS.map((group) => (
-            <div key={group.id}>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{group.label}</p>
-              <div className="grid grid-cols-5 gap-1">
-                {group.kinds.map((kind) => (
-                  <button
-                    key={kind.id}
-                    type="button"
-                    aria-label={kind.label}
-                    title={kind.label}
-                    onClick={() => onStyle((prev) => ({ ...prev, shape: kind.id }))}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.shape === kind.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
-                  >
-                    <ShapeGlyph id={kind.id} size={16} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {SHAPE_FILLS.map((fill) => (
-            <ColorDot
-              key={fill.id}
-              color={fill.fill}
-              label={fill.label}
-              active={style.fill.fill === fill.fill}
-              onClick={() => onStyle((prev) => ({ ...prev, fill }))}
-            />
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'arrow') {
-    return (
-      <SwatchCard label="Отрезок">
-        <div className="flex flex-wrap gap-1.5">
-          {PEN_COLORS.map((color) => (
-            <ColorDot
-              key={color}
-              color={color}
-              label={color}
-              active={style.arrow === color}
-              onClick={() => onStyle((prev) => ({ ...prev, arrow: color }))}
-            />
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'image') {
-    return (
-      <SwatchCard label="Изображение" wide>
-        <p className="text-[11px] leading-snug text-zinc-500">
-          Клик по доске открывает файл. Ещё можно вставить картинку через Ctrl+V или перетащить её на холст.
-        </p>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'geogebra') {
-    return (
-      <SwatchCard label="GeoGebra" wide>
-        <div className="flex flex-col gap-1">
-          {GEOGEBRA_APPS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, appName: item.id, templateId: '' }))}
-              className={`rounded-lg px-2 py-1.5 text-left text-xs font-medium ${style.appName === item.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}
-            >
-              {item.title}
-            </button>
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  return null;
-}
-
-function SwatchCard({ label, children, wide = false }) {
-  return (
-    <div className={`${wide ? 'w-[min(100vw-1.5rem,18rem)]' : 'w-[min(100vw-1.5rem,15rem)]'} max-h-[38vh] overflow-y-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-sm min-[720px]:max-h-none ${wide ? 'min-[720px]:w-56' : 'min-[720px]:w-40'} dark:border-zinc-800 dark:bg-zinc-950/95`}>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function ColorDot({ color, label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={`h-5 w-5 rounded-full border ${active ? 'ring-2 ring-zinc-900 ring-offset-2 ring-offset-white dark:ring-white dark:ring-offset-zinc-950' : 'border-zinc-300 dark:border-zinc-700'}`}
-      style={color === 'none'
-        ? { background: 'linear-gradient(135deg, transparent 46%, currentColor 46%, currentColor 54%, transparent 54%)' }
-        : { background: color }}
-    />
-  );
-}
-
-function SurfacePanel({ surface, onChange, onClose }) {
-  const grids = [
-    { id: 'empty', label: 'Пустой' },
-    { id: 'cell', label: 'Клетка' },
-    { id: 'rule', label: 'Линейка' },
-  ];
-  return (
-    <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-lg min-[720px]:absolute min-[720px]:inset-x-auto min-[720px]:right-0 min-[720px]:top-11 min-[720px]:max-h-none min-[720px]:w-[22rem] dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Фон и сетка</p>
-        <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900">
-          <X size={16} />
-        </button>
-      </div>
-      <p className="mb-2 text-sm text-zinc-500">Цвет фона</p>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {SURFACE_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            aria-label={color}
-            onClick={() => onChange({ ...surface, color })}
-            className={`h-9 w-9 rounded-xl border ${surface.color === color ? 'border-sky-500 ring-2 ring-sky-200' : 'border-zinc-200 dark:border-zinc-700'}`}
-            style={{ background: color }}
-          />
-        ))}
-      </div>
-      <p className="mb-2 text-sm text-zinc-500">Тип сетки</p>
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        {grids.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onChange({ ...surface, grid: item.id })}
-            className={`rounded-xl border px-2 py-2 text-xs font-medium ${surface.grid === item.id ? 'border-sky-500 bg-sky-50 text-sky-900' : 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <div
-        className="h-28 rounded-xl border border-zinc-200"
-        style={{
-          backgroundColor: surface.color,
-          backgroundImage: surface.grid === 'cell'
-            ? 'linear-gradient(to right, rgba(120,132,148,0.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,132,148,0.45) 1px, transparent 1px)'
-            : surface.grid === 'rule'
-              ? 'linear-gradient(to bottom, transparent 15px, rgba(120,132,148,0.45) 15px)'
-              : 'none',
-          backgroundSize: surface.grid === 'rule' ? '100% 16px' : '20px 20px',
-        }}
-      />
     </div>
   );
 }
