@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, BarChart3, ChevronDown, ChevronRight, Flame, Inbox, RefreshCw } from 'lucide-react';
 import { ThemeToggle } from '../../shared/ui';
 import { fetchMyDetailedStats } from '../StudentDashboardPage/api';

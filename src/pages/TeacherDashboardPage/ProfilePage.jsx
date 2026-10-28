@@ -4,7 +4,7 @@ import { teacherApi } from '../../features/teacher/api';
 import { restoreSession, saveSession } from '../../shared/lib/session';
 import {
   PageShell, Sheet, IconWell, InlineNotice, formatApiDetail,
-  fieldClass, labelClass, primaryBtnClass, secondaryBtnClass,
+  fieldClass, labelClass, primaryBtnClass,
 } from '../../shared/ui';
 
 export default function ProfilePage() {

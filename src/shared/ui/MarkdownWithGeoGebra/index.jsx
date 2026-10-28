@@ -1,320 +1,43 @@
-import React, { useRef, useEffect, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import 'katex/dist/katex.min.css';
+import GeoGebraApplet from '../../geogebra/GeoGebraApplet';
+import { materialIdOf, toGeoGebraAppName } from '../../geogebra/params';
 
-// Вспомогательные функции
-function hexToRgb(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-    : [0, 0, 0];
-}
-
-const APP_NAMES = new Set(['geometry', 'graphing', '3d']);
-
-export function toGeoGebraAppName(app) {
-  const name = String(app || 'geometry').toLowerCase();
-  return APP_NAMES.has(name) ? name : 'geometry';
-}
-
-function loadGgbScript(onReady) {
-  const tryStart = () => {
-    if (typeof window.GGBApplet === 'function') {
-      onReady();
-      return true;
-    }
-    return false;
-  };
-  if (tryStart()) return;
-
-  let tries = 0;
-  const poll = setInterval(() => {
-    if (tryStart() || ++tries > 200) clearInterval(poll);
-  }, 50);
-
-  const existing = document.getElementById('ggb-api-script');
-  if (existing) {
-    existing.addEventListener('load', tryStart, { once: true });
-    return;
-  }
-  const script = document.createElement('script');
-  script.src = 'https://www.geogebra.org/apps/deployggb.js';
-  script.id = 'ggb-api-script';
-  script.onload = tryStart;
-  document.head.appendChild(script);
-}
-
-function runEvalCommands(api, commands) {
-  (commands || []).forEach((cmd) => {
-    const line = String(cmd || '').trim();
-    if (!line) return;
-    try {
-      api.evalCommand(line);
-    } catch (err) {
-      console.error(`GeoGebra command error "${line}":`, err);
-    }
-  });
-}
-
-/** Апплет для AI hint/solve: одна фигура, команды только в appletOnLoad */
-export function GeoGebraFigureApplet({ figure }) {
-  const boxRef = useRef(null);
-  const uid = useId().replace(/:/g, '');
-  const height = Number(figure.height) || 400;
-  const appName = toGeoGebraAppName(figure.app);
+/** Апплет для AI hint/solve: одна фигура, команды выполняются после загрузки. */
+function GeoGebraFigureApplet({ figure }) {
   const commands = (
     figure.commands?.length
       ? figure.commands
       : String(figure.setup || '').split('\n')
   ).filter((c) => String(c).trim());
-
-  useEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    let cancelled = false;
-
-    const mount = () => {
-      if (cancelled || !boxRef.current || typeof window.GGBApplet !== 'function') return;
-      const box = boxRef.current;
-      box.innerHTML = '';
-      const applet = new window.GGBApplet(
-        {
-          appName,
-          id: `ggb${uid}`,
-          width: Math.max(box.clientWidth || 640, 320),
-          height,
-          language: 'ru',
-          showMenuBar: false,
-          showAlgebraInput: false,
-          showToolBar: true,
-          showResetIcon: true,
-          enable3d: appName === '3d',
-          scale: 1,
-          allowUpscale: false,
-          appletOnLoad(api) {
-            for (const cmd of commands) api.evalCommand(cmd);
-          },
-        },
-        true
-      );
-      applet.inject(box);
-    };
-
-    if (typeof window.GGBApplet === 'function') mount();
-    else loadGgbScript(mount);
-
-    return () => {
-      cancelled = true;
-      el.innerHTML = '';
-    };
-  }, [figure.id, appName, height, commands.join('\n'), uid]);
-
   return (
-    <div
-      ref={boxRef}
-      className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
-      style={{ width: '100%', height, margin: '12px 0' }}
-    />
+    <div className="my-3 w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <GeoGebraApplet
+        appName={toGeoGebraAppName(figure.app)}
+        commands={commands}
+        height={Number(figure.height) || 400}
+        toolbar
+      />
+    </div>
   );
 }
 
-// ==================== GeoGebra Embedded (экспортируемый) ====================
-export const GeoGebraEmbed = ({
-  figure,
-  id,
-  setup,
-  height = '400',
-  app,
-  appName,
-  commands,
-}) => {
-  const containerRef = useRef(null);
-  const uid = useId().replace(/:/g, '');
-  const resolvedApp = toGeoGebraAppName(figure?.app || appName || app);
-  const pxHeight = Number(figure?.height ?? height) || 400;
-  const commandList = (
-    figure?.commands?.length
-      ? figure.commands
-      : (Array.isArray(commands) && commands.length
-        ? commands
-        : String(figure?.setup || setup || '').split('\n'))
-  ).filter((c) => String(c || '').trim());
-  const useRawCommands = Boolean(figure || (Array.isArray(commands) && commands.length));
-  const materialId = typeof id === 'string' && id && !/^\d+$/.test(id) ? id : null;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const initApplet = () => {
-      if (cancelled || !containerRef.current || typeof window.GGBApplet !== 'function') return;
-      const box = containerRef.current;
-      box.innerHTML = '';
-
-      const parameters = {
-        id: `ggb${uid}`,
-        appName: resolvedApp,
-        width: Math.max(box.clientWidth || 640, 320),
-        height: pxHeight,
-        language: 'ru',
-        showMenuBar: false,
-        showAlgebraInput: false,
-        showToolBar: true,
-        showResetIcon: true,
-        enableLabelDrags: false,
-        enableShiftDragZoom: true,
-        enable3d: resolvedApp === '3d',
-        errorDialogsActive: false,
-        scale: 1,
-        allowUpscale: false,
-        ...(materialId ? { material_id: materialId } : {}),
-        appletOnLoad: (api) => {
-          if (useRawCommands) {
-            runEvalCommands(api, commandList);
-            return;
-          }
-
-          if (!id) {
-            api.evalCommand('ShowAxes(true)');
-            api.evalCommand('ShowGrid(true)');
-          }
-
-          if (setup) {
-            const commands = setup
-              .split('\n')
-              .map(cmd => cmd.trim())
-              .filter(cmd => cmd.length > 0 && !cmd.startsWith('//') && !cmd.startsWith('#'));
-
-            let viewCommands = [];
-            let perspectiveCommand = null;
-            let evalCommands = [];
-            let delayedCommands = [];
-
-            commands.forEach(cmd => {
-              if (!cmd) return;
-
-              if (cmd.startsWith('view:')) {
-                const parts = cmd.substring(5).split(',').map(s => s.trim());
-                viewCommands.push(parts);
-              } else if (cmd.startsWith('perspective:')) {
-                perspectiveCommand = cmd.substring(12).trim();
-              } else if (cmd.startsWith('color:')) {
-                const match = cmd.match(/color:\s*(\w+)\s*,\s*([\w#]+)/);
-                if (match) {
-                  delayedCommands.push({ type: 'color', obj: match[1], color: match[2] });
-                }
-              } else if (cmd.startsWith('size:')) {
-                const match = cmd.match(/size:\s*(\w+)\s*,\s*(\d+)/);
-                if (match) {
-                  delayedCommands.push({ type: 'size', obj: match[1], size: match[2] });
-                }
-              } else if (cmd.startsWith('label:')) {
-                const match = cmd.match(/label:\s*(\w+)\s*,\s*"([^"]+)"/);
-                if (match) {
-                  delayedCommands.push({ type: 'label', obj: match[1], label: match[2] });
-                }
-              } else if (cmd.startsWith('show:')) {
-                const items = cmd.substring(5).split(',').map(s => s.trim());
-                delayedCommands.push({ type: 'show', items });
-              } else if (cmd.startsWith('hide:')) {
-                const items = cmd.substring(5).split(',').map(s => s.trim());
-                delayedCommands.push({ type: 'hide', items });
-              } else if (cmd.startsWith('animate:')) {
-                const match = cmd.match(/animate:\s*(\w+)\s*,\s*(\w+)\s*,?\s*(\d+)?/);
-                if (match) {
-                  delayedCommands.push({ type: 'animate', obj: match[1], animate: match[2] === 'true', speed: match[3] || null });
-                }
-              } else if (cmd.includes('=') || cmd.includes(':=')) {
-                evalCommands.push(cmd);
-              } else {
-                evalCommands.push(cmd);
-              }
-            });
-
-            viewCommands.forEach(parts => {
-              if (parts.length >= 4) {
-                const xMin = parseFloat(parts[0]) || -10;
-                const xMax = parseFloat(parts[1]) || 10;
-                const yMin = parseFloat(parts[2]) || -10;
-                const yMax = parseFloat(parts[3]) || 10;
-
-                if (parts.length >= 6) {
-                  const zMin = parseFloat(parts[4]) || -10;
-                  const zMax = parseFloat(parts[5]) || 10;
-                  api.setCoordSystem(xMin, xMax, yMin, yMax, zMin, zMax);
-                } else {
-                  api.setCoordSystem(xMin, xMax, yMin, yMax);
-                }
-
-                if (parts.includes('grid')) api.setGridVisible(true);
-                if (parts.includes('axes')) api.setAxesVisible(true, true);
-              }
-            });
-
-            if (perspectiveCommand) {
-              api.setPerspective(perspectiveCommand);
-            }
-
-            evalCommands.forEach(cmd => {
-              try { api.evalCommand(cmd); } catch (err) { console.error(`GeoGebra command error "${cmd}":`, err); }
-            });
-
-            if (delayedCommands.length > 0) {
-              setTimeout(() => {
-                delayedCommands.forEach(dCmd => {
-                  try {
-                    switch (dCmd.type) {
-                      case 'color': api.setColor(dCmd.obj, ...hexToRgb(dCmd.color)); break;
-                      case 'size': api.setPointSize(dCmd.obj, parseInt(dCmd.size)); break;
-                      case 'label': api.setCaption(dCmd.obj, dCmd.label); break;
-                      case 'show':
-                        dCmd.items.forEach(item => {
-                          if (item === 'grid') api.setGridVisible(true);
-                          else if (item === 'axes') api.setAxesVisible(true, true);
-                          else api.setVisible(item, true);
-                        });
-                        break;
-                      case 'hide':
-                        dCmd.items.forEach(item => {
-                          if (item === 'grid') api.setGridVisible(false);
-                          else if (item === 'axes') api.setAxesVisible(false, false);
-                          else api.setVisible(item, false);
-                        });
-                        break;
-                      case 'animate':
-                        api.setAnimating(dCmd.obj, dCmd.animate);
-                        if (dCmd.animate) api.startAnimation(); else api.stopAnimation();
-                        if (dCmd.speed) api.setAnimationSpeed(dCmd.obj, parseFloat(dCmd.speed));
-                        break;
-                    }
-                  } catch (err) { console.error('GeoGebra delayed command error:', dCmd, err); }
-                });
-              }, 200);
-            }
-          }
-        }
-      };
-
-      const applet = new window.GGBApplet(parameters, true);
-      applet.inject(box);
-    };
-
-    loadGgbScript(initApplet);
-
-    return () => {
-      cancelled = true;
-      if (containerRef.current) containerRef.current.innerHTML = '';
-    };
-  }, [uid, setup, resolvedApp, useRawCommands, pxHeight, commandList.join('\n'), materialId]);
-
+/** Старый формат ответа: тег <GeoGebra id setup height /> прямо в тексте. */
+function GeoGebraEmbed({ id, setup, height = '400' }) {
   return (
-    <div className="my-6 w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-50 dark:bg-zinc-900/40 relative">
-      <div ref={containerRef} className="w-full" style={{ minHeight: `${pxHeight}px` }} />
+    <div className="my-6 w-full overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+      <GeoGebraApplet
+        materialId={materialIdOf(id)}
+        setup={setup || ''}
+        height={Number(height) || 400}
+        toolbar
+      />
     </div>
   );
-};
+}
 
 // ==================== Markdown Renderer с GeoGebra ====================
 const MarkdownWithGeoGebra = ({ children, className = "", markdownComponents = {}, figures = null }) => {

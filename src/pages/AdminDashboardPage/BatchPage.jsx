@@ -1,5 +1,5 @@
 import { PageShell } from '../../shared/ui';
-import { useAdminWorkspace } from './AdminWorkspace';
+import { useAdminWorkspace } from './adminWorkspaceContext';
 import BatchTab from './BatchTab';
 
 export default function BatchPage() {

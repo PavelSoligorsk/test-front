@@ -1,6 +1,15 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { Pencil, Eraser, ZoomIn, ZoomOut, Undo2, Redo2, Trash2, Hand, Check, Image as ImageIcon, X } from 'lucide-react';
 
+// Цвета на клавишах 1–5.
+const PRESET_COLORS = [
+  '#000000', // Черный
+  '#EF4444', // Красный
+  '#3B82F6', // Синий
+  '#22C55E', // Зеленый
+  '#EAB308', // Желтый
+];
+
 const DrawingPad = forwardRef(({ 
   initialData,
   backgroundImageSrc,
@@ -33,15 +42,6 @@ const DrawingPad = forwardRef(({
   const lastSavedDataRef = useRef(null);
   const panStartRef = useRef({ x: 0, y: 0 });
   const panStartOffsetRef = useRef({ x: 0, y: 0 });
-
-  // --- Предустановленные цвета ---
-  const presetColors = [
-    '#000000', // Черный
-    '#EF4444', // Красный
-    '#3B82F6', // Синий
-    '#22C55E', // Зеленый
-    '#EAB308', // Желтый
-  ];
 
   const baseHeight = baseWidth / aspectRatio;
 
@@ -529,8 +529,8 @@ const DrawingPad = forwardRef(({
       if (e.key >= '1' && e.key <= '5' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const index = parseInt(e.key) - 1;
-        if (presetColors[index]) {
-          setColor(presetColors[index]);
+        if (PRESET_COLORS[index]) {
+          setColor(PRESET_COLORS[index]);
         }
       }
     };
@@ -539,7 +539,6 @@ const DrawingPad = forwardRef(({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
 
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const canvasWidth = baseWidth * scale;
   const canvasHeight = baseHeight * scale;
 
@@ -571,7 +570,7 @@ const DrawingPad = forwardRef(({
         
         {/* Красивый выбор цветов */}
         <div className="flex items-center gap-1.5">
-          {presetColors.map((presetColor, index) => (
+          {PRESET_COLORS.map((presetColor, index) => (
             <button
               key={presetColor}
               onClick={() => setColor(presetColor)}

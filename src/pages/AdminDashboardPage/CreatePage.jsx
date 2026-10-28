@@ -1,6 +1,6 @@
 import { PageShell } from '../../shared/ui';
 import { parallelScrollClass, useParallelScroll } from '../../shared/lib/parallelScroll';
-import { useAdminWorkspace } from './AdminWorkspace';
+import { useAdminWorkspace } from './adminWorkspaceContext';
 import TaskForm from './TaskForm';
 import TaskFormPreview from './TaskFormPreview';
 

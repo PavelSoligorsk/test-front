@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useMeasuredHeight } from '../../shared/hooks/useMeasuredHeight';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -6,15 +6,8 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { continueOrderedListNumbers, normalizeDisplayMath } from '../../components/theoryMath';
 
-export default function MarkdownBody({ text, fontSize = 22 }) {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    const box = ref.current?.parentElement;
-    const body = ref.current;
-    if (!box || !body) return;
-    const next = Math.max(80, body.scrollHeight);
-    if (Math.abs(box.offsetHeight - next) > 2) box.style.height = `${next}px`;
-  }, [text, fontSize]);
+export default function MarkdownBody({ text, fontSize = 22, onMeasure }) {
+  const ref = useMeasuredHeight(onMeasure);
   return (
     <div
       ref={ref}

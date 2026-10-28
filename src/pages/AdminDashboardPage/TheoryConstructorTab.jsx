@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Sparkles, Copy, Check, X, Eye } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
@@ -182,12 +182,16 @@ export default function TheoryConstructorTab({ theoryData, setTheoryData, onSubm
   const [editorKey, setEditorKey] = useState(0);
   const contentRef = useRef(theoryData.content || '');
 
+  // Открыли другую статью (или очистили форму): превью сбрасываем, пустой редактор пересоздаём.
+  const [source, setSource] = useState({ id: theoryData.id, content: theoryData.content });
+  if (source.id !== theoryData.id || source.content !== theoryData.content) {
+    setSource({ id: theoryData.id, content: theoryData.content });
+    setPreviewContent('');
+    if (!theoryData.id && !theoryData.content) setEditorKey((key) => key + 1);
+  }
+
   useEffect(() => {
     contentRef.current = theoryData.content || '';
-    setPreviewContent('');
-    if (!theoryData.id && !theoryData.content) {
-      setEditorKey((key) => key + 1);
-    }
   }, [theoryData.id, theoryData.content]);
 
   const handlePreview = useCallback(() => {

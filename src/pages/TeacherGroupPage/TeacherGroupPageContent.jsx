@@ -1,24 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import {
   ArrowRight, BookOpen, CheckCircle2, ChevronLeft, Clock,
   FileText, LayoutDashboard, Send, Trash2, Trophy, Users, XCircle,
 } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
-import { InlineNotice, ThemeToggle, formatApiDetail } from '../../shared/ui';
+import { InlineNotice, ThemeToggle, formatApiDetail, useConfirm } from '../../shared/ui';
 import AssignTestToGroupModal from '../TeacherDashboardPage/AssignTestToGroupModal';
 import GroupStudentsModal from '../TeacherDashboardPage/GroupStudentsModal';
-
-function authHeaders() {
-  try {
-    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-    const token = session?.token || session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -114,7 +103,28 @@ function GroupTestCard({ test, groupId, navigate, onUnassign, solversOnly = fals
   );
 }
 
+// Группа, её назначения, тесты и ученики учителя; null — такой группы нет.
+async function fetchGroupPage(groupId) {
+  const [groupsRes, assignRes, testsRes, studentsRes] = await Promise.all([
+    apiClient.get(`/teacher/groups/`),
+    apiClient.get(`/teacher/groups/${groupId}/assignments`),
+    apiClient.get(`/teacher/tests`),
+    apiClient.get(`/teacher/students`),
+  ]);
+  const list = Array.isArray(groupsRes.data) ? groupsRes.data : [];
+  const found = list.find((g) => String(g.id) === String(groupId));
+  if (!found) return null;
+  const assignData = assignRes.data;
+  return {
+    group: { ...found, name: found.name || assignData?.group_name },
+    assignments: assignData,
+    tests: testsRes.data || [],
+    students: studentsRes.data || [],
+  };
+}
+
 export default function TeacherGroupPageContent() {
+  const confirm = useConfirm();
   const { groupId } = useParams();
   const navigate = useNavigate();
   const [group, setGroup] = useState(null);
@@ -128,48 +138,34 @@ export default function TeacherGroupPageContent() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [studentsModal, setStudentsModal] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const headers = authHeaders();
-      const [groupsRes, assignRes, testsRes, studentsRes] = await Promise.all([
-        axios.get(`${API_BASE}/teacher/groups/`, { headers }),
-        axios.get(`${API_BASE}/teacher/groups/${groupId}/assignments`, { headers }),
-        axios.get(`${API_BASE}/teacher/tests`, { headers }),
-        axios.get(`${API_BASE}/teacher/students`, { headers }),
-      ]);
-      const list = Array.isArray(groupsRes.data) ? groupsRes.data : [];
-      const found = list.find((g) => String(g.id) === String(groupId));
-      if (!found) {
+  // Спиннер на всю страницу — только при первом заходе; после действий данные обновляются на месте.
+  const load = useCallback(() => fetchGroupPage(groupId)
+    .then((page) => {
+      if (!page) {
         setError('Группа не найдена');
         setGroup(null);
         return;
       }
-      const assignData = assignRes.data;
-      setGroup({
-        ...found,
-        name: found.name || assignData?.group_name,
-      });
-      setAssignments(assignData);
-      setTests(testsRes.data || []);
-      setAllStudents(studentsRes.data || []);
-    } catch (err) {
+      setError(null);
+      setGroup(page.group);
+      setAssignments(page.assignments);
+      setTests(page.tests);
+      setAllStudents(page.students);
+    })
+    .catch((err) => {
       if (err.response?.status === 401) {
         navigate('/login');
         return;
       }
       setError(err.response?.status === 404 ? 'Группа не найдена' : 'Не удалось загрузить группу');
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId, navigate]);
+    })
+    .finally(() => setLoading(false)), [groupId, navigate]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const testsList = assignments?.tests || [];
+  const testsList = useMemo(() => assignments?.tests || [], [assignments]);
   const assignedCount = testsList.length;
   const solvedTests = useMemo(
     () => testsList.filter((t) => (t.students || []).some((s) => s.is_completed)),
@@ -179,7 +175,7 @@ export default function TeacherGroupPageContent() {
 
   const handleRemoveStudent = async (gid, studentId) => {
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${gid}/students/${studentId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/groups/${gid}/students/${studentId}`);
       await load();
       setNotice({ tone: 'success', text: 'Ученик убран из группы' });
     } catch (err) {
@@ -189,7 +185,7 @@ export default function TeacherGroupPageContent() {
 
   const handleAddStudents = async (gid, studentIds) => {
     try {
-      await axios.post(`${API_BASE}/teacher/groups/${gid}/students`, { student_ids: studentIds }, { headers: authHeaders() });
+      await apiClient.post(`/teacher/groups/${gid}/students`, { student_ids: studentIds });
       setStudentsModal(false);
       await load();
       setNotice({ tone: 'success', text: 'Состав группы обновлён' });
@@ -199,9 +195,9 @@ export default function TeacherGroupPageContent() {
   };
 
   const handleUnassign = async (testId) => {
-    if (!window.confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.')) return;
+    if (!(await confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.', { danger: true, confirmLabel: 'Снять' }))) return;
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${groupId}/assignments/${testId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/groups/${groupId}/assignments/${testId}`);
       await load();
       setNotice({ tone: 'success', text: 'Тест снят с группы' });
     } catch (err) {
@@ -210,7 +206,7 @@ export default function TeacherGroupPageContent() {
   };
 
   const handleAssign = async (testId, gid) => {
-    await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: gid }, { headers: authHeaders() });
+    await apiClient.post(`/teacher/assign-test-to-group`, { test_id: testId, group_id: gid });
     await load();
     setNotice({ tone: 'success', text: 'Тест назначен группе' });
   };

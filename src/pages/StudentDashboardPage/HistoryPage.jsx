@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchStudentHistory, retakeTest } from './api';
 import HistoryTab from './HistoryTab';
 import StudentPageLoading from './StudentPageLoading';
+import { useNotify } from '../../shared/ui';
 
 export default function HistoryPage() {
+  const notify = useNotify();
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,7 +23,7 @@ export default function HistoryPage() {
       const retakeData = await retakeTest(resultId);
       navigate(`/test/${testIdOverride || retakeData.test_id || resultId}?retake=1`, { state: { startData: retakeData } });
     } catch (err) {
-      alert(err.response?.data?.detail || 'Не удалось начать пересдачу. Проверьте лимит попыток.');
+      notify(err.response?.data?.detail || 'Не удалось начать пересдачу. Проверьте лимит попыток.');
     }
   };
 

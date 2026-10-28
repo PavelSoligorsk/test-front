@@ -1,6 +1,6 @@
 import RoleNav from '../../shared/ui/RoleNav';
 
-export const STUDENT_TABS = [
+const STUDENT_TABS = [
   { key: 'theory', label: 'Теория' },
   { key: 'tests', label: 'Тесты' },
   { key: 'board', label: 'Доска' },

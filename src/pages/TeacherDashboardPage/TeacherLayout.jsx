@@ -2,7 +2,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ClipboardList, GraduationCap } from 'lucide-react';
 import { RoleNav, InlineNotice, PageShell } from '../../shared/ui';
 import { restoreSession } from '../../shared/lib/session';
-import { TeacherWorkspaceProvider, useTeacherWorkspace } from './TeacherWorkspace';
+import { TeacherWorkspaceProvider } from './TeacherWorkspace';
+import { useTeacherWorkspace } from './teacherWorkspaceContext';
 import { TEACHER_PATHS, TEACHER_TABS, teacherTabFromPath } from './teacherPaths';
 import TestManageModal from './TestManageModal';
 import GroupStudentsModal from './GroupStudentsModal';
@@ -87,11 +88,11 @@ function TeacherChrome() {
 
       {ws.groupCreateModal != null && (
         <CreateGroupModal
+          key={ws.groupCreateModal.id ?? 'new'}
           groupForm={ws.groupCreateModal}
           allStudents={ws.students}
           onClose={() => ws.setGroupCreateModal(null)}
           onSave={ws.handleSaveGroupFromModal}
-          navigate={navigate}
         />
       )}
 

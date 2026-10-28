@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { restoreSession, getCurrentUser, SESSION_EVENT } from '../../shared/lib/session';
+import { restoreSession } from '../../shared/lib/session';
+import { useSessionUser } from '../../shared/hooks/useSessionUser';
 import { ErrorBoundary } from '../../shared/ui/ErrorBoundary';
 
 const LoginPage = React.lazy(() => import('../../pages/LoginPage'));
@@ -56,7 +57,7 @@ const NotFoundPage = React.lazy(() => import('../../pages/NotFoundPage'));
 restoreSession();
 
 function RedirectIfAuth({ children }) {
-  const user = getCurrentUser();
+  const user = useSessionUser();
   if (user) {
     const roleRoutes = { student: '/student', teacher: '/teacher', admin: '/admin' };
     return <Navigate to={roleRoutes[user.role] || '/student'} replace />;
@@ -65,18 +66,8 @@ function RedirectIfAuth({ children }) {
 }
 
 function PrivateRoute({ children, allowedRoles }) {
-  const [user, setUser] = useState(() => getCurrentUser());
+  const user = useSessionUser();
   const location = useLocation();
-
-  useEffect(() => {
-    const handleChange = () => setUser(getCurrentUser());
-    window.addEventListener(SESSION_EVENT, handleChange);
-    return () => window.removeEventListener(SESSION_EVENT, handleChange);
-  }, []);
-
-  useEffect(() => {
-    setUser(getCurrentUser());
-  }, [location.pathname]);
 
   if (!user) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;

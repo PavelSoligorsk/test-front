@@ -1,56 +1,41 @@
-import axios from 'axios';
-import { API_URL } from '../../shared/config';
-
-const API_BASE = API_URL;
-const getToken = () => {
-  const session = localStorage.getItem('edu_session');
-  if (!session) return null;
-  try {
-    const parsed = JSON.parse(session);
-    return parsed?.token || parsed?.access_token || null;
-  } catch { return null; }
-};
-
-const authConfig = () => ({
-  headers: { Authorization: `Bearer ${getToken()}` },
-});
+import apiClient from '../../shared/api';
 
 // Tests
 export const fetchStudentTestsMeta = async () => {
-  const res = await axios.get(`${API_BASE}/student/tests-meta`, authConfig());
+  const res = await apiClient.get(`/student/tests-meta`);
   return res.data;
 };
 
 export const fetchMyAssignmentsMeta = async () => {
-  const res = await axios.get(`${API_BASE}/student/my-assignments-meta`, authConfig());
+  const res = await apiClient.get(`/student/my-assignments-meta`);
   return res.data;
 };
 
 export const fetchAiTests = async () => {
-  const res = await axios.get(`${API_BASE}/student/ai-tests`, authConfig());
+  const res = await apiClient.get(`/student/ai-tests`);
   return res.data;
 };
 
 // Profile
 export const fetchStudentMe = async () => {
-  const res = await axios.get(`${API_BASE}/student/me`, authConfig());
+  const res = await apiClient.get(`/student/me`);
   return res.data;
 };
 
 export const updateStudentProfile = async (data) => {
-  const res = await axios.put(`${API_BASE}/student/me`, data, authConfig());
+  const res = await apiClient.put(`/student/me`, data);
   return res.data;
 };
 
 // History
 export const fetchStudentHistory = async () => {
-  const res = await axios.get(`${API_BASE}/student/history`, authConfig());
+  const res = await apiClient.get(`/student/history`);
   return res.data;
 };
 
 // Detailed Stats
 export const fetchMyDetailedStats = async (period = 'all') => {
-  const res = await axios.get(`${API_BASE}/student/me/stats?period=${period}`, authConfig());
+  const res = await apiClient.get(`/student/me/stats?period=${period}`);
   return res.data;
 };
 
@@ -58,31 +43,29 @@ export const fetchUserDetailedStats = async (userId, period = 'all', role = 'adm
   const path = role === 'teacher'
     ? `/teacher/students/${userId}/stats?period=${period}`
     : `/admin/users/${userId}/stats?period=${period}`;
-  const res = await axios.get(`${API_BASE}${path}`, authConfig());
+  const res = await apiClient.get(path);
   return res.data;
 };
 
 // Theory
 export const fetchTheoryMeta = async () => {
-  const res = await axios.get(`${API_BASE}/student/theory/meta`, authConfig());
+  const res = await apiClient.get(`/student/theory/meta`);
   return res.data || {};
 };
 
 export const fetchTheoryTopics = async () => {
-  const res = await axios.get(`${API_BASE}/student/theory/topics`, authConfig());
+  const res = await apiClient.get(`/student/theory/topics`);
   return res.data;
 };
 
 export const fetchTheorySections = async (topic) => {
-  const res = await axios.get(`${API_BASE}/student/theory/sections/${topic}`, authConfig());
+  const res = await apiClient.get(`/student/theory/sections/${topic}`);
   return res.data;
 };
 
 export const fetchTheoryByTopicSection = async (topic, section, theoryClass) => {
-  const res = await axios.get(
-    `${API_BASE}/student/theory/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
+  const res = await apiClient.get(`/student/theory/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
     {
-      ...authConfig(),
       params: theoryClass != null && theoryClass !== '' ? { theory_class: theoryClass } : {},
     },
   );
@@ -91,8 +74,7 @@ export const fetchTheoryByTopicSection = async (topic, section, theoryClass) => 
 
 // AI generate
 export const generateAiTest = async (prompt, taskCount, difficulty, targetClass, excludeWeeks, useStats) => {
-  const res = await axios.post(
-    `${API_BASE}/student/generate-test`,
+  const res = await apiClient.post(`/student/generate-test`,
     {
       prompt,
       task_count: parseInt(taskCount) || 10,
@@ -100,32 +82,31 @@ export const generateAiTest = async (prompt, taskCount, difficulty, targetClass,
       target_class: targetClass !== 'Все' ? targetClass : null,
       exclude_recent_weeks: parseFloat(excludeWeeks) || 0,
       use_stats: !!useStats,
-    },
-    authConfig()
+    }
   );
   return res.data;
 };
 
 // Start test
 export const startAssignedTest = async (testId) => {
-  const res = await axios.post(`${API_BASE}/student/start-test/${testId}`, {}, authConfig());
+  const res = await apiClient.post(`/student/start-test/${testId}`, {});
   return res.data;
 };
 
 export const startAiTest = async (testId) => {
-  const res = await axios.post(`${API_BASE}/student/start-ai-test/${testId}`, {}, authConfig());
+  const res = await apiClient.post(`/student/start-ai-test/${testId}`, {});
   return res.data;
 };
 
 // Retake
 export const retakeTest = async (resultId) => {
-  const res = await axios.post(`${API_BASE}/student/retake/${resultId}`, {}, authConfig());
+  const res = await apiClient.post(`/student/retake/${resultId}`, {});
   return res.data;
 };
 
 // Result (timer sync)
 export const fetchTestResult = async (resultId) => {
-  const res = await axios.get(`${API_BASE}/student/results/${resultId}`, authConfig());
+  const res = await apiClient.get(`/student/results/${resultId}`);
   return res.data;
 };
 

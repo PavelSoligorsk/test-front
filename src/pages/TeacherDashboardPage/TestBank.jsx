@@ -1,7 +1,6 @@
-import axios from 'axios';
-import React, { useState, useEffect, useMemo } from 'react';
+import apiClient from '../../shared/api';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, ChevronRight, GraduationCap } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
 import { MarkdownRenderer } from '../../shared/ui';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
@@ -30,17 +29,8 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
   const [examCache, setExamCache] = useState({});  // { "class::topic": true/false }
   const [loadingExamCache, setLoadingExamCache] = useState(false);
 
-  const getToken = () => {
-    try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      return session?.token || session?.access_token;
-    } catch { return null; }
-  };
-
-  const authHeaders = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
-
   useEffect(() => {
-    axios.get(`${API_BASE}/teacher/tasks-meta`, authHeaders())
+    apiClient.get(`/teacher/tasks-meta`)
       .then(res => setMeta(res.data))
       .catch(console.error);
   }, []);
@@ -66,9 +56,8 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
         const batch = entries.slice(i, i + BATCH);
         const results = await Promise.allSettled(
           batch.map(({ cls, topic }) =>
-            axios.get(`${API_BASE}/teacher/tasks/by-class/`, {
-              params: { task_class: cls, topic_number: topic },
-              ...authHeaders()
+            apiClient.get(`/teacher/tasks/by-class/`, {
+              params: { task_class: cls, topic_number: topic }
             })
           )
         );
@@ -158,9 +147,8 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
     setTaskSearch('');
     setLoading(true);
     try {
-      const res = await axios.get(
-        `${API_BASE}/teacher/tasks/by-class/`,
-        { params: { task_class: cls, topic_number: topic }, ...authHeaders() }
+      const res = await apiClient.get(`/teacher/tasks/by-class/`,
+        { params: { task_class: cls, topic_number: topic } }
       );
       setTasks(res.data);
     } catch (e) {

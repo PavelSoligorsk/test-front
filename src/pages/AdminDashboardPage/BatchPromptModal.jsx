@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Clipboard, Check, Upload, Edit3, Trash2 } from 'lucide-react';
 import { stringify } from 'yaml';
 import { IconWell, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';

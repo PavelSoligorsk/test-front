@@ -1,4 +1,3 @@
-import React from 'react';
 import { User as UserIcon, Phone, Check } from 'lucide-react';
 
 export default function ProfileTab({ profile, editForm, setEditForm, handleUpdateProfile, saving }) {

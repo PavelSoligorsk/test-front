@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, RotateCcw, LayoutGrid, ChevronRight, Inbox } from 'lucide-react';
 

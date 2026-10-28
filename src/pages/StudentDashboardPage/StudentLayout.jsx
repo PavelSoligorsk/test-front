@@ -5,8 +5,10 @@ import StudentNav from './StudentNav';
 import AiModal from './AiModal';
 import { fetchStudentMe, generateAiTest } from './api';
 import { STUDENT_PATHS, studentTabFromPath } from './studentPaths';
+import { useNotify } from '../../shared/ui';
 
 export default function StudentLayout() {
+  const notify = useNotify();
   const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
@@ -36,8 +38,8 @@ export default function StudentLayout() {
       setShowAiModal(false);
       setAiPrompt('');
       navigate(`/test/${newTest.id}?type=ai`);
-    } catch (err) {
-      alert('Не удалось сгенерировать тест. Попробуйте другой запрос.');
+    } catch {
+      notify('Не удалось сгенерировать тест. Попробуйте другой запрос.');
     } finally {
       setAiGenerating(false);
     }

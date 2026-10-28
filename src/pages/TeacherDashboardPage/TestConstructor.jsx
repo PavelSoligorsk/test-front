@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState } from 'react';
+import apiClient from '../../shared/api';
 import { XCircle, Send, Database, BookOpen, Sparkles, Trash2 } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
 import { MarkdownPreview } from './MarkdownPreview';
 
 const getDifficultyColor = (lvl) => {
@@ -11,43 +9,40 @@ const getDifficultyColor = (lvl) => {
   return "text-zinc-400 bg-zinc-900/30 border-zinc-800";
 };
 
+const EMPTY_FORM = {
+  id: null, title: '', target_class: '', target_topic: '',
+  is_autocompile: false, task_ids: [], is_active: true,
+  max_attempts: null, time_limit_minutes: null, allow_interruptions: true,
+  exam_start: '', exam_end: '',
+};
+
+function testFormFrom(test) {
+  if (!test) return EMPTY_FORM;
+  return {
+    id: test.id || null,
+    title: test.title || '',
+    target_class: test.target_class || '',
+    target_topic: test.target_topic || '',
+    is_autocompile: test.is_autocompile || false,
+    task_ids: test.task_ids || [],
+    is_active: test.is_active !== undefined ? test.is_active : true,
+    max_attempts: test.max_attempts ?? null,
+    time_limit_minutes: test.time_limit_minutes ?? null,
+    allow_interruptions: test.allow_interruptions !== undefined ? test.allow_interruptions : true,
+    exam_start: test.exam_start ? test.exam_start.slice(0, 16) : '',
+    exam_end: test.exam_end ? test.exam_end.slice(0, 16) : '',
+  };
+}
+
 export default function TestConstructor({ selectedTasks, onTaskToggle, openSolutions, openHints, onToggleSolution, onToggleHint, onTestsUpdate, onNavigateToBank, onNavigateToTests, editingTest, onClearEditing, onClearTasks, onOpenAiGenerator }) {
-  const EMPTY_FORM = {
-    id: null, title: '', target_class: '', target_topic: '',
-    is_autocompile: false, task_ids: [], is_active: true,
-    max_attempts: null, time_limit_minutes: null, allow_interruptions: true,
-    exam_start: '', exam_end: '',
-  };
-  const [testForm, setTestForm] = useState(EMPTY_FORM);
-
-  // Автозаполнение формы при редактировании теста
-  useEffect(() => {
-    if (editingTest) {
-      setTestForm({
-        id: editingTest.id || null,
-        title: editingTest.title || '',
-        target_class: editingTest.target_class || '',
-        target_topic: editingTest.target_topic || '',
-        is_autocompile: editingTest.is_autocompile || false,
-        task_ids: editingTest.task_ids || [],
-        is_active: editingTest.is_active !== undefined ? editingTest.is_active : true,
-        max_attempts: editingTest.max_attempts ?? null,
-        time_limit_minutes: editingTest.time_limit_minutes ?? null,
-        allow_interruptions: editingTest.allow_interruptions !== undefined ? editingTest.allow_interruptions : true,
-        exam_start: editingTest.exam_start ? editingTest.exam_start.slice(0, 16) : '',
-        exam_end: editingTest.exam_end ? editingTest.exam_end.slice(0, 16) : '',
-      });
-    } else {
-      // Если editingTest=null (сброс после редактирования) — очищаем форму
-      setTestForm(EMPTY_FORM);
-    }
-  }, [editingTest]);
-
-  const getAuthHeaders = () => {
-    const user = restoreSession();
-    const token = user?.token || user?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  // Автозаполнение формы при редактировании теста; editingTest=null (сброс после
+  // редактирования) очищает форму.
+  const [formSource, setFormSource] = useState(editingTest);
+  const [testForm, setTestForm] = useState(() => testFormFrom(editingTest));
+  if (formSource !== editingTest) {
+    setFormSource(editingTest);
+    setTestForm(testFormFrom(editingTest));
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,9 +58,9 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
     };
     try {
       if (testForm.id) {
-        await axios.put(`${API_BASE}/teacher/tests/${testForm.id}`, payload, { headers: getAuthHeaders() });
+        await apiClient.put(`/teacher/tests/${testForm.id}`, payload);
       } else {
-        await axios.post(`${API_BASE}/teacher/tests`, payload, { headers: getAuthHeaders() });
+        await apiClient.post(`/teacher/tests`, payload);
       }
       setTestForm(EMPTY_FORM);
       if (onClearEditing) onClearEditing();

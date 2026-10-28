@@ -1,4 +1,3 @@
-import React from 'react';
 import { BookOpen, Users, Bot, Clock, LayoutGrid, Target, ArrowRight, AlertCircle, Check, RotateCcw, Calendar } from 'lucide-react';
 
 const TYPE_META = {

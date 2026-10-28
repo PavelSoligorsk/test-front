@@ -1,6 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { uploadImage } from './api';
+
+// Высота по содержимому, когда поле растёт вместе с текстом.
+function fitTextarea(textarea, autoGrow) {
+  if (!autoGrow || !textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
 
 export default function ImageAwareTextarea({
   value,
@@ -17,15 +24,10 @@ export default function ImageAwareTextarea({
   const [uploadProgress, setUploadProgress] = useState(null);
   const isControlled = value !== undefined;
 
-  const fitHeight = () => {
-    const textarea = textareaRef.current;
-    if (!autoGrow || !textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  };
+  const fitHeight = () => fitTextarea(textareaRef.current, autoGrow);
 
   useEffect(() => {
-    fitHeight();
+    fitTextarea(textareaRef.current, autoGrow);
   }, [autoGrow, value, defaultValue, isUploading]);
 
   const readValue = () => (isControlled ? value : (textareaRef.current?.value ?? ''));

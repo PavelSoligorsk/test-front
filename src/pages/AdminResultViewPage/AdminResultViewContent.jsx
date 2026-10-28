@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
 import { fetchAdminResult } from '../AdminDashboardPage/api';
-import { MarkdownRenderer, DifficultyBadge, QuestionMap } from '../../shared/ui';
+import { DifficultyBadge, QuestionMap } from '../../shared/ui';
 import ResultTaskCard from './ResultTaskCard';
 
 export default function AdminResultViewContent() {

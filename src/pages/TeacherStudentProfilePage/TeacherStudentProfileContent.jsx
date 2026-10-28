@@ -1,22 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_BASE } from '../../shared/api';
-import { InlineNotice, formatApiDetail } from '../../shared/ui';
+import apiClient from '../../shared/api';
+import { InlineNotice, formatApiDetail, useConfirm } from '../../shared/ui';
 import {
   ChevronLeft, Phone, MessageSquare, History, ArrowRight, Trophy, Target,
   Calendar, Search, BarChart3, Shield, Clock, CheckCircle2, ListTodo, Trash2,
 } from 'lucide-react';
-
-function authHeaders() {
-  try {
-    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-    const token = session?.token || session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -26,6 +15,7 @@ function formatDate(iso) {
 }
 
 export default function TeacherStudentProfileContent() {
+  const confirm = useConfirm();
   const { userId } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -41,11 +31,10 @@ export default function TeacherStudentProfileContent() {
       setLoading(true);
       setError(null);
       try {
-        const headers = authHeaders();
         const [profileRes, historyRes, assignmentsRes] = await Promise.all([
-          axios.get(`${API_BASE}/teacher/students-profile/${userId}`, { headers }),
-          axios.get(`${API_BASE}/teacher/students-history/${userId}`, { headers }),
-          axios.get(`${API_BASE}/teacher/student/${userId}/assignments`, { headers }),
+          apiClient.get(`/teacher/students-profile/${userId}`),
+          apiClient.get(`/teacher/students-history/${userId}`),
+          apiClient.get(`/teacher/student/${userId}/assignments`),
         ]);
         setData(profileRes.data);
         setHistory(historyRes.data || []);
@@ -79,11 +68,10 @@ export default function TeacherStudentProfileContent() {
   ), [assignments]);
 
   const handleDeleteAssignment = async (assignmentId) => {
-    if (!window.confirm('Отменить назначение теста?')) return;
+    if (!(await confirm('Отменить назначение теста?', { danger: true, confirmLabel: 'Отменить назначение', cancelLabel: 'Оставить' }))) return;
     try {
-      const headers = authHeaders();
-      await axios.delete(`${API_BASE}/teacher/assignments/${assignmentId}`, { headers });
-      const res = await axios.get(`${API_BASE}/teacher/student/${userId}/assignments`, { headers });
+      await apiClient.delete(`/teacher/assignments/${assignmentId}`);
+      const res = await apiClient.get(`/teacher/student/${userId}/assignments`);
       setAssignments(res.data || []);
       setNotice({ tone: 'success', text: 'Назначение снято' });
     } catch (err) {

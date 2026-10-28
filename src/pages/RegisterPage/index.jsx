@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../../shared/config';
 import AuthShell, { AuthPasswordField, authButton, authField, authLabel, authLink } from '../../shared/ui/AuthShell';
 
 export default function Register() {
@@ -17,7 +16,7 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      await axios.post(`${API_URL}/register`, form);
+      await apiClient.post(`/register`, form);
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.detail || 'Не удалось создать аккаунт');

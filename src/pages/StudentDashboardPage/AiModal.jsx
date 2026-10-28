@@ -1,4 +1,3 @@
-import React from 'react';
 import { Sparkles, X, AlertCircle, Zap, RefreshCw } from 'lucide-react';
 
 export default function AiModal({

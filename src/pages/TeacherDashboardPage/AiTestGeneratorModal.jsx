@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Users, XCircle, CheckSquare, Square, Sparkles, AlertCircle, Zap, RefreshCw } from 'lucide-react';
 
 export default function AiTestGeneratorModal({

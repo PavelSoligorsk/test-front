@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { PlusCircle, Search, BookOpen, Filter, ChevronRight, Edit3, Users, Trash2 } from 'lucide-react';
 import { Sheet, IconWell, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 

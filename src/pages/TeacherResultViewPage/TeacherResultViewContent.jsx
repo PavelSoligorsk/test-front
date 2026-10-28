@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp, ArrowLeft, BarChart3 } from 'lucide-react';
-import axios from 'axios';
-import { API_BASE } from '../../shared/api';
+import apiClient from '../../shared/api';
 import { MarkdownRenderer, DifficultyBadge, QuestionMap } from '../../shared/ui';
 
 export default function TeacherResultViewContent() {
@@ -17,9 +16,7 @@ export default function TeacherResultViewContent() {
   useEffect(() => {
     const fetchResult = async () => {
       try {
-        const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-        const token = session?.token || session?.access_token;
-        const res = await axios.get(`${API_BASE}/teacher/results/${resultId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await apiClient.get(`/teacher/results/${resultId}`);
         setData(res.data);
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };

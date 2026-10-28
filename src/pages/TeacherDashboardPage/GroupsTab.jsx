@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, LayoutDashboard, Users, Send, Edit3, Trash2, PlusCircle } from 'lucide-react';
 import { Sheet, IconWell, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
-export default function GroupsTab({ groups, onOpenCreate, onEdit, onDelete, onManageStudents, onAssignTest, onDetail, navigate }) {
+export default function GroupsTab({ groups, onOpenCreate, onEdit, onDelete, onManageStudents, onAssignTest, onDetail }) {
   const [groupSearch, setGroupSearch] = useState('');
 
   const filtered = groups.filter((g) => g.name.toLowerCase().includes(groupSearch.toLowerCase()));

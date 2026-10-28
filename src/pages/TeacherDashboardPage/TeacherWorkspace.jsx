@@ -1,20 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { useCallback, useEffect, useState } from 'react';
+import apiClient from '../../shared/api';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
-import { formatApiDetail } from '../../shared/ui';
+import { formatApiDetail, useConfirm } from '../../shared/ui';
 import { TEACHER_PATHS } from './teacherPaths';
+import { TeacherWorkspaceContext } from './teacherWorkspaceContext';
 
-const TeacherWorkspaceContext = createContext(null);
-
-function authHeaders() {
-  const user = restoreSession();
-  const token = user?.token || user?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+function getTeacher(path) {
+  return apiClient.get(`/teacher/${path}`).then((res) => res.data);
 }
 
 export function TeacherWorkspaceProvider({ children }) {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,41 +34,14 @@ export function TeacherWorkspaceProvider({ children }) {
   const showSuccess = useCallback((text) => setNotice({ tone: 'success', text }), []);
   const clearNotice = useCallback(() => setNotice(null), []);
 
-  const fetchTests = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/tests`, { headers: authHeaders() });
-      setTests(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const fetchStudents = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/students`, { headers: authHeaders() });
-      setStudents(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const fetchGroups = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/groups/`, { headers: authHeaders() });
-      setGroups(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const fetchTopicSectionMeta = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/tasks-meta-by-topic-section`, { headers: authHeaders() });
-      setTopicSectionMeta(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  // Списки кабинета. Ошибка только в консоль — на экране остаётся прежний список.
+  const fetchTests = useCallback(() => getTeacher('tests').then(setTests, console.error), []);
+  const fetchStudents = useCallback(() => getTeacher('students').then(setStudents, console.error), []);
+  const fetchGroups = useCallback(() => getTeacher('groups/').then(setGroups, console.error), []);
+  const fetchTopicSectionMeta = useCallback(
+    () => getTeacher('tasks-meta-by-topic-section').then(setTopicSectionMeta, console.error),
+    [],
+  );
 
   useEffect(() => {
     Promise.all([fetchTests(), fetchStudents(), fetchGroups(), fetchTopicSectionMeta()])
@@ -90,13 +59,13 @@ export function TeacherWorkspaceProvider({ children }) {
     try {
       let groupId = data.id;
       if (data.id) {
-        await axios.put(`${API_BASE}/teacher/groups/${data.id}`, { name: data.name, description: data.description }, { headers: authHeaders() });
+        await apiClient.put(`/teacher/groups/${data.id}`, { name: data.name, description: data.description });
       } else {
-        const res = await axios.post(`${API_BASE}/teacher/groups/`, { name: data.name, description: data.description }, { headers: authHeaders() });
+        const res = await apiClient.post(`/teacher/groups/`, { name: data.name, description: data.description });
         groupId = res.data.id;
       }
       if (data.student_ids?.length && groupId) {
-        await axios.post(`${API_BASE}/teacher/groups/${groupId}/students`, { student_ids: data.student_ids }, { headers: authHeaders() });
+        await apiClient.post(`/teacher/groups/${groupId}/students`, { student_ids: data.student_ids });
       }
       setGroupCreateModal(null);
       fetchGroups();
@@ -108,9 +77,9 @@ export function TeacherWorkspaceProvider({ children }) {
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
-    if (!confirm(`Удалить группу "${groupName || groupId}"? Это действие нельзя отменить.`)) return;
+    if (!(await confirm(`Удалить группу "${groupName || groupId}"? Это действие нельзя отменить.`, { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${groupId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/groups/${groupId}`);
       fetchGroups();
     } catch (e) {
       showError(e, 'Ошибка при удалении группы');
@@ -119,7 +88,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleAddStudentsToGroup = async (groupId, studentIds) => {
     try {
-      await axios.post(`${API_BASE}/teacher/groups/${groupId}/students`, { student_ids: studentIds }, { headers: authHeaders() });
+      await apiClient.post(`/teacher/groups/${groupId}/students`, { student_ids: studentIds });
       fetchGroups();
       setGroupStudentsModal(null);
     } catch (e) {
@@ -129,7 +98,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleRemoveStudentFromGroup = async (groupId, studentId) => {
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${groupId}/students/${studentId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/groups/${groupId}/students/${studentId}`);
       await fetchGroups();
       return true;
     } catch (e) {
@@ -140,7 +109,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleAssignTestToGroup = async (testId, groupId) => {
     try {
-      await axios.post(`${API_BASE}/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId }, { headers: authHeaders() });
+      await apiClient.post(`/teacher/assign-test-to-group`, { test_id: testId, group_id: groupId });
       showSuccess('Тест назначен группе');
     } catch (e) {
       showError(e, 'Ошибка при назначении теста');
@@ -150,7 +119,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleAssignTest = async (data) => {
     try {
-      await axios.post(`${API_BASE}/teacher/assign-test`, data, { headers: authHeaders() });
+      await apiClient.post(`/teacher/assign-test`, data);
     } catch (e) {
       console.error(e);
       throw e;
@@ -159,7 +128,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleGenerateAiTest = async (aiParams) => {
     try {
-      const res = await axios.post(`${API_BASE}/teacher/generate-test`, aiParams, { headers: authHeaders() });
+      const res = await apiClient.post(`/teacher/generate-test`, aiParams);
       const generated = res.data;
       if (generated.tasks?.length) {
         setSelectedTasks(generated.tasks);
@@ -189,7 +158,7 @@ export function TeacherWorkspaceProvider({ children }) {
 
   const handleEditTest = async (test) => {
     try {
-      const res = await axios.get(`${API_BASE}/teacher/tests/${test.id}`, { headers: authHeaders() });
+      const res = await apiClient.get(`/teacher/tests/${test.id}`);
       setSelectedTasks(res.data.tasks || []);
       setEditingTest(res.data);
       navigate(TEACHER_PATHS.constructor);
@@ -199,16 +168,17 @@ export function TeacherWorkspaceProvider({ children }) {
   };
 
   const handleDeleteTest = async (testId) => {
-    if (!confirm('Удалить тест? Это действие нельзя отменить.')) return;
+    if (!(await confirm('Удалить тест? Это действие нельзя отменить.', { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
-      await axios.delete(`${API_BASE}/teacher/tests/${testId}`, { headers: authHeaders() });
+      await apiClient.delete(`/teacher/tests/${testId}`);
       fetchTests();
     } catch (e) {
       showError(e, 'Ошибка при удалении теста');
     }
   };
 
-  const value = useMemo(() => ({
+  // Обработчики пересоздаются на каждый рендер — useMemo с неполным списком зависимостей тут не нужен.
+  const value = {
     notice,
     clearNotice,
     showError,
@@ -249,23 +219,11 @@ export function TeacherWorkspaceProvider({ children }) {
     handleGenerateAiTest,
     handleEditTest,
     handleDeleteTest,
-  }), [
-    notice, loading, tests, students, groups, topicSectionMeta, selectedTasks,
-    manageTestModal, groupStudentsModal, assignGroupModal,
-    groupCreateModal, aiGeneratorModal, openSolutions, openHints, editingTest,
-    clearNotice, showError, showSuccess, fetchTests, fetchStudents, fetchGroups,
-    toggleTaskSelection,
-  ]);
+  };
 
   return (
     <TeacherWorkspaceContext.Provider value={value}>
       {children}
     </TeacherWorkspaceContext.Provider>
   );
-}
-
-export function useTeacherWorkspace() {
-  const ctx = useContext(TeacherWorkspaceContext);
-  if (!ctx) throw new Error('useTeacherWorkspace must be used within TeacherWorkspaceProvider');
-  return ctx;
 }

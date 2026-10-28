@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { PageShell } from '../../shared/ui';
-import { useTeacherWorkspace } from './TeacherWorkspace';
+import { useTeacherWorkspace } from './teacherWorkspaceContext';
 import GroupsTab from './GroupsTab';
 
 export default function GroupsPage() {
@@ -16,7 +16,6 @@ export default function GroupsPage() {
         onManageStudents={(g) => ws.setGroupStudentsModal(g)}
         onAssignTest={(g) => ws.setAssignGroupModal(g)}
         onDetail={(g) => navigate(`/teacher/groups/${g.id}`)}
-        navigate={navigate}
       />
     </PageShell>
   );

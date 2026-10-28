@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, ArrowRight, Users } from 'lucide-react';
 import { Sheet, IconWell, fieldClass } from '../../shared/ui';
 

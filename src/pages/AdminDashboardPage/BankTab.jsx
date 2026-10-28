@@ -1,13 +1,15 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useAsyncData } from '../../shared/hooks';
 import { Search, ChevronRight, Edit3, Trash2, Send, Shield, GraduationCap, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree, Inbox } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
-import { useAdminWorkspace } from './AdminWorkspace';
-import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { useAdminWorkspace } from './adminWorkspaceContext';
+import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass, useConfirm } from '../../shared/ui';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
+const NO_TASKS = [];
 
 const hasExamKeyword = (text) => {
   if (!text) return false;
@@ -54,6 +56,7 @@ const copyJSONToClipboard = async (tasks, setFeedback) => {
 };
 
 export default function BankTab({ tasksMeta, availableClasses, bankClass, setBankClass, bankTopic, setBankTopic, onEditTask, onTasksUpdate }) {
+  const confirm = useConfirm();
   const { showError, showSuccess } = useAdminWorkspace();
   const [feedback, setFeedback] = useState(null);
   const [openSolutions, setOpenSolutions] = useState({});
@@ -68,8 +71,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   const [selectedNavSection, setSelectedNavSection] = useState(null);
   const [topicSectionMeta, setTopicSectionMeta] = useState(null);
 
-  const [loadedTasks, setLoadedTasks] = useState([]);
-  const [loadingTasks, setLoadingTasks] = useState(false);
 
   useEffect(() => {
     if (navMode !== 'topic') return;
@@ -86,71 +87,36 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
     return () => { cancelled = true; };
   }, [navMode]);
 
-  useEffect(() => {
-    if (navMode !== 'class' || !bankClass || !bankTopic) {
-      if (navMode === 'class') setLoadedTasks([]);
-      return;
+  // Задания текущего раздела: по классу и подразделу или по теме и разделу.
+  const tasksKey = navMode === 'class'
+    ? (bankClass && bankTopic ? `class:${bankClass}:${bankTopic}` : null)
+    : (navMode === 'topic' && selectedNavTopic && selectedNavSection ? `topic:${selectedNavTopic}:${selectedNavSection}` : null);
+  const tasksQuery = useAsyncData(tasksKey, async () => {
+    try {
+      return navMode === 'class'
+        ? await fetchTasksByClassTopic(bankClass, bankTopic)
+        : await fetchTasksByTopicSection(selectedNavTopic, selectedNavSection);
+    } catch (e) {
+      console.error(e);
+      return [];
     }
-    let cancelled = false;
-    const load = async () => {
-      setLoadingTasks(true);
-      try {
-        const data = await fetchTasksByClassTopic(bankClass, bankTopic);
-        if (!cancelled) setLoadedTasks(data);
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) setLoadedTasks([]);
-      } finally {
-        if (!cancelled) setLoadingTasks(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [navMode, bankClass, bankTopic]);
-
-  useEffect(() => {
-    if (navMode !== 'topic' || !selectedNavTopic || !selectedNavSection) {
-      if (navMode === 'topic') setLoadedTasks([]);
-      return;
-    }
-    let cancelled = false;
-    const load = async () => {
-      setLoadingTasks(true);
-      try {
-        const data = await fetchTasksByTopicSection(selectedNavTopic, selectedNavSection);
-        if (!cancelled) setLoadedTasks(data);
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) setLoadedTasks([]);
-      } finally {
-        if (!cancelled) setLoadingTasks(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [navMode, selectedNavTopic, selectedNavSection]);
+  });
+  const loadedTasks = tasksQuery.data || NO_TASKS;
+  const loadingTasks = tasksQuery.loading;
+  const reloadTasks = tasksQuery.reload;
 
   const refreshCurrentTasks = useCallback(async () => {
-    let data = [];
-    try {
-      if (navMode === 'class' && bankClass && bankTopic) {
-        data = await fetchTasksByClassTopic(bankClass, bankTopic);
-      } else if (navMode === 'topic' && selectedNavTopic && selectedNavSection) {
-        data = await fetchTasksByTopicSection(selectedNavTopic, selectedNavSection);
-      }
-    } catch (e) { console.error(e); }
-    if (data.length || loadedTasks.length) setLoadedTasks(data);
+    await reloadTasks();
     if (onTasksUpdate) onTasksUpdate();
-  }, [navMode, bankClass, bankTopic, selectedNavTopic, selectedNavSection, onTasksUpdate, loadedTasks.length]);
+  }, [reloadTasks, onTasksUpdate]);
 
   const [classifyRunning, setClassifyRunning] = useState(false);
   const [classifyResult, setClassifyResult] = useState(null);
   const [classifyModal, setClassifyModal] = useState(false);
-  const [failedTaskIds, setFailedTaskIds] = useState(new Set());
-
-  useEffect(() => {
-    if (!classifyResult?.log) return;
+  // Задания, которые классификатор не смог разложить: их номера (#id) в строках журнала с ошибкой.
+  const failedTaskIds = useMemo(() => {
     const ids = new Set();
+    if (!classifyResult?.log) return ids;
     classifyResult.log.forEach(line => {
       const match = line.match(/#(\d+)/);
       if (match && (line.includes('❌') || line.includes('не совпал') || line.includes('пропущено') || line.includes('ошибок'))) {
@@ -162,11 +128,11 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
       const idMatch = line.match(/#(\d+)/g);
       if (idMatch) idMatch.forEach(m => ids.add(parseInt(m.replace('#', ''))));
     });
-    setFailedTaskIds(ids);
+    return ids;
   }, [classifyResult]);
 
   const handleDelete = async (taskId) => {
-    if (!window.confirm(`Удалить задание #${taskId}?`)) return;
+    if (!(await confirm(`Удалить задание #${taskId}?`, { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await deleteTask(taskId);
       await refreshCurrentTasks();

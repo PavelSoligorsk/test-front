@@ -47,3 +47,10 @@ export function boardImageSrc(props = {}) {
   if (props.fileId) return `${IMAGE_PUBLIC_URL}/boards/${props.fileId}.png`;
   return '';
 }
+
+const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
+
+/** Файлы картинок, которые принимает доска (из вставки, перетаскивания или выбора). */
+export function imageFiles(list) {
+  return Array.from(list || []).filter((file) => IMAGE_TYPES.test(file.type));
+}

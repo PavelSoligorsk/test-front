@@ -1,4 +1,3 @@
-import React from 'react';
 import { Send, PlusCircle } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';

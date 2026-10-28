@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Users, XCircle, CheckSquare, Square, UserPlus, Trophy, GraduationCap } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Users, XCircle, CheckSquare, Square, UserPlus, Trophy } from 'lucide-react';
 
 export default function GroupStudentsModal({ group, allStudents, onClose, onAdd, onRemove, navigate }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Список правится тут же после добавления и удаления; новый group.students от родителя его заменяет.
+  const [studentsSource, setStudentsSource] = useState(group.students);
   const [currentStudents, setCurrentStudents] = useState(group.students || []);
-
-  useEffect(() => { setCurrentStudents(group.students || []); }, [group.students]);
+  if (studentsSource !== group.students) {
+    setStudentsSource(group.students);
+    setCurrentStudents(group.students || []);
+  }
 
   const groupStudentIds = currentStudents.map((s) => s.id);
   const availableStudents = allStudents.filter((s) =>

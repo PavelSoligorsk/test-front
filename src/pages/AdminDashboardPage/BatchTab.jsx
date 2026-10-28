@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Layers, Upload, Edit3, Trash2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { parse as parseYaml } from 'yaml';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';

@@ -70,37 +70,6 @@ export function deleteTeacherBoardImage(fileId) {
   return apiClient.delete(`${ENDPOINTS.TEACHER_BOARD_IMAGES}/${encodeURIComponent(fileId)}`);
 }
 
-export function listGeoGebraTemplates() {
-  return apiClient.get(ENDPOINTS.BOARD_GEOGEBRA_TEMPLATES).then((response) => response.data || []);
-}
-
-export function getGeoGebraTemplate(id, lessonId) {
-  return apiClient.get(ENDPOINTS.BOARD_GEOGEBRA_TEMPLATE(id), {
-    params: lessonId ? { lessonId } : undefined,
-  }).then((response) => response.data);
-}
-
-export function createTeacherGeoGebraTemplate({ file, id, title, appName }) {
-  const body = new FormData();
-  body.append('file', file);
-  body.append('id', id);
-  body.append('title', title);
-  body.append('appName', appName);
-  return apiClient.post(ENDPOINTS.TEACHER_GEOGEBRA_TEMPLATES, body).then((response) => response.data);
-}
-
-export function updateTeacherGeoGebraTemplate(id, { file, title, appName }) {
-  const body = new FormData();
-  if (file) body.append('file', file);
-  if (title) body.append('title', title);
-  if (appName) body.append('appName', appName);
-  return apiClient.put(ENDPOINTS.TEACHER_GEOGEBRA_TEMPLATE(id), body).then((response) => response.data);
-}
-
-export function deleteTeacherGeoGebraTemplate(id) {
-  return apiClient.delete(ENDPOINTS.TEACHER_GEOGEBRA_TEMPLATE(id)).then((response) => response.data);
-}
-
 export function boardSocketUrl(audience, boardId, token, shareToken) {
   const path = audience === 'teacher'
     ? ENDPOINTS.TEACHER_BOARD_WS(boardId)

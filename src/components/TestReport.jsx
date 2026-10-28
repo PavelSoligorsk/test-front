@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import { useState } from 'react';
+import apiClient from '../shared/api';
 import { Download, Sparkles, RotateCcw } from 'lucide-react';
-import { MarkdownRenderer as MarkdownViewer, ThemeToggle } from '../shared/ui';
+import { MarkdownRenderer as MarkdownViewer, ThemeToggle, useNotify } from '../shared/ui';
 
-export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId, onRetake }) => {
+export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) => {
+  const notify = useNotify();
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 1. Подсчет статистики
@@ -39,7 +40,7 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId
     try {
       const RENDER_SERVICE = 'https://tg-production-cc61.up.railway.app';
       
-      const response = await axios.post(
+      const response = await apiClient.post(
         `${RENDER_SERVICE}/render-report`,
         {
           test: {
@@ -91,7 +92,7 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId
       
     } catch (error) {
       console.error('Ошибка при генерации PDF:', error);
-      alert('Не удалось скачать отчёт');
+      notify('Не удалось скачать отчёт');
     } finally {
       setIsGenerating(false);
     }

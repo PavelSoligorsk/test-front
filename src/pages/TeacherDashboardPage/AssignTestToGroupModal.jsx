@@ -1,15 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { useMemo, useState } from 'react';
+import apiClient from '../../shared/api';
 import { Search, XCircle, CheckCircle2, Clock, BookOpen, FileText } from 'lucide-react';
-import { API_BASE } from '../../shared/api';
-import { restoreSession } from '../../shared/lib/session';
-import { InlineNotice, formatApiDetail, fieldClass, secondaryBtnClass } from '../../shared/ui';
-
-function authHeaders() {
-  const user = restoreSession();
-  const token = user?.token || user?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+import { useAsyncData } from '../../shared/hooks';
+import { InlineNotice, formatApiDetail, fieldClass, secondaryBtnClass, useConfirm } from '../../shared/ui';
 
 function studentName(row) {
   if (row.student_name) return row.student_name;
@@ -18,32 +11,24 @@ function studentName(row) {
 }
 
 export default function AssignTestToGroupModal({ group, tests, onClose, onAssign, navigate }) {
+  const confirm = useConfirm();
   const [searchTerm, setSearchTerm] = useState('');
-  const [payload, setPayload] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
 
-  const fetchAssignments = useCallback(async () => {
-    if (!group?.id) return;
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/groups/${group.id}/assignments`, {
-        headers: authHeaders(),
-      });
-      setPayload(res.data);
-    } catch (e) {
-      setNotice({ tone: 'error', text: formatApiDetail(e.response?.data?.detail, 'Не удалось загрузить назначения') });
-    } finally {
-      setLoading(false);
-    }
-  }, [group?.id]);
+  const groupId = group?.id;
+  const assignmentsQuery = useAsyncData(groupId ?? null, async () => {
+    const res = await apiClient.get(`/teacher/groups/${groupId}/assignments`);
+    return res.data;
+  });
+  const fetchAssignments = assignmentsQuery.reload;
+  const loading = assignmentsQuery.loading;
+  const loadNotice = assignmentsQuery.error
+    ? { tone: 'error', text: formatApiDetail(assignmentsQuery.error.response?.data?.detail, 'Не удалось загрузить назначения') }
+    : null;
+  const shownNotice = notice || loadNotice;
 
-  useEffect(() => {
-    fetchAssignments();
-  }, [fetchAssignments]);
-
-  const assignedTests = payload?.tests || [];
+  const assignedTests = useMemo(() => assignmentsQuery.data?.tests || [], [assignmentsQuery.data]);
   const assignedIds = useMemo(() => new Set(assignedTests.map((t) => t.test_id)), [assignedTests]);
   const availableTests = (tests || []).filter((t) => !assignedIds.has(t.id));
   const filteredAvailable = availableTests.filter((t) =>
@@ -64,13 +49,11 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
   };
 
   const handleUnassign = async (testId) => {
-    if (!window.confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.')) return;
+    if (!(await confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.', { danger: true, confirmLabel: 'Снять' }))) return;
     setBusyId(testId);
     setNotice(null);
     try {
-      await axios.delete(`${API_BASE}/teacher/groups/${group.id}/assignments/${testId}`, {
-        headers: authHeaders(),
-      });
+      await apiClient.delete(`/teacher/groups/${group.id}/assignments/${testId}`);
       await fetchAssignments();
       setNotice({ tone: 'success', text: 'Тест снят с группы' });
     } catch (e) {
@@ -104,7 +87,7 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {notice ? <InlineNotice tone={notice.tone}>{notice.text}</InlineNotice> : null}
+          {shownNotice ? <InlineNotice tone={shownNotice.tone}>{shownNotice.text}</InlineNotice> : null}
 
           {loading ? (
             <p className="text-sm text-zinc-500 text-center py-8">Загрузка назначений…</p>

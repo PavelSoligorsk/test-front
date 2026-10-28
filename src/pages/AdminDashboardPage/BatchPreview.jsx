@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useAsyncData } from '../../shared/hooks';
 import { Eye, AlertCircle, Trash2, Loader2, Sparkles, Inbox } from 'lucide-react';
 import { MarkdownPreview } from './MarkdownPreview';
 import { fetchTask } from './api';
 import { IconWell, InlineNotice } from '../../shared/ui';
+
+const NO_TASKS = {};
 
 const MetaBadge = ({ label, value }) => (
   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium whitespace-nowrap bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
@@ -22,57 +24,23 @@ const optionsToMarkdown = (options) =>
   parseOptions(options).map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n');
 
 export default function BatchPreview({ mode, parsed, error, hasText }) {
-  const [fetchedTasks, setFetchedTasks] = useState({});
-  const [loadingTasks, setLoadingTasks] = useState(false);
-
-  useEffect(() => {
-    if (!hasText || error || !parsed || mode === 'create') {
-      setFetchedTasks({});
-      return;
-    }
-
-    const idsToFetch = mode === 'delete'
-      ? parsed.filter(id => typeof id === 'number' && Number.isInteger(id))
-      : parsed.map(item => item?.id).filter(id => typeof id === 'number' && Number.isInteger(id));
-
-    if (idsToFetch.length === 0) {
-      setFetchedTasks({});
-      return;
-    }
-
-    let isMounted = true;
-    setLoadingTasks(true);
-
-    const fetchTasks = async () => {
-      try {
-        const uniqueIds = [...new Set(idsToFetch)];
-        const requests = uniqueIds.map(id =>
-          fetchTask(id)
-            .then(data => ({ id, data }))
-            .catch(() => ({ id, data: null }))
-        );
-
-        const results = await Promise.all(requests);
-
-        if (!isMounted) return;
-
-        const taskMap = {};
-        results.forEach(({ id, data }) => {
-          if (data) taskMap[id] = data;
-        });
-
-        setFetchedTasks(taskMap);
-      } catch (err) {
-        console.error('Ошибка подгрузки заданий:', err);
-      } finally {
-        if (isMounted) setLoadingTasks(false);
-      }
-    };
-
-    fetchTasks();
-
-    return () => { isMounted = false; };
-  }, [parsed, mode, hasText, error]);
+  // Для удаления и правки показываем задания из базы, на которые ссылаются id.
+  const ids = !hasText || error || !parsed || mode === 'create'
+    ? []
+    : [...new Set((mode === 'delete' ? parsed : parsed.map((item) => item?.id))
+      .filter((id) => typeof id === 'number' && Number.isInteger(id)))];
+  const tasksQuery = useAsyncData(ids.length ? ids.join(',') : null, async () => {
+    const results = await Promise.all(ids.map((id) => fetchTask(id)
+      .then((data) => ({ id, data }))
+      .catch(() => ({ id, data: null }))));
+    const taskMap = {};
+    results.forEach(({ id, data }) => {
+      if (data) taskMap[id] = data;
+    });
+    return taskMap;
+  });
+  const fetchedTasks = tasksQuery.data || NO_TASKS;
+  const loadingTasks = tasksQuery.loading;
 
   const countLabel = mode === 'delete' ? 'к удалению' : 'заданий';
 

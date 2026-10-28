@@ -1,4 +1,3 @@
-import React from 'react';
 import { MarkdownPreview } from './MarkdownPreview';
 
 export default function TaskFormPreview({ taskData }) {

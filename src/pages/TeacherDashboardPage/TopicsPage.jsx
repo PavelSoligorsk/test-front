@@ -1,5 +1,5 @@
 import { PageShell } from '../../shared/ui';
-import { useTeacherWorkspace } from './TeacherWorkspace';
+import { useTeacherWorkspace } from './teacherWorkspaceContext';
 import TheoryBank from './TheoryBank';
 
 export default function TopicsPage() {

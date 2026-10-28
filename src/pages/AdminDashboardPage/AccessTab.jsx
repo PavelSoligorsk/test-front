@@ -1,4 +1,3 @@
-import React from 'react';
 import { PlusCircle, MailCheck, Trash2 } from 'lucide-react';
 import { Sheet, IconWell, fieldClass, labelClass, primaryBtnClass } from '../../shared/ui';
 

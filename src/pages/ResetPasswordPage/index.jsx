@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../../shared/api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { API_URL } from '../../shared/config';
 import AuthShell, { AuthPasswordField, authButton, authField, authLabel, authLink } from '../../shared/ui/AuthShell';
 
 export default function ResetPassword() {
@@ -20,7 +19,7 @@ export default function ResetPassword() {
     setError('');
     setMessage('');
     try {
-      await axios.post(`${API_URL}/forgot-password`, { email });
+      await apiClient.post(`/forgot-password`, { email });
       setMessage('Ссылка для сброса пароля отправлена на почту.');
     } catch (err) {
       setError(err.response?.data?.detail || 'Не удалось отправить ссылку');
@@ -43,7 +42,7 @@ export default function ResetPassword() {
     setError('');
     setMessage('');
     try {
-      await axios.post(`${API_URL}/reset-password`, {
+      await apiClient.post(`/reset-password`, {
         token,
         new_password: formData.newPassword,
         confirm_password: formData.confirmPassword,

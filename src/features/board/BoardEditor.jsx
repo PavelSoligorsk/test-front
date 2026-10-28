@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -9,12 +9,12 @@ import {
   EyeOff,
   Hand,
   Image,
-  Link2,
   LocateFixed,
   Maximize2,
   Grid3x3,
   Menu,
   Minus,
+  Circle,
   MousePointer2,
   Pencil,
   Pi,
@@ -25,11 +25,14 @@ import {
   StickyNote,
   Type,
   Undo2,
-  WifiOff,
   X,
 } from 'lucide-react';
-import BoardObject from './BoardObject';
-import SelectionToolbar from './SelectionToolbar';
+import ObjectLayer from './ObjectLayer';
+import { useBoardCamera } from './useBoardCamera';
+import { POINTER_ACTIONS, createPointerInput, forwardActions } from './input/pointer';
+import { createEarliestTimer, createRepeatGate } from './timers';
+import { createBoardStore, useStoreSelector } from './store';
+import { createMotion } from './motion';
 import {
   boardErrorMessage,
   createTeacherBoard,
@@ -41,344 +44,78 @@ import {
   uploadTeacherBoardImage,
   deleteTeacherBoardImage,
 } from './api';
-import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, stripCamera, theoryAppKind } from './geogebraApi';
+import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, stripCamera } from './geogebraApi';
+import { theoryAppKind } from '../../shared/geogebra/setup';
 import { connectBoard, setRemoteTitle } from './live';
+import { getCurrentUser } from '../../shared/lib/session';
 import { setPenActive } from './penLock';
-import { applyOp, diffOps, keepLongerStrokes, reorder, strokeDuration } from './ops';
-import { applyHistory, historyEntry } from './history';
+import { applyOp, diffOps, keepLongerStrokes, reorder } from './ops';
+import { applyHistory, createdOnly, historyEntry } from './history';
 import {
-  arrowBounds,
   boundsOf,
   clamp,
-  eraseStrokes,
-  intersects,
-  rectFromPoints,
-  resizeBox,
-  hitObject,
-  smoothPath,
-  snapMove,
 } from './geometry';
-import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
 import { cloneObjects, parseObjects, serializeObjects } from './clipboard';
 import {
-  GEOGEBRA_APPS,
   PEN_COLORS,
-  PEN_WIDTHS,
   SELECTION_COLOR,
   SHAPE_FILLS,
   STICKY_COLORS,
-  TEXT_SIZES,
   createObject,
-  geogebraApp,
+  sameSeries,
   TASK_FONT,
   uid,
 } from './model';
-import { boardImageSrc, unusedImageIds } from './images';
-import ShapeGlyph from './ShapeGlyph';
+import { boardImageSrc, imageFiles, unusedImageIds } from './images';
 import {
-  SHAPE_GROUPS,
-  attachSnap,
-  bindArrowEnds,
-  defaultDepth,
-  depthFromLocal,
+  bindFromHit,
+  dropBindsTo,
   extendStraight,
-  settleSnap,
-  jointLocal,
-  planeDefaults,
-  bindPolylineVertex,
-  bindPyramidBase,
-  moveApex,
-  movePolylineVertex,
-  moveShapeVertex,
-  movePyramidBase,
-  nearestCrossing,
-  arrowUnderPoint,
-  plantPoint,
-  refreshPointHold,
-  slideSharedPoints,
-  splitArrowThroughPoints,
-  nearestVertex,
-  setVertexName,
-  moveVertexLabel,
-  labelPlace,
-  labelVertices,
-  shapeVertexLocals,
-  solidAnchors,
   polylineFrame,
-  pruneJoints,
-  releaseMissingBinds,
-  retargetBound,
-  setArrowSide,
   joinArrows,
-  shapeFigures,
-  hitShapeContour,
-  shapeHandle,
-  shapeKnobPatch,
-  shapeKnobs,
-  shapeToneOpacity,
+  plantPoint,
+  releaseMissingBinds,
+  setArrowSide,
+  settleSnap,
   snapFigurePoint,
 } from './shapes';
-import { isPagesMeta } from './pages';
-import BoardTheoryPane from './BoardTheoryPane';
-import BoardTasksPane from './BoardTasksPane';
-import BoardStudentsPane from './BoardStudentsPane';
-import { taskOptions } from './taskBankApi';
-
-const SURFACE_MARK = 'board-surface';
-const SURFACE_COLORS = ['#e7f4fb', '#ffffff', '#eceff1', '#2c2c2e', '#dff6fb', '#e4e8fb', '#fbf3d4', '#f3e8f6', '#e7f6e4', '#fde8e8'];
-const DEFAULT_SURFACE = { color: '#e7f4fb', grid: 'cell' };
-
-function isSurfaceMeta(obj) {
-  return obj?.props?.system === SURFACE_MARK;
-}
-
-function isHiddenBoardObject(obj) {
-  return isPagesMeta(obj) || isSurfaceMeta(obj);
-}
-
-function applyFigureNode(node, fig, fill, stroke, dashed) {
-  if (fig.ellipse) {
-    node.setAttribute('cx', fig.ellipse.cx);
-    node.setAttribute('cy', fig.ellipse.cy);
-    node.setAttribute('rx', fig.ellipse.rx);
-    node.setAttribute('ry', fig.ellipse.ry);
-    node.removeAttribute('d');
-    node.removeAttribute('points');
-  } else if (fig.d) {
-    node.setAttribute('d', fig.d);
-    node.removeAttribute('points');
-  } else {
-    node.setAttribute('points', fig.points);
-    node.removeAttribute('d');
-  }
-  node.setAttribute('fill', fig.fill === 'none' ? 'none' : fill);
-  node.setAttribute('stroke', fig.stroke === 'none' ? 'none' : stroke);
-  node.setAttribute('stroke-width', '2');
-  node.setAttribute('stroke-linejoin', 'round');
-  node.setAttribute('vector-effect', 'non-scaling-stroke');
-  if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
-  else node.removeAttribute('fill-opacity');
-  if (fig.dashed || dashed) node.setAttribute('stroke-dasharray', '4 3');
-  else node.removeAttribute('stroke-dasharray');
-}
-
-function figureTag(fig) {
-  if (fig.ellipse) return 'ellipse';
-  if (fig.d) return 'path';
-  return 'polygon';
-}
-
-function paintLabelNode(node, name) {
-  if (!node || !name?.letter) return;
-  const place = labelPlace(name);
-  node.dataset.dx = String(place.dx);
-  node.dataset.dy = String(place.dy);
-  node.style.fontSize = `${place.size}px`;
-  node.style.transform = `translate(${place.dx}px, ${place.dy}px)`;
-}
-
-function pickObject(objects, point, zoom) {
-  for (let index = objects.length - 1; index >= 0; index -= 1) {
-    const obj = objects[index];
-    if (obj?.type === 'point' && hitObject(obj, point, zoom)) return obj;
-  }
-  for (let index = objects.length - 1; index >= 0; index -= 1) {
-    const obj = objects[index];
-    if (!obj || obj.type === 'point') continue;
-    const hit = obj.type === 'shape' ? hitShapeContour(obj, point, zoom) : hitObject(obj, point, zoom);
-    if (hit) return obj;
-  }
-  return null;
-}
-
-function readSurface(objects) {
-  const meta = (objects || []).find(isSurfaceMeta);
-  const color = SURFACE_COLORS.includes(meta?.props?.color) ? meta.props.color : DEFAULT_SURFACE.color;
-  const grid = meta?.props?.grid === 'empty' || meta?.props?.grid === 'rule' || meta?.props?.grid === 'cell'
-    ? meta.props.grid
-    : DEFAULT_SURFACE.grid;
-  return { color, grid };
-}
+import { SURFACE_MARK, isHiddenBoardObject, isSurfaceMeta, readSurface } from './meta';
 import { deleteBoard } from './storage';
+import { taskOptions } from './taskBankApi';
+import { LASER_COLOR, LASER_FADE_MS, LASER_WIDTH, MAX_OBJECTS, SEND_MS } from './constants';
+import BoardSidePanes from './ui/BoardSidePanes';
+import { renderDraft } from './paint/draft';
+import { paintGuides as renderGuides } from './paint/guides';
+import { createInk } from './paint/ink';
+import { playLaser } from './paint/laser';
+import IconButton from './ui/IconButton';
+import LinkStatus from './ui/LinkStatus';
+import PeerList from './ui/PeerList';
+import SelectionBar from './ui/SelectionBar';
+import ShareButton from './ui/ShareButton';
+import StyleTray from './ui/StyleTray';
+import SurfacePanel from './ui/SurfacePanel';
+import { peerColor, peerName } from './ui/peers';
+import { followMoved } from './tools/gestures';
 
-const LASER_COLOR = '#ff2d2d';
-const LASER_WIDTH = 12;
-const LASER_COLORS = ['#ff2d2d', '#f5c518', '#18181b', '#2563eb', '#16a34a', '#f97316', '#7c3aed'];
-const LASER_WIDTHS = [8, 12, 18];
-const LASER_HOLD_MS = 450;
-const LASER_EAT_SPEED = 2.5;
-const LASER_GAP_CAP_MS = 400;
-const LASER_MAX_POINTS = 2000;
-const INK_SPEED = 720;
 
-function laserLook(width, zoom) {
-  const z = Math.max(0.25, Number(zoom) || 1);
-  const size = Math.max(6, Math.min(20, Number(width) || LASER_WIDTH));
-  return {
-    halo: (size * 2.2) / z,
-    glow: (size * 0.9) / z,
-    core: Math.max(1.4, size * 0.2) / z,
-    head: (size * 0.55) / z,
-    blur: (size * 0.7) / z,
-  };
+function selfName() {
+  const user = getCurrentUser();
+  const full = [user?.first_name, user?.last_name].filter(Boolean).join(' ');
+  return full || user?.username || '';
 }
 
-function inkDuration(ms, length) {
-  const given = strokeDuration(ms);
-  return given || Math.min(4000, Math.max(280, (length / INK_SPEED) * 1000));
+function hasNoCanvasObjects(objects) {
+  return !objects.some((obj) => !isHiddenBoardObject(obj));
 }
 
-function svgNode(name) {
-  return document.createElementNS('http://www.w3.org/2000/svg', name);
+function isMeasured(obj) {
+  return obj?.type === 'task'
+    || (obj?.type === 'text' && (obj.props?.format === 'theory' || obj.props?.format === 'markdown'));
 }
 
-function createLaserNode(origin) {
-  const wrap = document.createElement('div');
-  wrap.dataset.laser = `${origin.x},${origin.y}`;
-  Object.assign(wrap.style, {
-    position: 'absolute',
-    left: `${origin.x}px`,
-    top: `${origin.y}px`,
-    width: '12px',
-    height: '12px',
-    overflow: 'visible',
-    pointerEvents: 'none',
-    opacity: '1',
-  });
-  const svg = svgNode('svg');
-  svg.setAttribute('width', '12');
-  svg.setAttribute('height', '12');
-  svg.style.display = 'block';
-  svg.style.overflow = 'visible';
 
-  const halo = svgNode('path');
-  const glow = svgNode('path');
-  const core = svgNode('path');
-  [halo, glow, core].forEach((path) => {
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-  });
-  halo.setAttribute('opacity', '0.4');
-  glow.setAttribute('opacity', '0.75');
-  core.setAttribute('stroke', '#ffffff');
-
-  const headGlow = svgNode('circle');
-  const head = svgNode('circle');
-  head.setAttribute('fill', '#ffffff');
-  headGlow.setAttribute('opacity', '0.55');
-
-  svg.append(halo, glow, core, headGlow, head);
-  wrap.appendChild(svg);
-  wrap.laserParts = { halo, glow, core, head, headGlow };
-  return wrap;
-}
-
-function moveLaserHead(parts, point, look) {
-  [parts.head, parts.headGlow].forEach((node) => {
-    node.setAttribute('cx', String(point.x));
-    node.setAttribute('cy', String(point.y));
-  });
-  parts.head.setAttribute('r', String(look.head * 0.55));
-  parts.headGlow.setAttribute('r', String(look.head * 1.5));
-}
-
-function updateLaserNode(wrap, local, color, look) {
-  const parts = wrap.laserParts;
-  if (!parts) return;
-  const d = smoothPath(local);
-  [parts.halo, parts.glow, parts.core].forEach((path) => {
-    path.setAttribute('d', d);
-    path.style.strokeDasharray = '';
-    path.style.strokeDashoffset = '';
-  });
-  parts.halo.setAttribute('stroke', color);
-  parts.glow.setAttribute('stroke', color);
-  parts.headGlow.setAttribute('fill', color);
-  parts.halo.setAttribute('stroke-width', String(look.halo));
-  parts.glow.setAttribute('stroke-width', String(look.glow));
-  parts.core.setAttribute('stroke-width', String(look.core));
-  parts.halo.style.filter = `blur(${look.blur}px)`;
-  parts.headGlow.style.filter = `blur(${look.blur * 0.6}px)`;
-  wrap.laserLook = look;
-  moveLaserHead(parts, local[local.length - 1] || { x: 0, y: 0 }, look);
-}
-
-function setLaserDash(parts, length, offset) {
-  [parts.halo, parts.glow, parts.core].forEach((path) => {
-    path.style.strokeDasharray = String(length);
-    path.style.strokeDashoffset = String(offset);
-  });
-}
-
-function laserTimeline(points) {
-  if (!Array.isArray(points) || points.length < 2) return null;
-  if (!points.every((point) => Number.isFinite(Number(point.t)))) return null;
-  const times = [0];
-  const dist = [0];
-  let sum = 0;
-  for (let i = 1; i < points.length; i += 1) {
-    sum += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-    dist.push(sum);
-    const gap = Math.max(0, Number(points[i].t) - Number(points[i - 1].t));
-    times.push(times[i - 1] + Math.min(gap, LASER_GAP_CAP_MS));
-  }
-  const total = times[times.length - 1];
-  if (!sum || total <= 0) return null;
-  return { times, fracs: dist.map((d) => d / sum), total };
-}
-
-function laserFrac(tl, elapsed) {
-  if (elapsed <= 0) return 0;
-  if (elapsed >= tl.total) return 1;
-  let i = 1;
-  while (i < tl.times.length - 1 && tl.times[i] < elapsed) i += 1;
-  const t0 = tl.times[i - 1];
-  const t1 = tl.times[i];
-  const k = t1 > t0 ? (elapsed - t0) / (t1 - t0) : 1;
-  return tl.fracs[i - 1] + (tl.fracs[i] - tl.fracs[i - 1]) * k;
-}
-
-function playLaser(wrap, { duration = 600, draw = true } = {}) {
-  const parts = wrap.laserParts;
-  if (!parts) return;
-  const length = parts.core.getTotalLength() || 1;
-  const tl = wrap.laserTimeline;
-  const total = tl ? tl.total : Math.max(1, duration);
-  const frac = (elapsed) => (tl ? laserFrac(tl, elapsed) : Math.min(1, Math.max(0, elapsed / total)));
-  const drawEnd = draw ? total : 0;
-  const holdEnd = drawEnd + LASER_HOLD_MS;
-  const eatMs = Math.max(250, total / LASER_EAT_SPEED);
-  let started = 0;
-  let headSet = false;
-  const tick = (now) => {
-    if (!wrap.isConnected) return;
-    if (!started) started = now;
-    const elapsed = now - started;
-    if (elapsed < drawEnd) {
-      const f = frac(elapsed);
-      setLaserDash(parts, length, length * (1 - f));
-      moveLaserHead(parts, parts.core.getPointAtLength(length * f), wrap.laserLook);
-    } else if (elapsed < holdEnd) {
-      setLaserDash(parts, length, 0);
-      if (!headSet) {
-        moveLaserHead(parts, parts.core.getPointAtLength(length), wrap.laserLook);
-        headSet = true;
-      }
-    } else {
-      const progress = Math.min(1, (elapsed - holdEnd) / eatMs);
-      const eaten = tl ? frac(progress * total) : progress;
-      setLaserDash(parts, length, -length * eaten);
-      wrap.style.opacity = String(progress < 0.7 ? 1 : 1 - (progress - 0.7) / 0.3);
-      if (progress >= 1) {
-        wrap.remove();
-        return;
-      }
-    }
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
+const EMPTY_STUDENTS = [];
 
 const TOOLS = [
   { id: 'select', label: 'Выбор', hint: 'V', icon: MousePointer2 },
@@ -387,6 +124,7 @@ const TOOLS = [
   { id: 'text', label: 'Текст', hint: 'T', icon: Type },
   { id: 'shape', label: 'Фигура', hint: 'R', icon: Square },
   { id: 'arrow', label: 'Отрезок', hint: 'L', icon: Minus },
+  { id: 'point', label: 'Точка', hint: '.', icon: Circle },
   { id: 'pen', label: 'Кисть', hint: 'P', icon: Pencil },
   { id: 'laser', label: 'Указка', hint: 'U', icon: Pointer },
   { id: 'eraser', label: 'Ластик', hint: 'E', icon: Eraser },
@@ -405,7 +143,6 @@ const INITIAL_STYLE = {
   arrow: PEN_COLORS[0],
   textSize: 22,
   appName: 'geometry',
-  templateId: '',
 };
 
 const TOOL_CODES = {
@@ -423,43 +160,15 @@ const TOOL_CODES = {
   KeyG: 'geogebra',
 };
 
-const MAX_OBJECTS = 10000;
-const SNAP_PX = 6;
-const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'shape-knob', 'poly-point', 'vert-point', 'label-move', 'label-size', 'apex', 'base-point', 'marquee', 'pinch']);
-const IMAGE_TYPES = /^image\/(png|jpe?g|webp)$/;
-const DEFAULT_CAMERA = { x: 64, y: 72, zoom: 1 };
-const SEND_MS = 50;
+const DRAG_HIDES_BAR = new Set(['move', 'resize', 'arrow-end', 'depth', 'shape-knob', 'poly-point', 'apex', 'base-point', 'marquee', 'pinch']);
 const GEO_XML_MS = 200;
+const GEO_XML_MOVING_MS = 1000;
 const GEO_SAVE_MS = 4000;
 const TASK_CARD_W = 560;
 const TASK_CARD_GAP = 32;
-const PEER_COLORS = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#9333ea', '#0891b2', '#db2777', '#4f46e5'];
 
 function boardTitle(value) {
   return (value || '').trim() || 'Доска';
-}
-
-function peerColor(clientId) {
-  let hash = 0;
-  for (const char of String(clientId || '')) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return PEER_COLORS[Math.abs(hash) % PEER_COLORS.length];
-}
-
-function peerName(peer) {
-  return peer?.name || (peer?.role === 'teacher' ? 'Учитель' : 'Ученик');
-}
-
-function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-  return (parts.length > 1 ? parts[0][0] + parts[1][0] : (parts[0] || '?').slice(0, 2)).toUpperCase();
-}
-
-function roundPoint(point) {
-  return { x: Math.round(point.x * 10) / 10, y: Math.round(point.y * 10) / 10 };
-}
-
-function imageFiles(list) {
-  return Array.from(list || []).filter((file) => IMAGE_TYPES.test(file.type));
 }
 
 async function imageSize(file) {
@@ -472,17 +181,6 @@ async function imageSize(file) {
   } catch {
     return null;
   }
-}
-
-function audienceKey(board) {
-  if (board?.groupId != null) return `g:${board.groupId}`;
-  const ids = [...(board?.studentIds || [])].map(Number).filter((id) => Number.isFinite(id)).sort((a, b) => a - b);
-  return `s:${ids.join(',')}`;
-}
-
-function sameSeries(a, b) {
-  const key = audienceKey(a);
-  return key !== 's:' && key === audienceKey(b);
 }
 
 function freshPageTitle(pages) {
@@ -507,22 +205,19 @@ export default function BoardEditor({
   shareToken = null,
 }) {
   const navigate = useNavigate();
-  const [savedCamera] = useState(() => loadLocalCamera(initialBoard.id));
 
   const viewportRef = useRef(null);
   const worldRef = useRef(null);
   const draftHostRef = useRef(null);
   const laserHostRef = useRef(null);
-  const inkRef = useRef({ items: new Map(), raf: 0 });
+  const [ink] = useState(createInk);
   const guideHostRef = useRef(null);
   const groupBoxRef = useRef(null);
   const barRef = useRef(null);
   const zoomLabelRef = useRef(null);
   const hintRef = useRef(null);
-  const cameraSyncRef = useRef(0);
-  const wheelRef = useRef(() => {});
-  const objectsRef = useRef(initialBoard.objects || []);
-  const cameraRef = useRef(savedCamera || DEFAULT_CAMERA);
+  const [store] = useState(() => createBoardStore(initialBoard.objects || []));
+  const [motion] = useState(() => createMotion());
   const titleRef = useRef(boardTitle(initialBoard.title));
   const boardIdRef = useRef(initialBoard.id);
   const sentRef = useRef(initialBoard.objects || []);
@@ -530,20 +225,17 @@ export default function BoardEditor({
   const socketRef = useRef(null);
   const geoCamInRef = useRef(new Map());
   const geoInputInRef = useRef(new Map());
+  const geoMoveInRef = useRef(new Map());
   const geoCamLastRef = useRef(new Map());
   const geoSeqRef = useRef(new Map());
   const geoCamFromRef = useRef(new Map());
   const sendTimerRef = useRef(0);
-  const lastCursorRef = useRef(0);
-  const cursorTimerRef = useRef(0);
   const cursorNodesRef = useRef(new Map());
   const peerCursorsRef = useRef(new Map());
   const cursorsOnRef = useRef(true);
-  const incomingRef = useRef({ raf: 0, before: null });
   const gestureIdsRef = useRef(new Set());
-  const gestureFrameRef = useRef(0);
   const clientIdRef = useRef(null);
-  const lastErrorRef = useRef({ text: '', at: 0 });
+  const [opErrorGate] = useState(() => createRepeatGate(4000));
   const apiMap = useRef(new Map());
   const pastRef = useRef([]);
   const futureRef = useRef([]);
@@ -554,7 +246,6 @@ export default function BoardEditor({
   const dragCleanupRef = useRef(null);
   const touchesRef = useRef(new Map());
   const pointerClientRef = useRef(null);
-  const labelArmRef = useRef(null);
   const editOriginRef = useRef(null);
   const editingIdRef = useRef(null);
   const selectedIdsRef = useRef([]);
@@ -565,28 +256,26 @@ export default function BoardEditor({
   const mountedRef = useRef(true);
   const spaceRef = useRef(false);
   const geoTimerRef = useRef(null);
-  const geoXmlTimerRef = useRef(null);
+  const [geoXmlTimer] = useState(createEarliestTimer);
   const geoLayoutTimerRef = useRef(0);
   const pendingTaskHeightsRef = useRef(new Map());
   const taskMeasureRafRef = useRef(0);
   const stackRef = useRef(null);
   const geoDirtyRef = useRef(new Set());
-  const shapeGlideRef = useRef({ items: new Map(), raf: 0, last: 0 });
   const readOnlyRef = useRef(readOnly);
   const audienceRef = useRef(audience);
   const fileRef = useRef(null);
   const imagePointRef = useRef(null);
   const noticeTimerRef = useRef(0);
 
-  const [objects, setObjects] = useState(initialBoard.objects || []);
-  const [camera, setCamera] = useState(savedCamera || DEFAULT_CAMERA);
   const [title, setTitle] = useState(boardTitle(initialBoard.title));
   const [tool, setTool] = useState('select');
   const [selectedIds, setSelectedIds] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [activeLabel, setActiveLabel] = useState(null);
   const [link, setLink] = useState({ state: 'connecting', pending: 0 });
   const [peers, setPeers] = useState([]);
+  const peersRef = useRef([]);
+  const [selfId, setSelfId] = useState(null);
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
   const [style, setStyle] = useState(INITIAL_STYLE);
   const [notice, setNotice] = useState('');
@@ -594,7 +283,7 @@ export default function BoardEditor({
   const [surfaceOpen, setSurfaceOpen] = useState(false);
   const [sidePane, setSidePane] = useState(null);
   const [keptPanes, setKeptPanes] = useState({ theory: false, tasks: false, students: false });
-  const sideStudentsRef = useRef(initialBoard.studentIds || EMPTY_STUDENTS);
+  const [sideStudents] = useState(() => initialBoard.studentIds || EMPTY_STUDENTS);
   const [cursorsOn, setCursorsOn] = useState(true);
   const [shareAccess, setShareAccess] = useState(initialBoard.shareAccess || 'off');
   const [shareTokenState, setShareTokenState] = useState(initialBoard.shareToken || null);
@@ -602,6 +291,21 @@ export default function BoardEditor({
   const theoryOpen = sidePane !== null;
   const [surface, setSurface] = useState(() => readSurface(initialBoard.objects));
   const surfaceRef = useRef(surface);
+  const isDragging = useCallback(() => Boolean(dragRef.current), []);
+  const paintCameraOverlays = useCallback(() => {
+    liveRef.current.paintSelectionUi?.();
+    liveRef.current.paintPeerCursors?.();
+  }, []);
+  const cam = useBoardCamera({
+    boardId: initialBoard.id,
+    viewportRef,
+    worldRef,
+    zoomLabelRef,
+    surfaceRef,
+    isDragging,
+    onPaint: paintCameraOverlays,
+  });
+  const { camera, viewSize, cameraRef } = cam;
   const [series, setSeries] = useState([]);
   const [editingPageId, setEditingPageId] = useState(null);
   const [editingPageTitle, setEditingPageTitle] = useState('');
@@ -611,11 +315,11 @@ export default function BoardEditor({
     title: boardTitle(initialBoard.title),
     groupId: initialBoard.groupId ?? null,
     studentIds: initialBoard.studentIds || [],
+    seriesId: initialBoard.seriesId || null,
     createdAt: initialBoard.createdAt || '',
   });
 
-  const selectedSet = new Set(selectedIds);
-  const selectedObjects = objects.filter((obj) => selectedSet.has(obj.id));
+  const canvasEmpty = useStoreSelector(store, hasNoCanvasObjects);
   const canUndo = historyCounts.undo > 0;
   const canRedo = historyCounts.redo > 0;
 
@@ -630,7 +334,7 @@ export default function BoardEditor({
     setHistoryCounts({ undo: pastRef.current.length, redo: futureRef.current.length });
   }
 
-  function pushHistory(before, after = objectsRef.current) {
+  function pushHistory(before, after = store.get()) {
     const entry = historyEntry(before, after);
     if (!entry) return;
     pastRef.current.push(entry);
@@ -642,26 +346,21 @@ export default function BoardEditor({
   function applySurface(next) {
     surfaceRef.current = next;
     setSurface(next);
-    paintSurface(cameraRef.current);
+    cam.paintSurface(cameraRef.current);
     if (readOnlyRef.current) return;
     const props = { system: SURFACE_MARK, text: '', color: next.color, grid: next.grid };
-    const existing = objectsRef.current.find(isSurfaceMeta);
+    const existing = store.get().find(isSurfaceMeta);
     if (!existing) {
-      commit([...objectsRef.current, createObject('text', { x: -10000, y: -10000, w: 1, h: 1, props })]);
+      commit([...store.get(), createObject('text', { x: -10000, y: -10000, w: 1, h: 1, props })]);
       return;
     }
-    commit(objectsRef.current.map((obj) => (obj.id === existing.id ? { ...obj, props } : obj)));
+    commit(store.get().map((obj) => (obj.id === existing.id ? { ...obj, props } : obj)));
   }
 
   function commit(next) {
-    const before = new Map(objectsRef.current.map((obj) => [obj.id, obj]));
-    pushHistory(objectsRef.current, next);
-    objectsRef.current = next;
-    setObjects(next);
+    pushHistory(store.get(), next);
+    store.set(next);
     scheduleSend();
-    next.forEach((obj) => {
-      if (before.get(obj.id) !== obj) paintObject(obj);
-    });
   }
 
   function send(op) {
@@ -673,11 +372,11 @@ export default function BoardEditor({
     window.clearTimeout(sendTimerRef.current);
     sendTimerRef.current = 0;
     if (readOnlyRef.current) {
-      sentRef.current = objectsRef.current;
+      sentRef.current = store.get();
       return;
     }
     const before = sentRef.current;
-    const after = objectsRef.current;
+    const after = store.get();
     if (before !== after) {
       sentRef.current = after;
       diffOps(before, after).forEach(send);
@@ -694,17 +393,8 @@ export default function BoardEditor({
     sendTimerRef.current = window.setTimeout(() => liveRef.current.flushOps(), SEND_MS);
   }
 
-  // Чужой штрих растёт мимо React: React увидит те же точки при следующей перерисовке или полном штрихе.
-  function paintStrokeDom(list, id) {
-    const obj = list.find((item) => item.id === id);
-    const path = obj && viewportRef.current?.querySelector(`[data-object="${CSS.escape(id)}"] path`);
-    if (!path) return false;
-    path.setAttribute('d', smoothPath(obj.props.points || []));
-    return true;
-  }
-
   function movePeerToStroke(clientId, id) {
-    const obj = objectsRef.current.find((item) => item.id === id);
+    const obj = store.get().find((item) => item.id === id);
     const points = obj?.type === 'draw' ? obj.props?.points : null;
     if (!clientId || !points?.length) return;
     const last = points[points.length - 1];
@@ -713,40 +403,41 @@ export default function BoardEditor({
   }
 
   function applyIncoming(op) {
-    const before = objectsRef.current;
+    const before = store.get();
     sentRef.current = applyOp(sentRef.current, op);
     const next = applyOp(before, op);
     if (next === before) return;
-    objectsRef.current = next;
-    if (op.type === 'append_points' && paintStrokeDom(next, op.id)) return;
-    const incoming = incomingRef.current;
-    if (incoming.raf) return;
-    incoming.raf = requestAnimationFrame(() => {
-      incoming.raf = 0;
-      if (!mountedRef.current) return;
-      setObjects(objectsRef.current);
-      pruneSelection();
-    });
+    const id = op.type === 'patch' ? op.id : op.type === 'upsert' ? op.object?.id : null;
+    const prev = id ? store.getById(id) : null;
+    store.set(next);
+    // Чужой сдвиг и размер доезжают плавно; свой жест над тем же объектом важнее.
+    if (prev && !gestureIdsRef.current.has(id)) motion.note(prev, store.getById(id));
+    pruneSelection();
+    // Чертёж взял другой участник (гонка нажатий) — уступаем ему, не трогая его замок.
+    const editing = editingIdRef.current && store.getById(editingIdRef.current);
+    const holder = editing?.type === 'geogebra' ? geoEditor(editing) : null;
+    if (holder) {
+      editingIdRef.current = null;
+      setEditingId(null);
+      notify(`Чертёж взял ${holder.name || 'другой участник'}`);
+    }
   }
 
   function onSnapshot(message, readPending) {
     flushOps();
     const pendingOps = readPending();
-    let next = keepLongerStrokes(
-      objectsRef.current,
-      Array.isArray(message.board?.objects) ? message.board.objects : [],
-    );
+    let next = keepLongerStrokes(store.get(), Array.isArray(message.board?.objects) ? message.board.objects : []);
     pendingOps.forEach((op) => {
       next = applyOp(next, op);
     });
     const remoteTitle = boardTitle(message.board?.title);
     const pendingTitle = [...pendingOps].reverse().find((op) => op.type === 'title');
     sentRef.current = next;
-    objectsRef.current = next;
-    incomingRef.current.before = null;
+    store.set(next);
     sentTitleRef.current = pendingTitle ? pendingTitle.title : remoteTitle;
     titleRef.current = sentTitleRef.current;
     clientIdRef.current = message.clientId || null;
+    setSelfId(clientIdRef.current);
     if (typeof message.cursors === 'boolean') {
       cursorsOnRef.current = message.cursors;
       setCursorsOn(message.cursors);
@@ -759,67 +450,23 @@ export default function BoardEditor({
     const roster = (message.peers || []).filter((peer) => peer.clientId !== message.clientId);
     peerCursorsRef.current = new Map([...peerCursorsRef.current].filter(([id]) => roster.some((peer) => peer.clientId === id)));
     if (!mountedRef.current) return;
-    setObjects(next);
     setTitle(titleRef.current);
     setPeers(roster);
+    peersRef.current = roster;
     pruneSelection();
+    // После переподключения у нас новый clientId: замок на свой чертёж переписываем.
+    const editing = editingIdRef.current && store.getById(editingIdRef.current);
+    if (editing?.type === 'geogebra' && editing.props?.editor?.clientId !== clientIdRef.current) {
+      if (geoEditor(editing)) {
+        editingIdRef.current = null;
+        setEditingId(null);
+      } else if (!readOnlyRef.current) setGeoLock(editing.id, true);
+    }
   }
 
   function showLaser(message) {
-    const host = laserHostRef.current;
-    const points = Array.isArray(message?.points) ? message.points : [];
-    if (!host || points.length < 2) return;
-    if (message.clientId && message.clientId === clientIdRef.current) return;
-    const origin = points[0];
-    const local = points.map((point) => ({ x: Number(point.x) - origin.x, y: Number(point.y) - origin.y }));
-    const color = message.color || LASER_COLOR;
-    const wrap = createLaserNode(origin);
-    wrap.laserTimeline = laserTimeline(points);
-    updateLaserNode(wrap, local, color, laserLook(message.width, cameraRef.current.zoom));
-    host.appendChild(wrap);
-    playLaser(wrap, { duration: inkDuration(message.ms, wrap.laserParts.core.getTotalLength() || 1) });
-  }
-
-  function paintInk(now) {
-    const ink = inkRef.current;
-    const viewport = viewportRef.current;
-    let alive = false;
-    ink.items.forEach((item, id) => {
-      const path = viewport?.querySelector(`[data-object="${CSS.escape(id)}"] path`);
-      if (!path) {
-        alive = true;
-        return;
-      }
-      const length = path.getTotalLength();
-      if (!length) {
-        alive = true;
-        return;
-      }
-      if (!item.duration) item.duration = inkDuration(item.ms, length);
-      if (!item.at) item.at = now;
-      const progress = Math.min(1, (now - item.at) / item.duration);
-      path.style.strokeDasharray = String(length);
-      path.style.strokeDashoffset = String(length * (1 - progress));
-      if (progress < 1) alive = true;
-      else {
-        path.style.strokeDasharray = '';
-        path.style.strokeDashoffset = '';
-        ink.items.delete(id);
-      }
-    });
-    return alive;
-  }
-
-  function startInk(id, ms) {
-    if (!id) return;
-    const ink = inkRef.current;
-    ink.items.set(id, { at: 0, ms });
-    if (ink.raf) return;
-    const tick = (now) => {
-      ink.last = now;
-      ink.raf = paintInk(now) ? requestAnimationFrame(tick) : 0;
-    };
-    ink.raf = requestAnimationFrame(tick);
+    if (message?.clientId && message.clientId === clientIdRef.current) return;
+    playLaser(laserHostRef.current, message);
   }
 
   function onAckObject(obj) {
@@ -829,11 +476,7 @@ export default function BoardEditor({
 
   function onOpError(detail) {
     const text = typeof detail === 'string' && detail ? detail : 'Сервер не принял изменение';
-    const last = lastErrorRef.current;
-    const now = Date.now();
-    if (last.text === text && now - last.at < 4000) return;
-    lastErrorRef.current = { text, at: now };
-    notify(text);
+    if (opErrorGate(text)) notify(text);
   }
 
   function onClosed(code) {
@@ -864,43 +507,48 @@ export default function BoardEditor({
     });
   }
 
-  function sendCursor(clientX, clientY) {
-    const socket = socketRef.current;
-    if (!socket || !viewportRef.current || !cursorsOnRef.current) return;
-    const editing = objectsRef.current.find((obj) => obj.id === editingIdRef.current);
-    if (editing?.type === 'geogebra') return;
-    const now = performance.now();
-    const wait = SEND_MS - (now - lastCursorRef.current);
-    const push = () => {
-      cursorTimerRef.current = 0;
-      lastCursorRef.current = performance.now();
-      const client = pointerClientRef.current;
-      if (!client || !viewportRef.current) return;
-      const world = clientToWorld(client.x, client.y);
-      if (!world) return;
-      socket.cursor(Math.round(world.x), Math.round(world.y));
-    };
-    pointerClientRef.current = { x: clientX, y: clientY };
-    if (wait <= 0) push();
-    else if (!cursorTimerRef.current) cursorTimerRef.current = window.setTimeout(push, wait);
+  function cursorAllowed() {
+    if (!socketRef.current || !viewportRef.current || !cursorsOnRef.current) return false;
+    return store.getById(editingIdRef.current)?.type !== 'geogebra';
+  }
+
+  function broadcastCursor(clientX, clientY) {
+    const world = cam.clientToWorld(clientX, clientY);
+    if (world) socketRef.current?.cursor(Math.round(world.x), Math.round(world.y));
+  }
+
+  // Готовый штрих уходит в сеть одним upsert и сразу ложится в документ и историю.
+  function addStroke(stroke) {
+    flushOps();
+    const upsert = { type: 'upsert', object: stroke };
+    send(upsert);
+    const next = applyOp(store.get(), upsert);
+    sentRef.current = applyOp(sentRef.current, upsert);
+    pushHistory(store.get(), next);
+    store.set(next);
+  }
+
+  function sendLaser(points, color, width, ms) {
+    socketRef.current?.laser(points, color, width, ms);
+    showLaser({ points, color, width, fadeMs: LASER_FADE_MS });
   }
 
   function canvasList() {
-    return objectsRef.current.filter((obj) => !isHiddenBoardObject(obj));
+    return store.get().filter((obj) => !isHiddenBoardObject(obj));
   }
 
   function addObjects(list) {
     if (!list.length) return false;
-    if (objectsRef.current.length + list.length > MAX_OBJECTS) {
+    if (store.get().length + list.length > MAX_OBJECTS) {
       notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
       return false;
     }
-    commit([...objectsRef.current, ...list]);
+    commit([...store.get(), ...list]);
     return true;
   }
 
   function placeTheoryBlock(payload) {
-    const point = viewportCenterWorld();
+    const point = cam.centerWorld();
     if (!point) return;
     if (payload?.kind === 'geogebra') {
       const height = Math.max(220, parseInt(payload.height, 10) || 400);
@@ -913,6 +561,7 @@ export default function BoardEditor({
           appName: theoryAppKind(payload.setup),
           theory: true,
           setup: payload.setup || '',
+          ...(payload.materialId ? { materialId: payload.materialId } : {}),
           controls: payload.controls || [],
           texts: payload.texts || [],
           height: String(height),
@@ -925,7 +574,7 @@ export default function BoardEditor({
       const viewport = viewportRef.current;
       if (!viewport) return;
       const rect = viewport.getBoundingClientRect();
-      const origin = clientToWorld(rect.left + 16, rect.top + 96);
+      const origin = cam.clientToWorld(rect.left + 16, rect.top + 96);
       const obj = createObject('text', {
         x: origin.x,
         y: origin.y,
@@ -958,7 +607,7 @@ export default function BoardEditor({
 
   function placeTasks(items, source) {
     if (!Array.isArray(items) || !items.length) return;
-    const point = viewportCenterWorld();
+    const point = cam.centerWorld();
     let y = point.y - 160;
     const list = items.map(({ task, number }) => {
       const teacherOnly = {};
@@ -996,13 +645,14 @@ export default function BoardEditor({
     }, 4000);
   }
 
-  // Высоту карточки знает только DOM (формулы, картинки), поэтому её меряет
-  // сама карточка. Свежий столбик заодно перекладывается без зазоров.
-  function measureTask(id, height) {
+  // Высоту карточки задания, блока теории и markdown знает только DOM (формулы,
+  // картинки), поэтому её меряет сам блок, а в модель пишет учитель — один писатель
+  // на всех. Свежий столбик заданий заодно перекладывается без зазоров.
+  function measureObject(id, height) {
     if (audienceRef.current !== 'teacher' || readOnlyRef.current || dragRef.current) return;
     const h = Math.max(80, Math.round(height));
-    const obj = objectsRef.current.find((item) => item.id === id);
-    if (!obj || obj.type !== 'task' || Math.abs(obj.h - h) <= 2) return;
+    const obj = store.get().find((item) => item.id === id);
+    if (!obj || !isMeasured(obj) || Math.abs(obj.h - h) <= 2) return;
     pendingTaskHeightsRef.current.set(id, h);
     if (taskMeasureRafRef.current) return;
     taskMeasureRafRef.current = requestAnimationFrame(() => {
@@ -1019,7 +669,7 @@ export default function BoardEditor({
     heights.forEach((h, id) => updates.set(id, { h }));
     const stack = stackRef.current;
     if (stack) {
-      const placed = stack.ids.map((id) => objectsRef.current.find((obj) => obj.id === id)).filter(Boolean);
+      const placed = stack.ids.map((id) => store.get().find((obj) => obj.id === id)).filter(Boolean);
       if (placed.length && placed.every((obj) => obj.x === placed[0].x)) {
         let y = placed[0].y;
         placed.forEach((obj) => {
@@ -1030,7 +680,7 @@ export default function BoardEditor({
       }
     }
     if (!updates.size) return;
-    live(objectsRef.current.map((obj) => (updates.has(obj.id) ? { ...obj, ...updates.get(obj.id) } : obj)));
+    live(store.get().map((obj) => (updates.has(obj.id) ? { ...obj, ...updates.get(obj.id) } : obj)));
   }
 
   function boardPath(id) {
@@ -1047,11 +697,12 @@ export default function BoardEditor({
     const meta = boardMetaRef.current;
     const title = freshPageTitle(series.length ? series : [meta]);
     const students = (meta.studentIds || []).map((id) => Number(id));
-    const body = meta.groupId != null
-      ? { title, groupId: Number(meta.groupId) }
+    const audience = meta.groupId != null
+      ? { groupId: Number(meta.groupId) }
       : students.length
-        ? { title, studentIds: students }
-        : { title };
+        ? { studentIds: students }
+        : {};
+    const body = { title, ...audience, seriesId: meta.seriesId || meta.id };
     try {
       const created = await createTeacherBoard(body);
       navigate(boardPath(created.id));
@@ -1102,7 +753,7 @@ export default function BoardEditor({
   }
 
   function pruneSelection() {
-    const alive = new Set(objectsRef.current.map((obj) => obj.id));
+    const alive = new Set(store.get().map((obj) => obj.id));
     const ids = selectedIdsRef.current.filter((id) => alive.has(id));
     if (ids.length !== selectedIdsRef.current.length) selectIds(ids);
     if (editingIdRef.current && !alive.has(editingIdRef.current)) {
@@ -1113,8 +764,7 @@ export default function BoardEditor({
   }
 
   function canSelect(obj) {
-    if (!obj.props?.locked) return true;
-    return audienceRef.current === 'teacher' || !readOnlyRef.current;
+    return audienceRef.current === 'teacher' || !obj.props?.locked;
   }
 
   function canEdit(obj) {
@@ -1123,13 +773,13 @@ export default function BoardEditor({
 
   function selectedList() {
     const set = new Set(selectedIdsRef.current);
-    return objectsRef.current.filter((obj) => set.has(obj.id));
+    return store.get().filter((obj) => set.has(obj.id));
   }
 
   function paintSelectionUi() {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const list = selectedList().map(displayedObject);
+    const list = selectedList();
     const bounds = boundsOf(list);
     const cam = cameraRef.current;
     const group = groupBoxRef.current;
@@ -1140,7 +790,7 @@ export default function BoardEditor({
         group.style.top = `${bounds.y}px`;
         group.style.width = `${bounds.w}px`;
         group.style.height = `${bounds.h}px`;
-        group.style.outline = `${1.5 / cam.zoom}px solid ${SELECTION_COLOR}`;
+        group.style.outline = `calc(1.5px * var(--inv-zoom, 1)) solid ${SELECTION_COLOR}`;
       } else {
         group.style.display = 'none';
       }
@@ -1169,387 +819,36 @@ export default function BoardEditor({
     bar.style.visibility = 'visible';
   }
 
-  function paintSurface(cam) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const look = surfaceRef.current || DEFAULT_SURFACE;
-    const zoom = cam?.zoom || 1;
-    const step = 28 * zoom;
-    const line = look.color === '#2c2c2e' ? 'rgba(255,255,255,0.28)' : 'rgba(120, 132, 148, 0.45)';
-    viewport.style.backgroundColor = look.color;
-    if (look.grid === 'empty') {
-      viewport.style.backgroundImage = 'none';
-      return;
-    }
-    if (look.grid === 'rule') {
-      viewport.style.backgroundImage = `linear-gradient(to bottom, transparent ${step - 1}px, ${line} ${step - 1}px)`;
-      viewport.style.backgroundSize = `100% ${step}px`;
-      viewport.style.backgroundPosition = `0px ${cam.y}px`;
-      return;
-    }
-    viewport.style.backgroundImage = `linear-gradient(to right, ${line} 1px, transparent 1px), linear-gradient(to bottom, ${line} 1px, transparent 1px)`;
-    viewport.style.backgroundSize = `${step}px ${step}px`;
-    viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
-  }
-
-  function paintCamera(cam) {
-    cameraRef.current = cam;
-    const world = worldRef.current;
-    if (world) {
-      world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.zoom})`;
-    }
-    const viewport = viewportRef.current;
-    if (viewport) {
-      const inv = 1 / cam.zoom;
-      paintSurface(cam);
-      viewport.querySelectorAll('[data-handle]').forEach((handle) => {
-        const kind = handle.dataset.handle;
-        if (kind === 'start' || kind === 'end' || kind === 'skew' || kind === 'slantL' || kind === 'slantR' || kind === 'spin' || kind === 'lean' || kind === 'apex' || kind === 'joint' || kind?.startsWith('poly-') || kind?.startsWith('vert-') || kind?.startsWith('base-')) {
-          handle.style.transform = `translate(-50%, -50%) scale(${inv})`;
-          return;
-        }
-        if (kind === 'depth') {
-          handle.style.transform = `translate(-50%, -50%) rotate(45deg) scale(${inv})`;
-          return;
-        }
-        const x = kind?.includes('w') ? '-50%' : '50%';
-        const y = kind?.includes('n') ? '-50%' : '50%';
-        handle.style.transform = `translate(${x}, ${y}) scale(${inv})`;
-      });
-      viewport.querySelectorAll('[data-outline]').forEach((outline) => {
-        outline.style.outlineWidth = `${Number(outline.dataset.outline || 1) * inv}px`;
-      });
-      viewport.querySelectorAll('[data-counter-scale]').forEach((badge) => {
-        badge.style.transform = `scale(${inv})`;
-      });
-    }
-    if (zoomLabelRef.current) {
-      zoomLabelRef.current.textContent = `${Math.round(cam.zoom * 100)}%`;
-    }
-    paintSelectionUi();
-    paintPeerCursors();
-  }
-
-  function paintObject(obj) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const el = viewport.querySelector(`[data-object="${CSS.escape(obj.id)}"]`);
-    if (!el) return;
-    el.style.left = `${obj.x}px`;
-    el.style.top = `${obj.y}px`;
-    el.style.width = `${obj.w}px`;
-    el.style.height = `${obj.h}px`;
-    if (obj.type === 'point') paintLabelNode(el.querySelector('[data-label="point"]'), obj.props);
-    if (obj.type === 'arrow') {
-      const svg = el.querySelector('svg');
-      const line = el.querySelector('line');
-      if (svg) {
-        svg.setAttribute('width', obj.w);
-        svg.setAttribute('height', obj.h);
-      }
-      if (line) {
-        line.setAttribute('x1', obj.props.x1);
-        line.setAttribute('y1', obj.props.y1);
-        line.setAttribute('x2', obj.props.x2);
-        line.setAttribute('y2', obj.props.y2);
-      }
-      const start = el.querySelector('[data-handle="start"]');
-      const end = el.querySelector('[data-handle="end"]');
-      if (start) {
-        start.style.left = `${obj.props.x1}px`;
-        start.style.top = `${obj.props.y1}px`;
-      }
-      if (end) {
-        end.style.left = `${obj.props.x2}px`;
-        end.style.top = `${obj.props.y2}px`;
-      }
-      (obj.props.joints || []).forEach((joint) => {
-        const dot = el.querySelector(`[data-point="${CSS.escape(joint.id)}"]`);
-        if (!dot) return;
-        const t = Number(joint.t) || 0;
-        dot.style.left = `${obj.props.x1 + (obj.props.x2 - obj.props.x1) * t}px`;
-        dot.style.top = `${obj.props.y1 + (obj.props.y2 - obj.props.y1) * t}px`;
-      });
-    }
-    if (obj.type === 'shape') {
-      const svg = el.querySelector('[data-shape]');
-      if (svg) {
-        const fill = obj.props.fill || '#ffffff';
-        const stroke = obj.props.stroke || '#18181b';
-        const figures = shapeFigures(obj.props.shape, obj.props.depth, obj.props);
-        const existing = [...svg.children];
-        const same = existing.length === figures.length && figures.every((fig, index) => existing[index]?.localName === figureTag(fig));
-        if (!same) svg.replaceChildren();
-        figures.forEach((fig, index) => {
-          const node = same
-            ? existing[index]
-            : svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', figureTag(fig)));
-          applyFigureNode(node, fig, fill, stroke, obj.props.dashed);
-        });
-      }
-      (obj.props.joints || []).forEach((joint) => {
-        const dot = el.querySelector(`[data-point="${CSS.escape(joint.id)}"]`);
-        if (!dot) return;
-        const [x, y] = jointLocal(obj, joint);
-        dot.style.left = `${x}%`;
-        dot.style.top = `${y}%`;
-      });
-      (labelVertices(obj) || shapeVertexLocals(obj) || []).forEach((point, index) => {
-        const handle = el.querySelector(`[data-handle="vert-${index}"]`);
-        const label = el.querySelector(`[data-label="v${index}"]`);
-        if (handle) {
-          handle.style.left = `${point[0]}%`;
-          handle.style.top = `${point[1]}%`;
-        }
-        if (label) {
-          label.style.left = `${point[0]}%`;
-          label.style.top = `${point[1]}%`;
-          paintLabelNode(label, obj.props.names?.[index]);
-        }
-      });
-      if (obj.props.shape === 'polyline') {
-        (obj.props.points || []).forEach((point, index) => {
-          const dot = el.querySelector(`[data-point="v${index}"]`);
-          const handle = el.querySelector(`[data-handle="poly-${index}"]`);
-          if (dot) {
-            dot.style.left = `${point[0]}%`;
-            dot.style.top = `${point[1]}%`;
-          }
-          if (handle) {
-            handle.style.left = `${point[0]}%`;
-            handle.style.top = `${point[1]}%`;
-          }
-        });
-      }
-      shapeKnobs(obj.props.shape, obj.props).forEach((knob) => {
-        const node = el.querySelector(`[data-handle="${knob.key}"]`);
-        if (!node) return;
-        node.style.left = `${knob.x}%`;
-        node.style.top = `${knob.y}%`;
-      });
-      const knob = el.querySelector('[data-handle="depth"]');
-      if (knob) {
-        const point = shapeHandle(obj.props.shape, obj.props.depth, obj.props);
-        knob.style.left = `${point.x}%`;
-        knob.style.top = `${point.y}%`;
-      }
-      const anchors = solidAnchors(obj.props.shape, obj.props.depth, obj.props);
-      const apex = el.querySelector('[data-handle="apex"]');
-      if (apex && anchors?.apex) {
-        apex.style.left = `${anchors.apex[0]}%`;
-        apex.style.top = `${anchors.apex[1]}%`;
-      }
-      (anchors?.base || []).forEach((point, index) => {
-        const handle = el.querySelector(`[data-handle="base-${index}"]`);
-        if (!handle) return;
-        handle.style.left = `${point[0]}%`;
-        handle.style.top = `${point[1]}%`;
-      });
-    }
-  }
-
-  function shapeDepthOf(obj) {
-    const value = Number(obj?.props?.depth);
-    return Number.isFinite(value) ? value : defaultDepth(obj?.props?.shape);
-  }
-
-  function draggedShapeIds() {
-    const ids = new Set(gestureIdsRef.current);
-    const drag = dragRef.current;
-    if (!drag) return ids;
-    if ((drag.starts instanceof Map || drag.starts instanceof Set) && drag.starts.size) {
-      drag.starts.forEach((_, id) => ids.add(id));
-    }
-    if (drag.id) ids.add(drag.id);
-    return ids;
-  }
-
-  function displayedObject(obj) {
-    const pose = shapeGlideRef.current.items.get(obj.id);
-    if (!pose) return obj;
-    const props = { ...obj.props };
-    if (obj.type === 'shape') props.depth = pose.depth;
-    if (obj.type === 'arrow') {
-      props.x1 = pose.x1;
-      props.y1 = pose.y1;
-      props.x2 = pose.x2;
-      props.y2 = pose.y2;
-    }
-    return { ...obj, x: pose.x, y: pose.y, w: pose.w, h: pose.h, props };
-  }
-
-  function paintShapeGlide() {
-    const busy = draggedShapeIds();
-    shapeGlideRef.current.items.forEach((_, id) => {
-      if (busy.has(id)) return;
-      const obj = objectsRef.current.find((item) => item.id === id);
-      if (obj) paintObject(displayedObject(obj));
-    });
-  }
-
-  function stopShapeGlide() {
-    const glide = shapeGlideRef.current;
-    const ids = [...glide.items.keys()];
-    if (glide.raf) cancelAnimationFrame(glide.raf);
-    glide.raf = 0;
-    glide.items.clear();
-    ids.forEach((id) => {
-      const obj = objectsRef.current.find((item) => item.id === id);
-      if (obj) paintObject(obj);
-    });
-  }
-
-  function tickShapeGlide(now) {
-    const glide = shapeGlideRef.current;
-    const elapsed = Math.min(48, now - glide.last);
-    glide.last = now;
-    const blend = 1 - Math.exp(-elapsed / 90);
-    const busy = draggedShapeIds();
-    let moving = false;
-    glide.items.forEach((pose, id) => {
-      if (busy.has(id)) {
-        glide.items.delete(id);
-        return;
-      }
-      const target = objectsRef.current.find((item) => item.id === id);
-      if (!target || target.type !== pose.type || (target.type === 'shape' && target.props?.shape !== pose.shape)) {
-        glide.items.delete(id);
-        return;
-      }
-      const depth = target.type === 'shape' ? shapeDepthOf(target) : pose.depth;
-      pose.x += (target.x - pose.x) * blend;
-      pose.y += (target.y - pose.y) * blend;
-      pose.w += (target.w - pose.w) * blend;
-      pose.h += (target.h - pose.h) * blend;
-      if (target.type === 'shape') pose.depth += (depth - pose.depth) * blend;
-      if (target.type === 'arrow') {
-        pose.x1 += (target.props.x1 - pose.x1) * blend;
-        pose.y1 += (target.props.y1 - pose.y1) * blend;
-        pose.x2 += (target.props.x2 - pose.x2) * blend;
-        pose.y2 += (target.props.y2 - pose.y2) * blend;
-      }
-      const arrived = Math.abs(target.x - pose.x) < 0.2
-        && Math.abs(target.y - pose.y) < 0.2
-        && Math.abs(target.w - pose.w) < 0.2
-        && Math.abs(target.h - pose.h) < 0.2
-        && (target.type !== 'shape' || Math.abs(depth - pose.depth) < 0.05)
-        && (target.type !== 'arrow' || (
-          Math.abs(target.props.x1 - pose.x1) < 0.2
-          && Math.abs(target.props.y1 - pose.y1) < 0.2
-          && Math.abs(target.props.x2 - pose.x2) < 0.2
-          && Math.abs(target.props.y2 - pose.y2) < 0.2
-        ));
-      if (arrived) {
-        glide.items.delete(id);
-        paintObject(target);
-        return;
-      }
-      moving = true;
-      paintObject(displayedObject(target));
-    });
-    glide.raf = moving ? requestAnimationFrame(tickShapeGlide) : 0;
-    paintSelectionUi();
-  }
-
-  function noteShapeGlide(before, next) {
-    const busy = draggedShapeIds();
-    const glide = shapeGlideRef.current;
-    const previous = new Map(before.map((obj) => [obj.id, obj]));
-    next.forEach((obj) => {
-      if (busy.has(obj.id)) return;
-      const prev = previous.get(obj.id);
-      if (!prev || prev.type !== obj.type) return;
-      if (obj.type === 'shape' && prev.props?.shape !== obj.props?.shape) return;
-      const moved = prev.x !== obj.x || prev.y !== obj.y || prev.w !== obj.w || prev.h !== obj.h
-        || (obj.type === 'shape' && shapeDepthOf(prev) !== shapeDepthOf(obj))
-        || (obj.type === 'arrow' && (
-          prev.props.x1 !== obj.props.x1 || prev.props.y1 !== obj.props.y1
-          || prev.props.x2 !== obj.props.x2 || prev.props.y2 !== obj.props.y2
-        ));
-      if (!moved) return;
-      if (!glide.items.has(obj.id)) {
-        glide.items.set(obj.id, {
-          type: obj.type,
-          shape: obj.props?.shape,
-          x: prev.x,
-          y: prev.y,
-          w: prev.w,
-          h: prev.h,
-          depth: shapeDepthOf(prev),
-          x1: prev.props?.x1,
-          y1: prev.props?.y1,
-          x2: prev.props?.x2,
-          y2: prev.props?.y2,
-        });
-      }
-    });
-    if (!glide.items.size || glide.raf) return;
-    glide.last = performance.now();
-    glide.raf = requestAnimationFrame(tickShapeGlide);
-  }
-
   function live(next) {
-    objectsRef.current = next;
-    setObjects(next);
+    store.set(next);
     scheduleSend();
   }
 
+  // Жест пишет модель на каждое движение указателя, а перерисовывает только
+  // затронутые объекты и не чаще кадра.
   function gesture(next, changed) {
-    stopShapeGlide();
-    objectsRef.current = next;
-    changed.forEach((obj) => {
-      if (!obj) return;
-      if (obj.id) gestureIdsRef.current.add(obj.id);
-      paintObject(obj);
+    const list = changed.filter(Boolean);
+    list.forEach((obj) => {
+      gestureIdsRef.current.add(obj.id);
+      motion.cancel(obj.id);
     });
+    store.set(next, { changed: list, defer: true });
     paintSelectionUi();
     scheduleSend();
-    if (gestureFrameRef.current) return;
-    gestureFrameRef.current = requestAnimationFrame(() => {
-      gestureFrameRef.current = 0;
-      if (!dragRef.current) return;
-      setObjects(objectsRef.current);
-    });
   }
 
-  function hideErased(before, next) {
-    const keep = new Set(next.map((obj) => obj.id));
-    before.forEach((obj) => {
-      if (keep.has(obj.id)) return;
-      const el = viewportRef.current?.querySelector(`[data-object="${CSS.escape(obj.id)}"]`);
-      if (el) el.style.display = 'none';
-    });
-    objectsRef.current = next;
+  function eraseTo(next) {
+    store.set(next, { defer: true });
     scheduleSend();
   }
 
   function releaseGesture() {
     gestureIdsRef.current.clear();
-    if (gestureFrameRef.current) {
-      cancelAnimationFrame(gestureFrameRef.current);
-      gestureFrameRef.current = 0;
-    }
   }
 
   function publishGesture() {
-    const next = objectsRef.current;
-    setObjects((prev) => (prev === next ? prev : next));
-    const cam = cameraRef.current;
-    setCamera((prev) => (
-      prev.x === cam.x && prev.y === cam.y && prev.zoom === cam.zoom ? prev : cam
-    ));
-    saveLocalCamera(boardIdRef.current, cam);
-  }
-
-  function scheduleCameraCommit() {
-    window.clearTimeout(cameraSyncRef.current);
-    cameraSyncRef.current = window.setTimeout(() => {
-      if (dragRef.current) {
-        scheduleCameraCommit();
-        return;
-      }
-      publishGesture();
-    }, 120);
+    store.flush();
+    cam.publish();
   }
 
   function paintCursor() {
@@ -1569,28 +868,7 @@ export default function BoardEditor({
   }
 
   function paintGuides(guides) {
-    const host = guideHostRef.current;
-    if (!host) return;
-    host.replaceChildren();
-    if (!guides?.length) return;
-    const thickness = 1 / cameraRef.current.zoom;
-    guides.forEach((guide) => {
-      const line = document.createElement('div');
-      line.className = 'pointer-events-none absolute';
-      line.style.background = '#f43f5e';
-      if (guide.axis === 'x') {
-        line.style.left = `${guide.at - thickness / 2}px`;
-        line.style.top = `${guide.from}px`;
-        line.style.width = `${thickness}px`;
-        line.style.height = `${guide.to - guide.from}px`;
-      } else {
-        line.style.left = `${guide.from}px`;
-        line.style.top = `${guide.at - thickness / 2}px`;
-        line.style.width = `${guide.to - guide.from}px`;
-        line.style.height = `${thickness}px`;
-      }
-      host.appendChild(line);
-    });
+    renderGuides(guideHostRef.current, guides, cameraRef.current.zoom);
   }
 
   function flushHeldLink() {
@@ -1600,268 +878,18 @@ export default function BoardEditor({
     setLink((prev) => (prev.state === 'denied' ? prev : held));
   }
 
-  function paintLaserDraft(host, draft) {
-    const origin = draft.origin || draft.points[0];
-    const key = `${origin.x},${origin.y}`;
-    [...host.children].forEach((node) => {
-      if (node.dataset.laser !== key) node.remove();
-    });
-    let wrap = [...host.children].find((node) => node.dataset.laser === key);
-    if (!wrap) {
-      wrap = createLaserNode(origin);
-      host.appendChild(wrap);
-    }
-    const local = draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }));
-    updateLaserNode(wrap, local, draft.color || LASER_COLOR, laserLook(draft.width, cameraRef.current.zoom));
-  }
-
   function paintDraft(draft) {
     draftRef.current = draft;
-    const host = draftHostRef.current;
-    if (!host) return;
-    if (draft?.kind === 'pen' && draft.laser && draft.points.length) {
-      paintLaserDraft(host, draft);
-      return;
-    }
-    if (draft?.kind === 'pen' && draft.points.length) {
-      const origin = draft.origin || draft.points[0];
-      const wrap = host.firstChild;
-      const path = wrap?.dataset?.pen === `${origin.x},${origin.y}` ? wrap.querySelector('path') : null;
-      if (path) {
-        path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }))));
-        path.setAttribute('stroke', draft.color);
-        path.setAttribute('stroke-width', draft.width);
-        return;
-      }
-    }
-    host.replaceChildren();
-    if (!draft) return;
-    const inv = 1 / cameraRef.current.zoom;
-    if (draft.kind === 'marquee') {
-      const node = document.createElement('div');
-      node.className = 'pointer-events-none absolute';
-      node.style.left = `${draft.x}px`;
-      node.style.top = `${draft.y}px`;
-      node.style.width = `${draft.w}px`;
-      node.style.height = `${draft.h}px`;
-      node.style.border = `${inv}px solid ${SELECTION_COLOR}`;
-      node.style.background = 'rgba(66, 98, 255, 0.08)';
-      host.appendChild(node);
-      return;
-    }
-    if (draft.kind === 'chain') {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('width', '1');
-      svg.setAttribute('height', '1');
-      svg.style.position = 'absolute';
-      svg.style.left = '0';
-      svg.style.top = '0';
-      svg.style.overflow = 'visible';
-      const addLine = (x1, y1, x2, y2, dashed) => {
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1);
-        line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2);
-        line.setAttribute('y2', y2);
-        line.setAttribute('stroke', draft.stroke || '#18181b');
-        line.setAttribute('stroke-width', '2');
-        line.setAttribute('stroke-linecap', 'round');
-        if (dashed) line.setAttribute('stroke-dasharray', '6 4');
-        svg.appendChild(line);
-      };
-      draft.points.forEach((point, index) => {
-        if (index) addLine(draft.points[index - 1].x, draft.points[index - 1].y, point.x, point.y, false);
-      });
-      if (draft.closing && draft.points.length) {
-        const last = draft.points[draft.points.length - 1];
-        addLine(last.x, last.y, draft.points[0].x, draft.points[0].y, false);
-      } else if (draft.hover && draft.points.length) {
-        const last = draft.points[draft.points.length - 1];
-        addLine(last.x, last.y, draft.hover.x, draft.hover.y, false);
-      }
-      if (draft.guide) addLine(draft.guide.x1, draft.guide.y1, draft.guide.x2, draft.guide.y2, true);
-      draft.points.forEach((point, index) => {
-        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('cx', point.x);
-        dot.setAttribute('cy', point.y);
-        dot.setAttribute('r', index === 0 ? '3.5' : '2.5');
-        dot.setAttribute('fill', '#18181b');
-        svg.appendChild(dot);
-      });
-      host.appendChild(svg);
-      return;
-    }
-    if (draft.kind === 'dot') {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
-      svg.style.left = '0';
-      svg.style.top = '0';
-      svg.style.overflow = 'visible';
-      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      dot.setAttribute('cx', draft.x);
-      dot.setAttribute('cy', draft.y);
-      dot.setAttribute('r', '3');
-      dot.setAttribute('fill', '#18181b');
-      svg.appendChild(dot);
-      host.appendChild(svg);
-      return;
-    }
-    if (draft.kind === 'shape') {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
-      svg.style.position = 'absolute';
-      svg.setAttribute('viewBox', '0 0 100 100');
-      svg.setAttribute('preserveAspectRatio', 'none');
-      svg.style.left = `${draft.x}px`;
-      svg.style.top = `${draft.y}px`;
-      svg.style.width = `${Math.max(draft.w, 1)}px`;
-      svg.style.height = `${Math.max(draft.h, 1)}px`;
-      svg.style.opacity = '0.85';
-      shapeFigures(draft.shape).forEach((fig) => {
-        const node = document.createElementNS('http://www.w3.org/2000/svg', fig.ellipse ? 'ellipse' : fig.d ? 'path' : 'polygon');
-        if (fig.ellipse) {
-          node.setAttribute('cx', fig.ellipse.cx);
-          node.setAttribute('cy', fig.ellipse.cy);
-          node.setAttribute('rx', fig.ellipse.rx);
-          node.setAttribute('ry', fig.ellipse.ry);
-        } else if (fig.d) node.setAttribute('d', fig.d);
-        else node.setAttribute('points', fig.points);
-        node.setAttribute('fill', fig.fill === 'none' ? 'none' : draft.fill);
-        node.setAttribute('stroke', fig.stroke === 'none' ? 'none' : draft.stroke);
-        node.setAttribute('stroke-width', '2');
-        node.setAttribute('stroke-linejoin', 'round');
-        node.setAttribute('vector-effect', 'non-scaling-stroke');
-        if (fig.fill !== 'none') node.setAttribute('fill-opacity', shapeToneOpacity(fig.tone));
-        if (fig.dashed) node.setAttribute('stroke-dasharray', '4 3');
-        svg.appendChild(node);
-      });
-      host.appendChild(svg);
-      return;
-    }
-    if (draft.kind === 'pen' && draft.points.length) {
-      // Та же схема, что у зрителя: рамка в первой точке, точки от неё. Рамка по bbox раздувает холст и сдвигает уже нарисованное.
-      const origin = draft.origin || draft.points[0];
-      const wrap = document.createElement('div');
-      wrap.dataset.pen = `${origin.x},${origin.y}`;
-      wrap.style.position = 'absolute';
-      wrap.style.left = `${origin.x}px`;
-      wrap.style.top = `${origin.y}px`;
-      wrap.style.width = '12px';
-      wrap.style.height = '12px';
-      wrap.style.overflow = 'visible';
-      wrap.style.pointerEvents = 'none';
-      const pen = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      pen.setAttribute('width', '12');
-      pen.setAttribute('height', '12');
-      pen.style.display = 'block';
-      pen.style.overflow = 'visible';
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', smoothPath(draft.points.map((point) => ({ x: point.x - origin.x, y: point.y - origin.y }))));
-      path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', draft.color);
-      path.setAttribute('stroke-width', draft.width);
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
-      pen.appendChild(path);
-      wrap.appendChild(pen);
-      host.appendChild(wrap);
-      return;
-    }
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'pointer-events-none absolute overflow-visible');
-    svg.style.position = 'absolute';
-    if (draft.kind === 'arrow') {
-      const left = Math.min(draft.x1, draft.x2);
-      const top = Math.min(draft.y1, draft.y2);
-      svg.style.left = `${left}px`;
-      svg.style.top = `${top}px`;
-      svg.setAttribute('width', Math.max(Math.abs(draft.x2 - draft.x1), 1));
-      svg.setAttribute('height', Math.max(Math.abs(draft.y2 - draft.y1), 1));
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', draft.x1 - left);
-      line.setAttribute('y1', draft.y1 - top);
-      line.setAttribute('x2', draft.x2 - left);
-      line.setAttribute('y2', draft.y2 - top);
-      line.setAttribute('stroke', draft.color);
-      line.setAttribute('stroke-width', draft.width);
-      line.setAttribute('stroke-linecap', 'round');
-      svg.appendChild(line);
-      if (draft.guide) {
-        const guide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        guide.setAttribute('x1', draft.guide.x1 - left);
-        guide.setAttribute('y1', draft.guide.y1 - top);
-        guide.setAttribute('x2', draft.guide.x2 - left);
-        guide.setAttribute('y2', draft.guide.y2 - top);
-        guide.setAttribute('stroke', draft.color);
-        guide.setAttribute('stroke-width', '1.5');
-        guide.setAttribute('stroke-dasharray', '6 4');
-        svg.appendChild(guide);
-      }
-    }
-    host.appendChild(svg);
-  }
-
-  function toWorld(event) {
-    return clientToWorld(event.clientX, event.clientY);
-  }
-
-  function clientToWorld(clientX, clientY) {
-    const viewport = viewportRef.current;
-    if (!viewport) return null;
-    const rect = viewport.getBoundingClientRect();
-    const cam = cameraRef.current;
-    return {
-      x: (clientX - rect.left - cam.x) / cam.zoom,
-      y: (clientY - rect.top - cam.y) / cam.zoom,
-    };
-  }
-
-  function viewportCenterWorld() {
-    const viewport = viewportRef.current;
-    if (!viewport) return null;
-    const rect = viewport.getBoundingClientRect();
-    return clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    renderDraft(draftHostRef.current, draft, cameraRef.current.zoom);
   }
 
   function pasteTarget() {
     const client = pointerClientRef.current;
-    return client ? clientToWorld(client.x, client.y) : viewportCenterWorld();
-  }
-
-  function zoomAt(nextZoom, clientX, clientY) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    const cam = cameraRef.current;
-    const zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
-    const px = clientX - rect.left;
-    const py = clientY - rect.top;
-    const worldX = (px - cam.x) / cam.zoom;
-    const worldY = (py - cam.y) / cam.zoom;
-    paintCamera({ zoom, x: px - worldX * zoom, y: py - worldY * zoom });
-    scheduleCameraCommit();
-  }
-
-  function zoomBy(factor) {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    zoomAt(cameraRef.current.zoom * factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
-  }
-
-  function zoomTo(zoom) {
-    zoomBy(zoom / cameraRef.current.zoom);
+    return client ? cam.clientToWorld(client.x, client.y) : cam.centerWorld();
   }
 
   function fitAll() {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const bounds = boundsOf(canvasList());
-    const cam = bounds
-      ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 2 })
-      : { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2, zoom: 1 };
-    paintCamera(cam);
-    scheduleCameraCommit();
+    cam.fit(boundsOf(canvasList()), 2);
   }
 
   function changedGeoBase64(obj, base64) {
@@ -1874,7 +902,7 @@ export default function BoardEditor({
     const ids = [...geoDirtyRef.current];
     for (const id of ids) {
       geoDirtyRef.current.delete(id);
-      const obj = objectsRef.current.find((item) => item.id === id);
+      const obj = store.get().find((item) => item.id === id);
       const api = apiMap.current.get(id);
       if (!obj || obj.type !== 'geogebra' || !api) continue;
       const base64 = await readGeoGebraBase64(api);
@@ -1886,7 +914,7 @@ export default function BoardEditor({
   async function saveGeoChanges() {
     const updates = await collectGeoBase64();
     if (!updates.size || !mountedRef.current) return;
-    const next = objectsRef.current.map((obj) => (
+    const next = store.get().map((obj) => (
       updates.has(obj.id) ? { ...obj, props: { ...obj.props, ggbBase64: updates.get(obj.id) } } : obj
     ));
     live(next);
@@ -1911,7 +939,7 @@ export default function BoardEditor({
     if (editingIdRef.current) ids.add(editingIdRef.current);
     const pending = [];
     ids.forEach((id) => {
-      const obj = objectsRef.current.find((item) => item.id === id);
+      const obj = store.get().find((item) => item.id === id);
       const api = apiMap.current.get(id);
       if (!obj || obj.type !== 'geogebra' || !api) return;
       const xml = readGeoGebraXml(api);
@@ -1933,7 +961,7 @@ export default function BoardEditor({
     if (!pending.length) return;
     if (!mountedRef.current) return;
     const byId = new Map(pending.map((item) => [item.id, item]));
-    const current = objectsRef.current;
+    const current = store.get();
     let changed = false;
     const next = current.map((obj) => {
       const update = byId.get(obj.id);
@@ -1949,7 +977,7 @@ export default function BoardEditor({
 
   function changeGeoControls(id, controls) {
     if (readOnlyRef.current || !Array.isArray(controls)) return;
-    const current = objectsRef.current;
+    const current = store.get();
     const index = current.findIndex((obj) => obj.id === id);
     if (index < 0) return;
     const obj = current[index];
@@ -1969,7 +997,7 @@ export default function BoardEditor({
   // 3D — с короткой паузой. Отдельный setPerspective затирает чертёж до белого.
   function geoLayoutChanged(id) {
     if (editingIdRef.current !== id || readOnlyRef.current) return;
-    const current = objectsRef.current.find((item) => item.id === id);
+    const current = store.get().find((item) => item.id === id);
     if (!current || current.type !== 'geogebra') return;
     window.clearTimeout(geoLayoutTimerRef.current);
     const delay = current.props.appName === '3d' ? 400 : 0;
@@ -1982,7 +1010,7 @@ export default function BoardEditor({
       const xml = readGeoGebraXml(api);
       const base64 = await readGeoGebraBase64(api);
       if (!base64 || !mountedRef.current || editingIdRef.current !== id) return;
-      const next = objectsRef.current.map((obj) => (
+      const next = store.get().map((obj) => (
         obj.id === id && obj.type === 'geogebra'
           ? {
             ...obj,
@@ -2002,14 +1030,11 @@ export default function BoardEditor({
     }, delay);
   }
 
-  function scheduleGeoSave(id) {
+  // Снимок построения (XML). Пока чертящий тянет точку, зрители получают дельты,
+  // поэтому полный XML можно слать реже; отпустил — уходит сразу.
+  function scheduleGeoSave(id, delay = GEO_XML_MS) {
     geoDirtyRef.current.add(id);
-    if (!geoXmlTimerRef.current) {
-      geoXmlTimerRef.current = window.setTimeout(() => {
-        geoXmlTimerRef.current = 0;
-        liveRef.current.saveGeoXml?.();
-      }, GEO_XML_MS);
-    }
+    geoXmlTimer.schedule(delay, () => liveRef.current.saveGeoXml?.());
     if (!geoTimerRef.current) {
       geoTimerRef.current = window.setTimeout(() => {
         geoTimerRef.current = 0;
@@ -2054,6 +1079,10 @@ export default function BoardEditor({
           setCursorsOn(enabled);
           liveRef.current.paintPeerCursors?.();
         },
+        onGeoMove: (message) => {
+          if (!message?.id || message.clientId === clientIdRef.current) return;
+          geoMoveInRef.current.get(message.id)?.(message);
+        },
         onGeoInput: (message) => {
           if (!message?.id || message.clientId === clientIdRef.current) return;
           geoInputInRef.current.get(message.id)?.(message);
@@ -2071,23 +1100,18 @@ export default function BoardEditor({
         },
         onPull: (message) => {
           if (!message?.camera || message.clientId === clientIdRef.current) return;
-          const next = {
-            x: Number(message.camera.x) || 0,
-            y: Number(message.camera.y) || 0,
-            zoom: clamp(Number(message.camera.zoom) || 1, MIN_ZOOM, MAX_ZOOM),
-          };
-          paintCamera(next);
-          setCamera(next);
-          saveLocalCamera(boardIdRef.current, next);
+          liveRef.current.pullCamera?.(message.camera);
           notify(`${message.name || 'Участник'} притянул вас к своему виду`);
         },
         onJoin: (peer) => {
           if (!peer?.clientId || peer.clientId === clientIdRef.current) return;
-          setPeers((prev) => [...prev.filter((item) => item.clientId !== peer.clientId), peer]);
+          peersRef.current = [...peersRef.current.filter((item) => item.clientId !== peer.clientId), peer];
+          setPeers(peersRef.current);
         },
         onLeave: (clientId) => {
           peerCursorsRef.current.delete(clientId);
-          setPeers((prev) => prev.filter((item) => item.clientId !== clientId));
+          peersRef.current = peersRef.current.filter((item) => item.clientId !== clientId);
+          setPeers(peersRef.current);
         },
         onClosed: call('onClosed'),
       },
@@ -2108,66 +1132,42 @@ export default function BoardEditor({
     };
   }, [initialBoard.id, audience, shareToken]);
 
-  useEffect(() => {
-    const next = readSurface(objects);
+  useEffect(() => store.subscribe(() => {
+    const next = readSurface(store.get());
     const current = surfaceRef.current;
     if (next.color === current.color && next.grid === current.grid) return;
     surfaceRef.current = next;
     setSurface(next);
-    paintSurface(cameraRef.current);
-  }, [objects]);
+    liveRef.current.paintSurface?.(cameraRef.current);
+  }), [store, cameraRef]);
 
   useEffect(() => {
     mountedRef.current = true;
-    const ink = inkRef.current;
+    ink.attach(viewportRef.current);
     return () => {
       mountedRef.current = false;
       window.clearTimeout(noticeTimerRef.current);
-      window.clearTimeout(cameraSyncRef.current);
       window.clearTimeout(geoTimerRef.current);
-      window.clearTimeout(geoXmlTimerRef.current);
-      window.clearTimeout(cursorTimerRef.current);
+      geoXmlTimer.cancel();
       setPenActive(false);
-      cancelAnimationFrame(ink.raf);
-      dragCleanupRef.current?.();
-      stopShapeGlide();
+      ink.stop();
+      motion.dispose();
+      store.dispose();
     };
-  }, []);
+  }, [geoXmlTimer, ink, motion, store]);
+
+  // Любая правка документа (своя или после отмены) уходит в сеть через общий diff.
+  useEffect(() => store.subscribe(() => liveRef.current.scheduleSend?.()), [store]);
 
   useEffect(() => {
     scheduleSend();
-  }, [objects, title]);
+  }, [title]);
 
-  useLayoutEffect(() => {
-    const ids = draggedShapeIds();
-    if (!ids.size) return;
-    ids.forEach((id) => {
-      const obj = objectsRef.current.find((item) => item.id === id);
-      if (obj) paintObject(obj);
-    });
+  // Камера подбирается один раз при открытии доски (если вида из прошлого раза нет).
+  const fitOnOpen = useEffectEvent(() => {
+    if (!cam.saved) cam.fit(boundsOf(canvasList()), 1);
   });
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return undefined;
-    const onWheel = (event) => wheelRef.current(event);
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (savedCamera) return;
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const bounds = boundsOf(canvasList());
-    const cam = bounds
-      ? fitCamera(bounds, viewport.clientWidth, viewport.clientHeight, { padding: 96, maxZoom: 1 })
-      : { x: Math.round(viewport.clientWidth / 2), y: Math.round(viewport.clientHeight / 2), zoom: 1 };
-    paintCamera(cam);
-    scheduleCameraCommit();
-    // Камера подбирается один раз при открытии доски.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useLayoutEffect(() => fitOnOpen(), []);
 
   function stepHistory(direction) {
     if (readOnlyRef.current) return;
@@ -2176,7 +1176,7 @@ export default function BoardEditor({
     const entry = from.pop();
     if (!entry) return;
     to.push(entry);
-    const before = objectsRef.current;
+    const before = store.get();
     const next = applyHistory(before, entry, direction);
     editOriginRef.current = null;
     editingIdRef.current = null;
@@ -2204,15 +1204,12 @@ export default function BoardEditor({
     }
     if (op.type === 'camera') return;
     applyIncoming(op);
-    // Пока человек рисует, курсор он не шлёт: стрелка стоит на конце его штриха.
-    if (op.type === 'append_points') movePeerToStroke(message?.clientId, op.id);
-    else if (op.type === 'upsert' && op.object?.type === 'draw') {
+    // Пока человек рисует, курсор он не шлёт: стрелка встаёт на конец готового штриха.
+    if (op.type === 'upsert' && op.object?.type === 'draw') {
       movePeerToStroke(message?.clientId, op.object.id);
-      const current = objectsRef.current.find((item) => item.id === op.object.id);
+      const current = store.get().find((item) => item.id === op.object.id);
       const incoming = op.object.props?.points?.length || 0;
-      if (current && (current.props?.points?.length || 0) === incoming && message?.clientId !== clientIdRef.current) {
-        startInk(op.object.id, op.object.props?.ms);
-      }
+      if (current && (current.props?.points?.length || 0) === incoming) ink.start(op.object.id);
     }
   }
 
@@ -2220,7 +1217,7 @@ export default function BoardEditor({
     if (readOnlyRef.current) return;
     const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
     if (!set.size) return;
-    const before = objectsRef.current;
+    const before = store.get();
     const removed = before.filter((obj) => set.has(obj.id));
     const next = releaseMissingBinds(before.filter((obj) => !set.has(obj.id)));
     commit(next);
@@ -2235,7 +1232,7 @@ export default function BoardEditor({
   function patchSelected(type, patch) {
     const set = new Set(selectedList().filter((obj) => obj.type === type && canEdit(obj)).map((obj) => obj.id));
     if (!set.size) return;
-    let next = objectsRef.current.map((obj) => {
+    let next = store.get().map((obj) => {
       if (!set.has(obj.id)) return obj;
       const updated = { ...obj, props: { ...obj.props, ...patch } };
       if (type === 'task' && patch.fontSize) {
@@ -2247,86 +1244,30 @@ export default function BoardEditor({
     });
     if (type === 'shape' && patch.shape) {
       const changedIds = new Set(
-        objectsRef.current.filter((obj) => set.has(obj.id) && obj.props.shape !== patch.shape).map((obj) => obj.id),
+        store.get().filter((obj) => set.has(obj.id) && obj.props.shape !== patch.shape).map((obj) => obj.id),
       );
-      if (changedIds.size) {
-        next = next.map((obj) => {
-          if (obj.type !== 'arrow') return obj;
-          const bind1 = obj.props.bind1 && changedIds.has(obj.props.bind1.id) ? null : obj.props.bind1 || null;
-          const bind2 = obj.props.bind2 && changedIds.has(obj.props.bind2.id) ? null : obj.props.bind2 || null;
-          if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
-          return { ...obj, props: { ...obj.props, bind1, bind2 } };
-        });
-        next = pruneJoints(next);
-      }
+      if (changedIds.size) next = dropBindsTo(next, [...changedIds]);
     }
     commit(next);
-  }
-
-  function followMoved(next, movedIds, releasePoint) {
-    const moved = new Set(movedIds);
-    const hostIds = next.filter((obj) => moved.has(obj.id) && (obj.type === 'shape' || obj.type === 'arrow' || obj.type === 'point')).map((obj) => obj.id);
-    if (releasePoint && hostIds.length === 1 && next.find((obj) => obj.id === hostIds[0])?.type === 'point') {
-      const pointId = hostIds[0];
-      const detached = next.map((obj) => {
-        if (obj.type !== 'arrow') return obj;
-        const bind1 = obj.props.bind1?.point && obj.props.bind1.id === pointId ? null : obj.props.bind1 || null;
-        const bind2 = obj.props.bind2?.point && obj.props.bind2.id === pointId ? null : obj.props.bind2 || null;
-        if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
-        return { ...obj, props: { ...obj.props, bind1, bind2 } };
-      });
-      return pruneJoints(detached);
-    }
-    const hostSet = new Set(hostIds);
-    const result = next.map((obj) => {
-      if (!moved.has(obj.id)) return obj;
-      if (obj.type === 'arrow') {
-        const keep = (bind) => (bind && (hostSet.has(bind.id) || bind.point) ? bind : null);
-        const bind1 = keep(obj.props.bind1);
-        const bind2 = keep(obj.props.bind2);
-        if ((obj.props.bind1 || null) === bind1 && (obj.props.bind2 || null) === bind2) return obj;
-        return { ...obj, props: { ...obj.props, bind1, bind2 } };
-      }
-      if (obj.type === 'shape' && obj.props.shape === 'polyline' && Array.isArray(obj.props.binds)) {
-        const binds = obj.props.binds.map((bind) => (bind && hostSet.has(bind.id) ? bind : null));
-        if (binds.every((bind, index) => (bind || null) === (obj.props.binds[index] || null))) return obj;
-        return { ...obj, props: { ...obj.props, binds } };
-      }
-      if (obj.type === 'shape' && obj.props.shape === 'pyramid3' && Array.isArray(obj.props.baseBinds)) {
-        const baseBinds = obj.props.baseBinds.map((bind) => (bind && hostSet.has(bind.id) ? bind : null));
-        if (baseBinds.every((bind, index) => (bind || null) === (obj.props.baseBinds[index] || null))) return obj;
-        return { ...obj, props: { ...obj.props, baseBinds } };
-      }
-      return obj;
-    });
-    const slid = slideSharedPoints(result, movedIds);
-    return hostIds.length ? retargetBound(slid, hostIds) : pruneJoints(slid);
-  }
-
-  function gestureFollow(base, movedIds, changed, releasePoint) {
-    const settled = followMoved(base, movedIds, releasePoint);
-    const known = new Set(changed.map((obj) => obj.id));
-    const extra = settled.filter((obj, index) => obj !== base[index] && !known.has(obj.id));
-    gesture(settled, [...changed, ...extra]);
   }
 
   function reorderSelected(toFront) {
     const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
     if (!set.size) return;
-    const moving = objectsRef.current.filter((obj) => set.has(obj.id));
-    const rest = objectsRef.current.filter((obj) => !set.has(obj.id));
-    const next = reorder(objectsRef.current, (toFront ? [...rest, ...moving] : [...moving, ...rest]).map((obj) => obj.id));
-    if (next === objectsRef.current) return;
+    const moving = store.get().filter((obj) => set.has(obj.id));
+    const rest = store.get().filter((obj) => !set.has(obj.id));
+    const next = reorder(store.get(), (toFront ? [...rest, ...moving] : [...moving, ...rest]).map((obj) => obj.id));
+    if (next === store.get()) return;
     commit(next);
   }
 
   function toggleLock() {
-    if (readOnlyRef.current) return;
+    if (readOnlyRef.current || audienceRef.current !== 'teacher') return;
     const list = selectedList();
     if (!list.length) return;
     const lock = !list.every((obj) => obj.props?.locked);
     const set = new Set(list.map((obj) => obj.id));
-    commit(objectsRef.current.map((obj) => {
+    commit(store.get().map((obj) => {
       if (!set.has(obj.id)) return obj;
       return { ...obj, props: { ...obj.props, locked: lock } };
     }));
@@ -2359,18 +1300,18 @@ export default function BoardEditor({
   function nudge(dx, dy) {
     const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
     if (!set.size) return;
-    const moved = objectsRef.current.map((obj) => (set.has(obj.id) ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj));
+    const moved = store.get().map((obj) => (set.has(obj.id) ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj));
     commit(followMoved(moved, [...set]));
   }
 
   function styleKeys(key) {
     if (readOnlyRef.current) return false;
-    const selected = objectsRef.current.filter((obj) => selectedIdsRef.current.includes(obj.id) && canEdit(obj));
+    const selected = store.get().filter((obj) => selectedIdsRef.current.includes(obj.id) && canEdit(obj));
     if (!selected.length || !selected.every((obj) => obj.type === 'shape' || obj.type === 'arrow')) return false;
     if (key === 'ArrowUp' || key === 'ArrowDown') {
       const dashed = key === 'ArrowDown';
       const ids = new Set(selected.map((obj) => obj.id));
-      commit(objectsRef.current.map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, dashed } } : obj)));
+      commit(store.get().map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, dashed } } : obj)));
       return true;
     }
     if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -2378,7 +1319,7 @@ export default function BoardEditor({
       if (!arrows.length) return false;
       const side = key === 'ArrowLeft' ? 'left' : 'right';
       const ids = new Set(arrows.map((obj) => obj.id));
-      commit(objectsRef.current.map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, ...setArrowSide(obj, side) } } : obj)));
+      commit(store.get().map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, ...setArrowSide(obj, side) } } : obj)));
       return true;
     }
     return false;
@@ -2388,27 +1329,47 @@ export default function BoardEditor({
     if (readOnlyRef.current) return;
     const ids = selectedList().filter((obj) => obj.type === 'arrow' && canEdit(obj)).map((obj) => obj.id);
     if (ids.length < 2) return;
-    const next = joinArrows(objectsRef.current, ids);
-    if (next === objectsRef.current) {
+    const next = joinArrows(store.get(), ids);
+    if (next === store.get()) {
       notify('Эти отрезки не лежат на одной прямой');
       return;
     }
     const kept = ids.find((id) => next.some((obj) => obj.id === id));
     commit(next);
-    if (kept) selectIds([kept.id]);
+    if (kept) selectIds([kept]);
+  }
+
+  function dropPoint(at) {
+    const zoom = cameraRef.current.zoom || 1;
+    const point = createObject('point', {
+      x: at.x,
+      y: at.y,
+      w: 8,
+      h: 8,
+      props: { letter: '', sub: '', cross: null },
+    });
+    const next = plantPoint([...store.get(), point], point.id, zoom, uid);
+    if (next.length > MAX_OBJECTS) {
+      notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
+      return;
+    }
+    commit(next);
+    const placed = next.find((obj) => obj.id === point.id);
+    if (placed) selectIds([placed.id]);
+    setTool('select');
   }
 
   function arrowSide(side) {
     if (readOnlyRef.current) return;
     const ids = new Set(selectedList().filter((obj) => obj.type === 'arrow' && canEdit(obj)).map((obj) => obj.id));
     if (!ids.size) return;
-    commit(objectsRef.current.map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, ...setArrowSide(obj, side) } } : obj)));
+    commit(store.get().map((obj) => (ids.has(obj.id) ? { ...obj, props: { ...obj.props, ...setArrowSide(obj, side) } } : obj)));
   }
 
   function aimPoint(point, anchor, alt, ignoreId) {
     const zoom = cameraRef.current.zoom || 1;
     if (alt) return { point, dist: Infinity };
-    const hosts = objectsRef.current;
+    const hosts = store.get();
     const hit = settleSnap(snapFigurePoint(point, hosts, zoom, ignoreId), hosts);
     const locked = anchor ? settleSnap(anchor, hosts) : null;
     const straight = locked ? extendStraight(point, locked, hosts, zoom) : null;
@@ -2420,18 +1381,12 @@ export default function BoardEditor({
     chainRef.current = null;
     paintDraft(null);
     if (!chain || chain.points.length < 2) return false;
-    if (objectsRef.current.length + 1 > MAX_OBJECTS) {
+    if (store.get().length + 1 > MAX_OBJECTS) {
       notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
       return true;
     }
     const look = styleRef.current;
-    let next = objectsRef.current;
-    const binds = [];
-    chain.hits.forEach((hit) => {
-      const placed = attachSnap(next, hit, uid);
-      next = placed.objects;
-      binds.push(placed.bind);
-    });
+    const binds = chain.hits.map(bindFromHit);
     const frame = polylineFrame(chain.points, {
       shape: 'polyline',
       closed,
@@ -2442,7 +1397,7 @@ export default function BoardEditor({
       depth: 0,
     });
     const obj = createObject('shape', frame);
-    commit([...next, obj]);
+    commit([...store.get(), obj]);
     selectIds([obj.id]);
     return true;
   }
@@ -2562,11 +1517,10 @@ export default function BoardEditor({
     setEditingId(null);
     if (!origin || !id) return;
     const prev = origin.find((obj) => obj.id === id);
-    const curr = objectsRef.current.find((obj) => obj.id === id);
+    const curr = store.get().find((obj) => obj.id === id);
     if (curr?.type === 'text' && !(curr.props?.text || '').trim()) {
-      const next = objectsRef.current.filter((obj) => obj.id !== id);
-      const top = pastRef.current[pastRef.current.length - 1];
-      const created = top?.changes.length === 1 && top.changes[0].id === id && !top.changes[0].before;
+      const next = store.get().filter((obj) => obj.id !== id);
+      const created = createdOnly(pastRef.current[pastRef.current.length - 1], id);
       if (!(prev?.props?.text || '').trim() && created) {
         pastRef.current.pop();
         noteHistory();
@@ -2582,7 +1536,7 @@ export default function BoardEditor({
   }
 
   function beginEdit(id) {
-    if (editOriginRef.current == null) editOriginRef.current = objectsRef.current;
+    if (editOriginRef.current == null) editOriginRef.current = store.get();
     editingIdRef.current = id;
     selectIds([id]);
     setEditingId(id);
@@ -2590,7 +1544,7 @@ export default function BoardEditor({
   }
 
   function changeText(id, text, measure) {
-    live(objectsRef.current.map((obj) => {
+    live(store.get().map((obj) => {
       if (obj.id !== id) return obj;
       const props = { ...obj.props, text };
       if (measure?.fontSize) props.fontSize = measure.fontSize;
@@ -2600,18 +1554,36 @@ export default function BoardEditor({
     }));
   }
 
+  // Кто сейчас чертит в апплете. Замок живёт в props.editor и действует, пока его
+  // владелец на доске: ушёл или переподключился — замок сам перестаёт считаться.
+  function geoEditor(obj) {
+    const editor = obj?.props?.editor;
+    if (!editor?.clientId || editor.clientId === clientIdRef.current) return null;
+    return peersRef.current.some((peer) => peer.clientId === editor.clientId) ? editor : null;
+  }
+
+  function setGeoLock(id, locked) {
+    const editor = locked && clientIdRef.current ? { clientId: clientIdRef.current, name: selfName() } : null;
+    live(store.get().map((obj) => (obj.id === id ? { ...obj, props: { ...obj.props, editor } } : obj)));
+  }
+
   function toggleGeo(id) {
-    const obj = objectsRef.current.find((item) => item.id === id);
+    const obj = store.get().find((item) => item.id === id);
     if (!obj || !canEdit(obj)) return;
     selectIds([id]);
     const turningOff = editingIdRef.current === id;
+    const holder = obj.type === 'geogebra' && !turningOff ? geoEditor(obj) : null;
+    if (holder) {
+      notify(`Сейчас чертит ${holder.name || 'другой участник'}`);
+      return;
+    }
     editingIdRef.current = turningOff ? null : id;
     setEditingId(editingIdRef.current);
+    if (obj.type === 'geogebra' && !readOnlyRef.current) setGeoLock(id, !turningOff);
     if (!turningOff && obj.type === 'geogebra') socketRef.current?.hideCursor();
     if (turningOff) {
       geoDirtyRef.current.add(id);
-      window.clearTimeout(geoXmlTimerRef.current);
-      geoXmlTimerRef.current = 0;
+      geoXmlTimer.cancel();
       window.clearTimeout(geoTimerRef.current);
       geoTimerRef.current = 0;
       liveRef.current.saveGeoXml?.();
@@ -2619,11 +1591,40 @@ export default function BoardEditor({
     }
   }
 
-  const sideActionsRef = useRef({});
-  sideActionsRef.current.theory = placeTheoryBlock;
-  sideActionsRef.current.tasks = placeTasks;
-  const copyTheoryToBoard = useCallback((payload) => sideActionsRef.current.theory?.(payload), []);
-  const copyTasksToBoard = useCallback((payload) => sideActionsRef.current.tasks?.(payload), []);
+  const copyTheoryToBoard = useCallback((payload) => actionsRef.current.placeTheoryBlock?.(payload), []);
+  const copyTasksToBoard = useCallback((payload) => actionsRef.current.placeTasks?.(payload), []);
+  // Колбэки объектов не меняются между рендерами: они зовут свежие функции через ref-ы.
+  const objectCallbacks = useMemo(() => ({
+    onChangeText: (...args) => actionsRef.current.changeText?.(...args),
+    onBlurText: (...args) => actionsRef.current.commitEdit?.(...args),
+    onToggleGeo: (...args) => actionsRef.current.toggleGeo?.(...args),
+    onGeoControls: (...args) => actionsRef.current.changeGeoControls?.(...args),
+    onGeoReady: (id, api) => {
+      if (api) apiMap.current.set(id, api);
+      else apiMap.current.delete(id);
+    },
+    onGeoChange: (id) => liveRef.current.geoChanged?.(id),
+    onGeoLayout: (id) => liveRef.current.geoLayoutChanged?.(id),
+    onGeoCamera: (id, wire) => socketRef.current?.geocam({ id, ...wire }),
+    onGeoCamBind: (id, fn) => {
+      if (fn) {
+        geoCamInRef.current.set(id, fn);
+        const last = geoCamLastRef.current.get(id);
+        if (last) fn(last);
+      } else geoCamInRef.current.delete(id);
+    },
+    onGeoMove: (id, body) => socketRef.current?.geomove({ id, ...body }),
+    onGeoMoveBind: (id, fn) => {
+      if (fn) geoMoveInRef.current.set(id, fn);
+      else geoMoveInRef.current.delete(id);
+    },
+    onGeoInput: (id, body) => socketRef.current?.geoinput({ id, ...body }),
+    onGeoInputBind: (id, fn) => {
+      if (fn) geoInputInRef.current.set(id, fn);
+      else geoInputInRef.current.delete(id);
+    },
+    onMeasure: (id, height) => liveRef.current.measureObject?.(id, height),
+  }), []);
   function toggleSidePane(pane) {
     setSidePane((open) => (open === pane ? null : pane));
     setKeptPanes((prev) => (prev[pane] ? prev : { ...prev, [pane]: true }));
@@ -2632,113 +1633,59 @@ export default function BoardEditor({
   useLayoutEffect(() => {
     toolRef.current = tool;
     if (dragRef.current?.kind === 'pen') {
-      objectsRef.current.forEach((obj) => {
-        if (obj.type !== 'draw') return;
-        const shown = objects.find((item) => item.id === obj.id);
-        if ((obj.props?.points?.length || 0) > (shown?.props?.points?.length || 0)) paintStrokeDom(objectsRef.current, obj.id);
-      });
-      if (inkRef.current.last) paintInk(inkRef.current.last);
+      ink.repaint();
       return;
     }
-    paintCamera(cameraRef.current);
+    cam.paintNow();
     paintCursor();
-    // React рисует штрих по своему состоянию, а точки могли прийти позже и попасть только в DOM.
-    objectsRef.current.forEach((obj) => {
-      if (obj.type !== 'draw') return;
-      const shown = objects.find((item) => item.id === obj.id);
-      if ((obj.props?.points?.length || 0) > (shown?.props?.points?.length || 0)) paintStrokeDom(objectsRef.current, obj.id);
-    });
-    // Предпросмотр своего штриха остаётся, пока объект с теми же точками не появился в DOM.
-    const ownDraft = draftRef.current;
-    if (ownDraft?.kind === 'pen' && dragRef.current?.kind !== 'pen') {
-      const shown = objects.find((obj) => (
-        obj.type === 'draw'
-        && obj.x === ownDraft.origin?.x
-        && obj.y === ownDraft.origin?.y
-        && (obj.props?.points?.length || 0) >= ownDraft.points.length
-      ));
-      if (shown) paintDraft(null);
-    }
-    if (draftRef.current && dragRef.current?.kind !== 'pen') paintDraft(draftRef.current);
-    if (inkRef.current.last) paintInk(inkRef.current.last);
-    const drag = dragRef.current;
-    if (drag?.kind === 'move') {
-      objectsRef.current.forEach((obj) => {
-        if (drag.starts.has(obj.id)) paintObject(obj);
-      });
-    } else if (drag?.id) {
-      const obj = objectsRef.current.find((item) => item.id === drag.id);
-      if (obj) paintObject(obj);
-    }
-    paintShapeGlide();
+    if (draftRef.current && draftRef.current.kind !== 'pen' && dragRef.current?.kind !== 'pen') paintDraft(draftRef.current);
+    ink.repaint();
   });
 
-  useEffect(() => {
-    titleRef.current = title;
-    editingIdRef.current = editingId;
-    selectedIdsRef.current = selectedIds;
-    toolRef.current = tool;
-    styleRef.current = style;
-    liveRef.current = {
-      flushOps,
-      saveGeoXml,
-      saveGeoChanges,
-      geoLayoutChanged,
-      restackTasks,
-      measureTask,
-      onSnapshot,
-      onAckObject,
-      onOpError,
-      applyRemote,
-      onClosed,
-      paintPeerCursors,
-      showLaser,
-      onGeocam: (message) => geoCamInRef.current.get(message.id)?.(message),
-      onGeoInput: (message) => geoInputInRef.current.get(message.id)?.(message),
+  // Указатель живёт в своём модуле и создаётся один раз; JSX получает стабильные прокладки.
+  const pointerRef = useRef(null);
+  const camApi = cam.api;
+  useLayoutEffect(() => {
+    const pointer = createPointerInput({
+      refs: {
+        dragRef,
+        chainRef,
+        touchesRef,
+        pointerClientRef,
+        toolRef,
+        styleRef,
+        editingIdRef,
+        selectedIdsRef,
+        readOnlyRef,
+        spaceRef,
+        hintRef,
+        fileRef,
+        imagePointRef,
+        dragCleanupRef,
+        draftRef,
+        viewportRef,
+        cameraRef,
+      },
+      store,
+      cam: camApi,
+      board: { ...forwardActions(() => actionsRef.current, POINTER_ACTIONS), setEditingId, setTool },
+    });
+    pointerRef.current = pointer;
+    return () => {
+      pointer.dispose();
+      if (pointerRef.current === pointer) pointerRef.current = null;
     };
-    actionsRef.current = {
-      undo,
-      redo,
-      deleteSelected,
-      commitEdit,
-      beginEdit,
-      duplicateSelected,
-      selectAll,
-      toggleLock,
-      reorderSelected,
-      nudge,
-      styleKeys,
-      arrowSide,
-      finishChain,
-      namePoint,
-      eraseName,
-      fitAll,
-      zoomTo,
-      pasteObjects,
-      pasteText,
-      insertImages,
-      pasteTarget,
-      pinchMove,
-      endPinch,
-      selectedList,
-    };
-    readOnlyRef.current = readOnly;
-    audienceRef.current = audience;
-    wheelRef.current = (event) => {
-      if (!event.isTrusted) return;
-      if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
-      event.preventDefault();
-      const cam = cameraRef.current;
-      const scale = event.deltaMode === 1 ? 16 : 1;
-      if (event.ctrlKey || event.metaKey) {
-        const delta = clamp(event.deltaY * scale, -60, 60);
-        zoomAt(cam.zoom * Math.exp(-delta * 0.006), event.clientX, event.clientY);
-        return;
-      }
-      paintCamera({ ...cam, x: cam.x - event.deltaX * scale, y: cam.y - event.deltaY * scale });
-      scheduleCameraCommit();
-    };
-  });
+  }, [store, camApi, cameraRef]);
+  const pointerHandlers = useMemo(() => ({
+    onPointerDown: (event) => pointerRef.current?.onPointerDown(event),
+    onViewportPointerMove: (event) => pointerRef.current?.onViewportPointerMove(event),
+    onPointerLeave: () => { pointerClientRef.current = null; },
+    onDoubleClick: (event) => pointerRef.current?.onDoubleClick(event),
+    onContextMenu: (event) => pointerRef.current?.onContextMenu(event),
+    onDragOver: (event) => pointerRef.current?.onDragOver(event),
+    onDrop: (event) => pointerRef.current?.onDrop(event),
+    onImageFile: (event) => pointerRef.current?.onImageFile(event),
+  }), []);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -2812,7 +1759,6 @@ export default function BoardEditor({
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
-        if (actions.eraseName?.()) return;
         actions.deleteSelected();
         return;
       }
@@ -2825,7 +1771,7 @@ export default function BoardEditor({
         return;
       }
       if (event.key === 'Enter' && selectedIdsRef.current.length === 1) {
-        const obj = objectsRef.current.find((item) => item.id === selectedIdsRef.current[0]);
+        const obj = store.get().find((item) => item.id === selectedIdsRef.current[0]);
         if (obj && !obj.props?.locked && obj.props?.format !== 'markdown' && obj.props?.format !== 'theory' && (obj.type === 'sticky' || obj.type === 'text' || obj.type === 'shape')) {
           event.preventDefault();
           actions.beginEdit(obj.id);
@@ -2833,10 +1779,6 @@ export default function BoardEditor({
         return;
       }
       if (mod || event.altKey) return;
-      if (actions.namePoint?.(event.key)) {
-        event.preventDefault();
-        return;
-      }
       const nextTool = TOOL_CODES[event.code];
       if (!nextTool) return;
       if (event.code === 'KeyO' || event.code === 'KeyR') {
@@ -2888,12 +1830,12 @@ export default function BoardEditor({
     const onTouchMove = (event) => {
       if (event.pointerType !== 'touch' || !touchesRef.current.has(event.pointerId)) return;
       touchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (dragRef.current?.kind === 'pinch') actionsRef.current.pinchMove();
+      if (dragRef.current?.kind === 'pinch') pointerRef.current?.pinchMove();
     };
     const onTouchEnd = (event) => {
       if (event.pointerType !== 'touch') return;
       touchesRef.current.delete(event.pointerId);
-      if (dragRef.current?.kind === 'pinch' && touchesRef.current.size < 2) actionsRef.current.endPinch();
+      if (dragRef.current?.kind === 'pinch' && touchesRef.current.size < 2) pointerRef.current?.endPinch();
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -2913,1007 +1855,7 @@ export default function BoardEditor({
       window.removeEventListener('pointerup', onTouchEnd);
       window.removeEventListener('pointercancel', onTouchEnd);
     };
-  }, []);
-
-  function namePoint(key) {
-    if (readOnlyRef.current) return false;
-    const letter = /^[a-zA-Z]$/.test(key) ? key.toUpperCase() : '';
-    const digit = /^[0-9]$/.test(key) ? key : '';
-    if (!letter && !digit) return false;
-    const selectedId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
-    const selected = objectsRef.current.find((obj) => obj.id === selectedId && obj.type === 'point');
-    const cursorVertex = () => {
-      const client = pointerClientRef.current;
-      if (!client) return null;
-      const world = clientToWorld(client.x, client.y);
-      if (!world) return null;
-      return nearestVertex(objectsRef.current, world, cameraRef.current.zoom);
-    };
-    if (digit) {
-      if (selected?.props.letter) {
-        const sub = `${selected.props.sub || ''}${digit}`.slice(0, 3);
-        labelArmRef.current = { kind: 'point', id: selected.id };
-        commit(objectsRef.current.map((obj) => (obj.id === selected.id ? { ...obj, props: { ...obj.props, sub } } : obj)));
-        return true;
-      }
-      const arm = labelArmRef.current;
-      if (arm?.kind !== 'vertex') return false;
-      const shape = objectsRef.current.find((obj) => obj.id === arm.id);
-      const current = shape?.props.names?.[arm.index];
-      if (!current?.letter) return false;
-      const sub = `${current.sub || ''}${digit}`.slice(0, 3);
-      commit(objectsRef.current.map((obj) => (obj.id === shape.id ? setVertexName(obj, arm.index, current.letter, sub) : obj)));
-      return true;
-    }
-    const vertex = cursorVertex();
-    if (vertex) {
-      labelArmRef.current = { kind: 'vertex', id: vertex.id, index: vertex.index };
-      commit(objectsRef.current.map((obj) => (obj.id === vertex.id ? setVertexName(obj, vertex.index, letter, '') : obj)));
-      return true;
-    }
-    if (selected) {
-      labelArmRef.current = { kind: 'point', id: selected.id };
-      commit(objectsRef.current.map((obj) => (
-        obj.id === selected.id ? { ...obj, props: { ...obj.props, letter, sub: '' } } : obj
-      )));
-      return true;
-    }
-    const client = pointerClientRef.current;
-    if (!client) return false;
-    const world = clientToWorld(client.x, client.y);
-    if (!world) return false;
-    const point = dropPoint(world, letter, false);
-    if (!point) return false;
-    labelArmRef.current = { kind: 'point', id: point.id };
-    selectIds([point.id]);
-    return true;
-  }
-
-  function dropPoint(at, letter = '', free = true) {
-    const zoom = cameraRef.current.zoom || 1;
-    const hit = nearestCrossing(objectsRef.current, at, zoom);
-    const onArrow = hit ? null : arrowUnderPoint(objectsRef.current, at, zoom);
-    if (!free && !hit && !onArrow) return null;
-    const place = hit?.point || onArrow?.point || at;
-    const point = createObject('point', {
-      x: place.x,
-      y: place.y,
-      w: 8,
-      h: 8,
-      props: { letter, sub: '', cross: null },
-    });
-    const next = plantPoint([...objectsRef.current, point], point.id, zoom, uid);
-    commit(next);
-    return next.find((obj) => obj.id === point.id) || point;
-  }
-
-  function eraseName() {
-    if (readOnlyRef.current) return false;
-    const client = pointerClientRef.current;
-    if (!client) return false;
-    const world = clientToWorld(client.x, client.y);
-    if (!world) return false;
-    const zoom = cameraRef.current.zoom || 1;
-    const vertex = nearestVertex(objectsRef.current, world, zoom, 36);
-    const shape = vertex && objectsRef.current.find((obj) => obj.id === vertex.id);
-    const named = shape?.props.names?.[vertex.index]?.letter ? vertex : null;
-    let point = null;
-    let pointDist = Infinity;
-    let letterHit = null;
-    objectsRef.current.forEach((obj) => {
-      if (obj.type === 'point' && obj.props.letter) {
-        const place = labelPlace(obj.props);
-        const dist = Math.hypot(world.x - (obj.x + place.dx), world.y - (obj.y + place.dy));
-        if (dist <= place.size && (!letterHit || dist < letterHit.dist)) {
-          letterHit = { kind: 'point', obj, dist };
-        }
-      }
-      (labelVertices(obj) || []).forEach((local, index) => {
-        const item = obj.props.names?.[index];
-        if (!item?.letter) return;
-        const place = labelPlace(item);
-        const x = obj.x + (local[0] / 100) * obj.w + place.dx;
-        const y = obj.y + (local[1] / 100) * obj.h + place.dy;
-        const dist = Math.hypot(world.x - x, world.y - y);
-        if (dist <= place.size && (!letterHit || dist < letterHit.dist)) {
-          letterHit = { kind: 'vertex', obj, index, dist };
-        }
-      });
-      if (obj.type !== 'point') return;
-      const dist = Math.hypot(world.x - obj.x, world.y - obj.y);
-      if (dist <= 36 / zoom && dist < pointDist) {
-        point = obj;
-        pointDist = dist;
-      }
-    });
-    const vertexDist = named ? named.dist : Infinity;
-    if (letterHit?.kind === 'vertex' && letterHit.dist <= vertexDist && letterHit.dist <= pointDist) {
-      setActiveLabel((current) => (current?.id === letterHit.obj.id && current.key === `v${letterHit.index}` ? null : current));
-      commit(objectsRef.current.map((obj) => (obj.id === letterHit.obj.id ? setVertexName(obj, letterHit.index, '', '') : obj)));
-      return true;
-    }
-    if (named && vertexDist <= pointDist) {
-      if (labelArmRef.current?.kind === 'vertex' && labelArmRef.current.id === named.id && labelArmRef.current.index === named.index) {
-        labelArmRef.current = null;
-      }
-      setActiveLabel((current) => (current?.id === shape.id && current.key === `v${named.index}` ? null : current));
-      commit(objectsRef.current.map((obj) => (obj.id === shape.id ? setVertexName(obj, named.index, '', '') : obj)));
-      return true;
-    }
-    const doomed = letterHit?.kind === 'point' && letterHit.dist <= pointDist ? letterHit.obj : point;
-    if (!doomed) return false;
-    if (labelArmRef.current?.kind === 'point' && labelArmRef.current.id === doomed.id) labelArmRef.current = null;
-    setActiveLabel((current) => (current?.id === doomed.id ? null : current));
-    commit(releaseMissingBinds(objectsRef.current.filter((obj) => obj.id !== doomed.id)));
-    selectIds(selectedIdsRef.current.filter((id) => id !== doomed.id));
-    return true;
-  }
-
-  function strokePoints(drag) {
-    return drag.points.map((point) => roundPoint({ x: point.x - drag.origin.x, y: point.y - drag.origin.y }));
-  }
-
-  function finishLaser(drag) {
-    if (drag.points.length < 2) {
-      paintDraft(null);
-      return;
-    }
-    const t0 = drag.points[0].t ?? drag.t0;
-    const points = drag.points.map((point) => ({
-      ...roundPoint(point),
-      t: Math.max(0, Math.round((point.t ?? t0) - t0)),
-    }));
-    const color = styleRef.current.laserColor || LASER_COLOR;
-    const width = styleRef.current.laserWidth || LASER_WIDTH;
-    const ms = strokeDuration(performance.now() - drag.t0) || 1;
-    socketRef.current?.laser(points, color, width, ms);
-    const key = `${drag.origin.x},${drag.origin.y}`;
-    const wrap = [...(draftHostRef.current?.children || [])].find((node) => node.dataset.laser === key);
-    const laserHost = laserHostRef.current;
-    if (wrap && laserHost) laserHost.appendChild(wrap);
-    paintDraft(null);
-    if (!wrap?.isConnected) {
-      showLaser({ points, color, width, ms });
-      return;
-    }
-    wrap.laserTimeline = laserTimeline(points);
-    playLaser(wrap, { draw: false });
-  }
-
-  // Штрих живёт только на экране, пока перо не отпущено. В сеть уходит один раз, целиком.
-  function finishStroke(drag) {
-    if (drag.laser) {
-      finishLaser(drag);
-      return;
-    }
-    if (drag.points.length < 2) return;
-    const stroke = {
-      id: uid(),
-      type: 'draw',
-      x: drag.origin.x,
-      y: drag.origin.y,
-      w: 12,
-      h: 12,
-      rotation: 0,
-      props: {
-        points: strokePoints(drag),
-        color: drag.color,
-        width: drag.width,
-        ms: strokeDuration(performance.now() - drag.t0) || 1,
-      },
-    };
-    flushOps();
-    const upsert = { type: 'upsert', object: stroke };
-    send(upsert);
-    const next = applyOp(objectsRef.current, upsert);
-    sentRef.current = applyOp(sentRef.current, upsert);
-    pushHistory(objectsRef.current, next);
-    objectsRef.current = next;
-    setObjects(next);
-  }
-
-  function startPinch() {
-    const viewport = viewportRef.current;
-    const points = [...touchesRef.current.values()].slice(0, 2);
-    if (!viewport || points.length < 2) return;
-    const rect = viewport.getBoundingClientRect();
-    const [a, b] = points;
-    dragRef.current = {
-      kind: 'pinch',
-      dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
-      mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top },
-      camera: { ...cameraRef.current },
-    };
-    paintCursor();
-    paintSelectionUi();
-  }
-
-  function pinchMove() {
-    const drag = dragRef.current;
-    const viewport = viewportRef.current;
-    const points = [...touchesRef.current.values()].slice(0, 2);
-    if (!drag || drag.kind !== 'pinch' || !viewport || points.length < 2) return;
-    const rect = viewport.getBoundingClientRect();
-    const [a, b] = points;
-    const dist = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
-    const mid = { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top };
-    const zoom = clamp(drag.camera.zoom * (dist / drag.dist), MIN_ZOOM, MAX_ZOOM);
-    const worldX = (drag.mid.x - drag.camera.x) / drag.camera.zoom;
-    const worldY = (drag.mid.y - drag.camera.y) / drag.camera.zoom;
-    paintCamera({ zoom, x: mid.x - worldX * zoom, y: mid.y - worldY * zoom });
-  }
-
-  function endPinch() {
-    releaseGesture();
-    dragRef.current = null;
-    paintCursor();
-    publishGesture();
-    paintSelectionUi();
-    flushHeldLink();
-  }
-
-  function startPan(event) {
-    dragRef.current = {
-      kind: 'pan',
-      pointerId: event.pointerId,
-      client: { x: event.clientX, y: event.clientY },
-      camera: { ...cameraRef.current },
-    };
-    paintCursor();
-    trackPointer(event);
-  }
-
-  function cancelDrag() {
-    const drag = dragRef.current;
-    if (!drag) return;
-    releaseGesture();
-    dragRef.current = null;
-    flushHeldLink();
-    dragCleanupRef.current?.();
-    paintDraft(null);
-    paintGuides(null);
-    if (drag.origin && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'arrow-end' || drag.kind === 'depth')) {
-      objectsRef.current = drag.origin;
-      drag.origin.forEach((obj) => {
-        if (drag.starts?.has(obj.id) || obj.id === drag.id) paintObject(obj);
-      });
-    }
-    if (drag.kind === 'pen') setPenActive(false);
-    if (drag.kind === 'eraser' && drag.origin) {
-      objectsRef.current = drag.origin;
-      viewportRef.current?.querySelectorAll('[data-object]').forEach((el) => {
-        el.style.display = '';
-      });
-    }
-    if (hintRef.current) hintRef.current.style.display = '';
-    paintCursor();
-    paintSelectionUi();
-    flushHeldLink();
-    scheduleSend();
-  }
-
-  function finishDrag(event) {
-    const drag = dragRef.current;
-    releaseGesture();
-    dragRef.current = null;
-    if (drag?.kind === 'pen') setPenActive(false);
-    flushHeldLink();
-    window.clearTimeout(cameraSyncRef.current);
-    if (drag?.kind !== 'pen') paintDraft(null);
-    paintGuides(null);
-    paintCursor();
-    if (hintRef.current) hintRef.current.style.display = '';
-    try {
-      if (!drag) return;
-      if (drag.kind === 'pan') return;
-      if (drag.kind === 'eraser') {
-        if (drag.dirty && drag.origin) pushHistory(drag.origin);
-        pruneSelection();
-        return;
-      }
-      const world = toWorld(event);
-      if (!world) return;
-      const currentStyle = styleRef.current;
-
-      if (drag.kind === 'marquee') {
-        const rect = rectFromPoints(drag.start, world);
-        const zoom = cameraRef.current.zoom;
-        if (rect.w < 3 / zoom && rect.h < 3 / zoom) return;
-        const hits = canvasList()
-          .filter((obj) => canSelect(obj) && !obj.props?.locked && intersects(rect, obj))
-          .map((obj) => obj.id);
-        selectIds([...new Set([...drag.base, ...hits])]);
-        return;
-      }
-
-      if (drag.kind === 'pen') {
-        finishStroke(drag);
-        return;
-      }
-
-      if (drag.kind === 'shape' && currentStyle.shape === 'point') {
-        const point = dropPoint(world, '', true);
-        if (point) selectIds([point.id]);
-        setTool('select');
-        return;
-      }
-
-      if (drag.kind === 'shape') {
-        const rect = rectFromPoints(drag.start, world);
-        const zoom = cameraRef.current.zoom;
-        const tiny = rect.w < 8 / zoom && rect.h < 8 / zoom;
-        const box = tiny
-          ? { x: drag.start.x - 80, y: drag.start.y - 60, w: 160, h: 120 }
-          : { ...rect, w: Math.max(rect.w, 16), h: Math.max(rect.h, 16) };
-        const shape = createObject('shape', {
-          ...box,
-          props: {
-            shape: currentStyle.shape,
-            fill: currentStyle.fill.fill,
-            stroke: currentStyle.fill.stroke,
-            depth: defaultDepth(currentStyle.shape),
-            text: '',
-            ...planeDefaults(currentStyle.shape),
-          },
-        });
-        if (addObjects([shape])) selectIds([shape.id]);
-        setTool('select');
-        return;
-      }
-
-      if (drag.kind === 'arrow') {
-        const zoom = cameraRef.current.zoom;
-        const startHit = aimPoint(drag.start, null, event.altKey);
-        const endHit = aimPoint(world, startHit, event.altKey);
-        if (Math.hypot(endHit.point.x - startHit.point.x, endHit.point.y - startHit.point.y) < 8 / zoom) return;
-        let next = objectsRef.current;
-        const startBind = attachSnap(next, startHit, uid);
-        next = startBind.objects;
-        const endBind = attachSnap(next, endHit, uid);
-        next = endBind.objects;
-        if (next.length + 1 > MAX_OBJECTS) {
-          notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
-          return;
-        }
-        const arrow = createObject('arrow', arrowBounds(startHit.point, endHit.point, {
-          color: currentStyle.arrow,
-          width: currentStyle.penWidth,
-          head: false,
-          bind1: startBind.bind,
-          bind2: endBind.bind,
-        }));
-        let list = [...next, arrow];
-        if (!event.altKey) list = splitArrowThroughPoints(list, [arrow.id], uid, zoom);
-        if (list.length > MAX_OBJECTS) {
-          notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
-          return;
-        }
-        commit(list);
-        const known = new Set(next.map((obj) => obj.id));
-        selectIds(list.filter((obj) => obj.type === 'arrow' && !known.has(obj.id)).map((obj) => obj.id));
-        return;
-      }
-
-      if (drag.kind === 'arrow-end' && drag.dirty && !event.altKey) {
-        const bound = bindArrowEnds(objectsRef.current, drag.id, cameraRef.current.zoom, uid);
-        const known = new Set(bound.map((obj) => obj.id));
-        const split = splitArrowThroughPoints(bound, [drag.id], uid, cameraRef.current.zoom);
-        objectsRef.current = split;
-        const pieces = split.filter((obj) => obj.type === 'arrow' && !known.has(obj.id));
-        if (pieces.length) selectIds(pieces.map((obj) => obj.id));
-      }
-
-      if (drag.kind === 'poly-point' && drag.dirty && !event.altKey) {
-        objectsRef.current = bindPolylineVertex(objectsRef.current, drag.id, drag.index, cameraRef.current.zoom, uid);
-      }
-
-      if (drag.kind === 'base-point' && drag.dirty && !event.altKey) {
-        objectsRef.current = bindPyramidBase(objectsRef.current, drag.id, drag.index, cameraRef.current.zoom, uid);
-      }
-
-      if (drag.kind === 'move' && drag.dirty && !event.altKey && drag.starts?.size) {
-        const moved = new Set(drag.starts.keys());
-        let next = objectsRef.current;
-        if (moved.size === 1) {
-          const only = [...moved][0];
-          if (next.some((obj) => obj.id === only && obj.type === 'point')) next = refreshPointHold(next, only);
-        }
-        const arrowIds = [...moved].filter((id) => next.some((obj) => obj.id === id && obj.type === 'arrow'));
-        let pieces = [];
-        if (arrowIds.length) {
-          const known = new Set(next.map((obj) => obj.id));
-          next = splitArrowThroughPoints(next, arrowIds, uid, cameraRef.current.zoom, moved);
-          pieces = next.filter((obj) => obj.type === 'arrow' && !known.has(obj.id)).map((obj) => obj.id);
-        }
-        objectsRef.current = next;
-        if (pieces.length) {
-          const alive = new Set(next.map((obj) => obj.id));
-          selectIds([...selectedIdsRef.current.filter((id) => alive.has(id)), ...pieces]);
-        }
-      }
-
-      if (drag.dirty && drag.origin) pushHistory(drag.origin);
-      pruneSelection();
-    } finally {
-      publishGesture();
-      paintSelectionUi();
-      flushHeldLink();
-      flushOps();
-    }
-  }
-
-  function moveDrag(event) {
-    const drag = dragRef.current;
-    if (!drag) return;
-    if (event.pointerType === 'touch') pointerClientRef.current = { x: event.clientX, y: event.clientY };
-    else sendCursor(event.clientX, event.clientY);
-
-    if (drag.kind === 'pan') {
-      paintCamera({
-        ...cameraRef.current,
-        x: drag.camera.x + (event.clientX - drag.client.x),
-        y: drag.camera.y + (event.clientY - drag.client.y),
-      });
-      return;
-    }
-
-    const world = toWorld(event);
-    if (!world) return;
-    const currentStyle = styleRef.current;
-    const zoom = cameraRef.current.zoom;
-
-    if (drag.kind === 'marquee') {
-      paintDraft({ kind: 'marquee', ...rectFromPoints(drag.start, world) });
-      return;
-    }
-
-    if (drag.kind === 'pen') {
-      const raw = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : null;
-      const samples = raw?.length ? raw : [event];
-      const min = 0.35 / zoom;
-      let added = false;
-      samples.forEach((sample) => {
-        if (drag.laser && drag.points.length >= LASER_MAX_POINTS) return;
-        const point = toWorld(sample);
-        if (!point) return;
-        const last = drag.points[drag.points.length - 1];
-        if (last && Math.hypot(point.x - last.x, point.y - last.y) < min) return;
-        drag.points.push(drag.laser ? { x: point.x, y: point.y, t: performance.now() } : point);
-        added = true;
-      });
-      if (!added) return;
-      paintDraft({
-        kind: 'pen',
-        laser: Boolean(drag.laser),
-        points: drag.points,
-        origin: drag.origin,
-        color: drag.laser ? (styleRef.current.laserColor || LASER_COLOR) : currentStyle.pen,
-        width: drag.laser ? (styleRef.current.laserWidth || LASER_WIDTH) : currentStyle.penWidth,
-      });
-      return;
-    }
-
-    if (drag.kind === 'eraser') {
-      const next = eraseStrokes(objectsRef.current, world, 16 / zoom);
-      if (next.length !== objectsRef.current.length) {
-        drag.dirty = true;
-        hideErased(objectsRef.current, next);
-      }
-      return;
-    }
-
-    if (drag.kind === 'shape' && currentStyle.shape === 'point') {
-      paintDraft({ kind: 'dot', x: world.x, y: world.y });
-      return;
-    }
-
-    if (drag.kind === 'shape') {
-      paintDraft({
-        kind: 'shape',
-        ...rectFromPoints(drag.start, world),
-        shape: currentStyle.shape,
-        fill: currentStyle.fill.fill,
-        stroke: currentStyle.fill.stroke,
-      });
-      return;
-    }
-
-    if (drag.kind === 'arrow') {
-      const startHit = aimPoint(drag.start, null, event.altKey);
-      const endHit = aimPoint(world, startHit, event.altKey);
-      paintDraft({
-        kind: 'arrow',
-        x1: startHit.point.x,
-        y1: startHit.point.y,
-        x2: endHit.point.x,
-        y2: endHit.point.y,
-        guide: endHit.guide,
-        color: currentStyle.arrow,
-        width: currentStyle.penWidth,
-      });
-      return;
-    }
-
-    if (drag.kind === 'label-move' || drag.kind === 'label-size') {
-      const rawX = event.clientX - drag.cx;
-      const rawY = event.clientY - drag.cy;
-      if (!drag.dirty && Math.hypot(rawX, rawY) < 2) return;
-      drag.dirty = true;
-      const sx = rawX / zoom;
-      const sy = rawY / zoom;
-      const patch = drag.kind === 'label-move'
-        ? { dx: drag.dx + sx, dy: drag.dy + sy }
-        : { size: Math.min(96, Math.max(14, drag.size + (sx - sy) * 0.45)) };
-      const next = objectsRef.current.map((obj) => {
-        if (obj.id !== drag.id) return obj;
-        if (drag.index < 0) return { ...obj, props: { ...obj.props, ...patch } };
-        return moveVertexLabel(obj, drag.index, patch);
-      });
-      gesture(next, [next.find((obj) => obj.id === drag.id)]);
-      return;
-    }
-
-    let dx = world.x - drag.start.x;
-    let dy = world.y - drag.start.y;
-    if (!drag.dirty && Math.hypot(dx, dy) < 3 / zoom) return;
-    if (!drag.dirty) {
-      drag.dirty = true;
-      paintSelectionUi();
-    }
-
-    if (drag.kind === 'move') {
-      const lonePoint = drag.starts.size === 1 && [...drag.starts.values()].every((obj) => obj.type === 'point');
-      if (!event.altKey && !lonePoint && drag.others.length && drag.bounds) {
-        const snap = snapMove(
-          { x: drag.bounds.x + dx, y: drag.bounds.y + dy, w: drag.bounds.w, h: drag.bounds.h },
-          drag.others,
-          SNAP_PX / zoom,
-        );
-        dx += snap.dx;
-        dy += snap.dy;
-        paintGuides(snap.guides);
-      } else {
-        paintGuides(null);
-      }
-      const changed = [];
-      const next = objectsRef.current.map((obj) => {
-        const start = drag.starts.get(obj.id);
-        if (!start) return obj;
-        const moved = { ...start, x: start.x + dx, y: start.y + dy };
-        if (start.type === 'point' && drag.starts.size === 1) moved.props = { ...start.props, cross: null };
-        changed.push(moved);
-        return moved;
-      });
-      gestureFollow(next, changed.map((obj) => obj.id), changed, event.altKey && lonePoint);
-      return;
-    }
-
-    if (drag.kind === 'resize') {
-      const keepRatio = drag.obj.type === 'geogebra' || (drag.obj.type === 'image' ? !event.shiftKey : event.shiftKey);
-      const nextObj = { ...drag.obj, ...resizeBox(drag.obj, drag.handle, world, drag.start, keepRatio) };
-      if (nextObj.type === 'shape' && nextObj.props.shape === 'polyline' && Array.isArray(nextObj.props.binds)) {
-        nextObj.props = { ...nextObj.props, binds: nextObj.props.binds.map(() => null) };
-      }
-      if (nextObj.type === 'shape' && nextObj.props.shape === 'pyramid3' && Array.isArray(nextObj.props.baseBinds)) {
-        nextObj.props = { ...nextObj.props, baseBinds: nextObj.props.baseBinds.map(() => null) };
-      }
-      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
-      if (nextObj.type === 'shape') gestureFollow(base, [nextObj.id], [nextObj]);
-      else gesture(base, [nextObj]);
-      return;
-    }
-
-    if (drag.kind === 'depth') {
-      const box = drag.obj;
-      const u = ((world.x - box.x) / box.w) * 100;
-      const v = ((world.y - box.y) / box.h) * 100;
-      const depth = depthFromLocal(box.props.shape, u, v, box.props);
-      const nextObj = { ...box, props: { ...box.props, depth } };
-      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
-      gestureFollow(base, [nextObj.id], [nextObj]);
-      return;
-    }
-
-    if (drag.kind === 'apex') {
-      const box = drag.obj;
-      const u = ((world.x - box.x) / box.w) * 100;
-      const v = ((world.y - box.y) / box.h) * 100;
-      const nextObj = { ...box, props: { ...box.props, ...moveApex(box.props.shape, box.props, u, v) } };
-      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
-      gestureFollow(base, [nextObj.id], [nextObj]);
-      return;
-    }
-
-    if (drag.kind === 'base-point') {
-      const box = drag.obj;
-      const hit = aimPoint(world, null, event.altKey, drag.id);
-      const local = [((hit.point.x - box.x) / box.w) * 100, ((hit.point.y - box.y) / box.h) * 100];
-      const moved = movePyramidBase(box, drag.index, local);
-      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? moved : obj));
-      gestureFollow(base, [moved.id], [moved]);
-      return;
-    }
-
-    if (drag.kind === 'poly-point' || drag.kind === 'vert-point') {
-      const hit = aimPoint(world, null, event.altKey, drag.id);
-      const moved = drag.kind === 'poly-point'
-        ? movePolylineVertex(drag.obj, drag.index, hit.point)
-        : moveShapeVertex(drag.obj, drag.index, hit.point);
-      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? moved : obj));
-      const settled = retargetBound(base, [drag.id]);
-      const known = new Set([drag.id]);
-      const extra = settled.filter((obj, index) => obj !== base[index] && !known.has(obj.id));
-      gesture(settled, [settled.find((obj) => obj.id === drag.id), ...extra]);
-      return;
-    }
-
-    if (drag.kind === 'shape-knob') {
-      const box = drag.obj;
-      const u = ((world.x - box.x) / box.w) * 100;
-      const patch = shapeKnobPatch(box.props.shape, drag.handle, u, box.props);
-      if (!patch) return;
-      const nextObj = { ...box, props: { ...box.props, ...patch } };
-      const base = objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj));
-      gestureFollow(base, [nextObj.id], [nextObj]);
-      return;
-    }
-
-    if (drag.kind === 'arrow-end') {
-      const fixed = drag.handle === 'start'
-        ? { x: drag.obj.x + drag.obj.props.x2, y: drag.obj.y + drag.obj.props.y2, bind: drag.obj.props.bind2 }
-        : { x: drag.obj.x + drag.obj.props.x1, y: drag.obj.y + drag.obj.props.y1, bind: drag.obj.props.bind1 };
-      const moving = aimPoint(world, fixed.bind ? fixed : null, event.altKey, drag.id);
-      const start = drag.handle === 'start' ? moving.point : fixed;
-      const end = drag.handle === 'end' ? moving.point : fixed;
-      const nextObj = { ...drag.obj, ...arrowBounds(start, end, drag.obj.props) };
-      gesture(objectsRef.current.map((obj) => (obj.id === drag.id ? nextObj : obj)), [nextObj]);
-    }
-  }
-
-  function trackPointer(event) {
-    const pointerId = event.pointerId;
-    const move = (ev) => {
-      if (ev.pointerId === pointerId) moveDrag(ev);
-    };
-    const detach = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', cancel);
-      if (dragCleanupRef.current === detach) dragCleanupRef.current = null;
-    };
-    const up = (ev) => {
-      if (ev.pointerId !== pointerId) return;
-      detach();
-      if (dragRef.current?.pointerId === pointerId) finishDrag(ev);
-    };
-    const cancel = (ev) => {
-      if (ev.pointerId !== pointerId) return;
-      detach();
-      if (dragRef.current?.pointerId === pointerId) cancelDrag();
-    };
-    dragCleanupRef.current?.();
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', cancel);
-    dragCleanupRef.current = detach;
-    const capture = event.currentTarget;
-    if (capture?.setPointerCapture) {
-      try { capture.setPointerCapture(pointerId); } catch { /* уже отпущен */ }
-    }
-  }
-
-  function onPointerDown(event) {
-    if (!event.isTrusted) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('[data-geo-live]')) return;
-    if (target?.closest('textarea, input')) return;
-    if (target?.closest('[data-chrome]')) return;
-
-    if (event.pointerType === 'touch') {
-      touchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (touchesRef.current.size === 2) {
-        cancelDrag();
-        startPinch();
-        return;
-      }
-      if (touchesRef.current.size > 2) return;
-    }
-    if (dragRef.current) return;
-    if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
-
-    pointerClientRef.current = { x: event.clientX, y: event.clientY };
-    const world = toWorld(event);
-    if (!world) return;
-    const currentTool = toolRef.current;
-    const handleEl = target?.closest('[data-handle]');
-    const panButton = event.button === 1 || event.button === 2;
-
-    if (readOnlyRef.current || panButton || currentTool === 'hand' || (spaceRef.current && !handleEl)) {
-      startPan(event);
-      return;
-    }
-
-    if (editingIdRef.current && !target?.closest('textarea')) {
-      const editing = objectsRef.current.find((obj) => obj.id === editingIdRef.current);
-      if (editing && editing.type !== 'geogebra') actionsRef.current.commitEdit(editingIdRef.current);
-    }
-
-    if (chainRef.current && !(currentTool === 'shape' && styleRef.current.shape === 'polyline')) finishChain();
-
-    const sizeEl = target?.closest('[data-label-size]');
-    const labelEl = target?.closest('[data-label]');
-    if ((sizeEl || labelEl) && !panButton && currentTool !== 'hand' && !spaceRef.current) {
-      const id = labelEl.closest('[data-object]')?.dataset.object;
-      const obj = objectsRef.current.find((item) => item.id === id);
-      if (obj && canEdit(obj)) {
-        const key = labelEl.dataset.label;
-        const index = key === 'point' ? -1 : Number(key.slice(1));
-        const name = index < 0 ? obj.props : obj.props.names?.[index];
-        const place = labelPlace(name);
-        setActiveLabel({ id, key });
-        dragRef.current = {
-          kind: sizeEl ? 'label-size' : 'label-move',
-          pointerId: event.pointerId,
-          id,
-          index,
-          cx: event.clientX,
-          cy: event.clientY,
-          dx: place.dx,
-          dy: place.dy,
-          size: place.size,
-          origin: objectsRef.current,
-          dirty: false,
-        };
-        selectIds([id]);
-        trackPointer(event);
-        return;
-      }
-    }
-
-    const drawingLine = currentTool === 'arrow' || (currentTool === 'shape' && styleRef.current.shape === 'polyline');
-    const polyHandle = handleEl?.dataset.handle?.startsWith('poly-');
-    if ((((currentTool === 'select' || handleEl) && !drawingLine) || polyHandle)) {
-      if (handleEl) {
-        const id = handleEl.closest('[data-object]')?.dataset.object;
-        const obj = objectsRef.current.find((item) => item.id === id);
-        if (!obj || !canEdit(obj)) return;
-        const handle = handleEl.dataset.handle;
-        const knob = handle === 'skew' || handle === 'slantL' || handle === 'slantR' || handle === 'spin' || handle === 'lean';
-        const polyIndex = handle.startsWith('poly-') ? Number(handle.slice(5)) : -1;
-        const vertIndex = handle.startsWith('vert-') ? Number(handle.slice(5)) : -1;
-        const baseIndex = handle.startsWith('base-') ? Number(handle.slice(5)) : -1;
-        dragRef.current = {
-          kind: handle === 'start' || handle === 'end' ? 'arrow-end' : handle === 'depth' ? 'depth' : handle === 'apex' ? 'apex' : knob ? 'shape-knob' : polyIndex >= 0 ? 'poly-point' : vertIndex >= 0 ? 'vert-point' : baseIndex >= 0 ? 'base-point' : 'resize',
-          index: polyIndex >= 0 ? polyIndex : vertIndex >= 0 ? vertIndex : baseIndex,
-          pointerId: event.pointerId,
-          id,
-          handle,
-          start: world,
-          obj,
-          origin: objectsRef.current,
-          dirty: false,
-        };
-        selectIds([id]);
-        trackPointer(event);
-        return;
-      }
-
-      const hit = pickObject(canvasList().filter(canSelect), world, cameraRef.current.zoom);
-      if (!hit) {
-        if (event.pointerType === 'touch') {
-          selectIds([]);
-          setActiveLabel(null);
-          setEditingId(null);
-          startPan(event);
-          return;
-        }
-        const base = event.shiftKey ? selectedIdsRef.current : [];
-        if (!event.shiftKey) {
-          selectIds([]);
-          setActiveLabel(null);
-          setEditingId(null);
-        }
-        dragRef.current = { kind: 'marquee', pointerId: event.pointerId, start: world, base };
-        trackPointer(event);
-        return;
-      }
-
-      let ids = selectedIdsRef.current;
-      if (event.shiftKey) {
-        ids = ids.includes(hit.id) ? ids.filter((id) => id !== hit.id) : [...ids, hit.id];
-        selectIds(ids);
-        if (!ids.includes(hit.id)) return;
-      } else if (!ids.includes(hit.id)) {
-        ids = [hit.id];
-        selectIds(ids);
-        setActiveLabel(null);
-      }
-      if (editingIdRef.current && editingIdRef.current !== hit.id) setEditingId(null);
-      if (hit.type === 'geogebra' && editingIdRef.current === hit.id) return;
-
-      const set = new Set(ids);
-      const movable = objectsRef.current.filter((obj) => set.has(obj.id) && canEdit(obj));
-      if (!movable.length) return;
-      dragRef.current = {
-        kind: 'move',
-        pointerId: event.pointerId,
-        start: world,
-        starts: new Map(movable.map((obj) => [obj.id, obj])),
-        bounds: boundsOf(movable),
-        others: objectsRef.current
-          .filter((obj) => !set.has(obj.id) && obj.type !== 'draw')
-          .map((obj) => ({ x: obj.x, y: obj.y, w: obj.w, h: obj.h })),
-        origin: objectsRef.current,
-        dirty: false,
-      };
-      trackPointer(event);
-      return;
-    }
-
-    selectIds([]);
-
-    if (currentTool === 'pen' || currentTool === 'laser') {
-      if (currentTool === 'pen' && objectsRef.current.length >= MAX_OBJECTS) {
-        notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
-        return;
-      }
-      const laser = currentTool === 'laser';
-      dragRef.current = {
-        kind: 'pen',
-        laser,
-        pointerId: event.pointerId,
-        points: [laser ? { x: world.x, y: world.y, t: performance.now() } : world],
-        origin: world,
-        t0: performance.now(),
-        color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
-        width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
-      };
-      setPenActive(true);
-      if (hintRef.current) hintRef.current.style.display = 'none';
-      paintDraft({
-        kind: 'pen',
-        laser,
-        points: [world],
-        origin: world,
-        color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
-        width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
-      });
-      trackPointer(event);
-      return;
-    }
-
-    if (currentTool === 'eraser') {
-      const next = eraseStrokes(objectsRef.current, world, 16 / cameraRef.current.zoom);
-      dragRef.current = {
-        kind: 'eraser',
-        pointerId: event.pointerId,
-        origin: objectsRef.current,
-        dirty: next.length !== objectsRef.current.length,
-      };
-      if (dragRef.current.dirty) hideErased(objectsRef.current, next);
-      trackPointer(event);
-      return;
-    }
-
-    if (currentTool === 'shape' && styleRef.current.shape === 'polyline') {
-      if (hintRef.current) hintRef.current.style.display = 'none';
-      placePolylinePoint(world, event.altKey);
-      return;
-    }
-
-    if (currentTool === 'shape' || currentTool === 'arrow') {
-      if (hintRef.current) hintRef.current.style.display = 'none';
-      dragRef.current = { kind: currentTool, pointerId: event.pointerId, start: world };
-      trackPointer(event);
-      return;
-    }
-
-    if (currentTool === 'sticky' || currentTool === 'text') {
-      const sticky = currentTool === 'sticky';
-      const obj = createObject(sticky ? 'sticky' : 'text', sticky
-        ? {
-          x: world.x - 100,
-          y: world.y - 100,
-          w: 200,
-          h: 200,
-          props: { text: '', color: styleRef.current.sticky, fontSize: 28 },
-        }
-        : {
-          x: world.x,
-          y: world.y - 20,
-          w: 280,
-          h: Math.max(40, Math.round(styleRef.current.textSize * 1.4 + 16)),
-          props: { text: '', fontSize: styleRef.current.textSize },
-        });
-      if (addObjects([obj])) beginEdit(obj.id);
-      return;
-    }
-
-    if (currentTool === 'image') {
-      imagePointRef.current = world;
-      fileRef.current?.click();
-      return;
-    }
-
-    if (currentTool === 'geogebra') {
-      placeGeogebra(world);
-    }
-  }
-
-  function onViewportPointerMove(event) {
-    if (!event.isTrusted) return;
-    if (event.pointerType === 'touch') return;
-    if (chainRef.current && !dragRef.current && toolRef.current === 'shape' && styleRef.current.shape === 'polyline') {
-      const world = toWorld(event);
-      if (world) paintChainPreview(aimPoint(world, chainRef.current.hits.at(-1), event.altKey));
-    }
-    if (dragRef.current) return;
-    sendCursor(event.clientX, event.clientY);
-  }
-
-  function onContextMenu(event) {
-    if (event.target instanceof Element && event.target.closest('[data-geo-live]')) return;
-    event.preventDefault();
-  }
-
-  function onDragOver(event) {
-    if (readOnlyRef.current) return;
-    if (Array.from(event.dataTransfer?.types || []).includes('Files')) {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
-    }
-  }
-
-  function onDrop(event) {
-    const files = imageFiles(event.dataTransfer?.files);
-    if (!files.length) return;
-    event.preventDefault();
-    const world = toWorld(event);
-    if (!world) return;
-    insertImages(files, world);
-  }
-
-  async function onImageFile(event) {
-    const files = imageFiles(event.target.files);
-    event.target.value = '';
-    const point = imagePointRef.current;
-    if (!files.length || !point) return;
-    await insertImages(files, point);
-  }
-
-  function placeGeogebra(world) {
-    const appName = geogebraApp(styleRef.current.appName).id;
-    const obj = createObject('geogebra', {
-      x: world.x - 220,
-      y: world.y - 160,
-      w: 440,
-      h: 320,
-      props: { appName },
-    });
-    if (addObjects([obj])) selectIds([obj.id]);
-    setTool('select');
-  }
-
-  function onDoubleClick(event) {
-    if (toolRef.current !== 'select' || readOnlyRef.current) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('[data-geo-live], [data-chrome], textarea')) return;
-    const world = toWorld(event);
-    if (!world) return;
-    const hit = pickObject(canvasList().filter(canSelect), world, cameraRef.current.zoom);
-    if (hit) {
-      if (canEdit(hit) && hit.props?.format !== 'markdown' && hit.props?.format !== 'theory' && (hit.type === 'sticky' || hit.type === 'text' || hit.type === 'shape')) beginEdit(hit.id);
-      return;
-    }
-    const obj = createObject('text', {
-      x: world.x,
-      y: world.y - 20,
-      w: 280,
-      h: Math.max(40, Math.round(styleRef.current.textSize * 1.4 + 16)),
-      props: { text: '', fontSize: styleRef.current.textSize },
-    });
-    if (addObjects([obj])) beginEdit(obj.id);
-  }
+  }, [store]);
 
   function goBack() {
     flushOps();
@@ -3942,16 +1884,106 @@ export default function BoardEditor({
     };
   }, [initialBoard.id, audience]);
 
+  // Свежие версии обработчиков для подписок, таймеров и колбэков объектов.
+  useEffect(() => {
+    titleRef.current = title;
+    editingIdRef.current = editingId;
+    selectedIdsRef.current = selectedIds;
+    toolRef.current = tool;
+    styleRef.current = style;
+    liveRef.current = {
+      flushOps,
+      scheduleSend,
+      paintSurface: cam.paintSurface,
+      pullCamera: cam.jumpTo,
+      paintSelectionUi,
+      geoChanged: (id, info) => {
+        if (editingIdRef.current !== id || readOnlyRef.current) return;
+        scheduleGeoSave(id, info?.settled ? 0 : info?.moving ? GEO_XML_MOVING_MS : GEO_XML_MS);
+      },
+      saveGeoXml,
+      saveGeoChanges,
+      geoLayoutChanged,
+      restackTasks,
+      measureObject,
+      onSnapshot,
+      onAckObject,
+      onOpError,
+      applyRemote,
+      onClosed,
+      paintPeerCursors,
+      showLaser,
+      onGeocam: (message) => geoCamInRef.current.get(message.id)?.(message),
+    };
+    actionsRef.current = {
+      placeTheoryBlock,
+      placeTasks,
+      changeText,
+      toggleGeo,
+      changeGeoControls,
+      undo,
+      redo,
+      deleteSelected,
+      commitEdit,
+      beginEdit,
+      duplicateSelected,
+      selectAll,
+      toggleLock,
+      reorderSelected,
+      nudge,
+      styleKeys,
+      arrowSide,
+      finishChain,
+      fitAll,
+      zoomTo: cam.zoomTo,
+      pasteObjects,
+      pasteText,
+      insertImages,
+      pasteTarget,
+      addObjects,
+      addStroke,
+      aimPoint,
+      broadcastCursor,
+      canEdit,
+      canSelect,
+      canvasList,
+      commit,
+      cursorAllowed,
+      dropPoint,
+      eraseTo,
+      flushHeldLink,
+      flushOps,
+      gesture,
+      notify,
+      paintChainPreview,
+      paintCursor,
+      paintDraft,
+      paintGuides,
+      paintSelectionUi,
+      placePolylinePoint,
+      pruneSelection,
+      publishGesture,
+      pushHistory,
+      releaseGesture,
+      scheduleSend,
+      selectIds,
+      sendLaser,
+      selectedList,
+    };
+    readOnlyRef.current = readOnly;
+    audienceRef.current = audience;
+  });
+
   const pages = series.length ? series : [{
     id: initialBoard.id,
     title: initialBoard.title,
     studentIds: initialBoard.studentIds || [],
     groupId: initialBoard.groupId ?? null,
+    seriesId: initialBoard.seriesId || null,
     createdAt: initialBoard.createdAt || '',
   }];
   const pageIndex = Math.max(0, pages.findIndex((page) => page.id === initialBoard.id));
   const trayContext = tool === 'select' || tool === 'hand' ? null : tool;
-  const geoEditing = selectedObjects.length === 1 && editingId === selectedObjects[0].id && selectedObjects[0].type === 'geogebra';
 
   return (
     <div className={`fixed inset-0 z-30 flex overflow-hidden bg-[#f3f3f4] text-zinc-900 dark:bg-[#101012] dark:text-zinc-100 ${theoryOpen ? 'min-[720px]:flex-row' : ''}`}>
@@ -3960,57 +1992,30 @@ export default function BoardEditor({
         ref={viewportRef}
         className={`absolute inset-0 touch-none select-none ${(tool === 'pen' || tool === 'laser' || tool === 'eraser' || (tool === 'shape' && style.shape === 'polyline')) ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}
         style={{ backgroundColor: surface.color }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onViewportPointerMove}
-        onPointerLeave={() => { pointerClientRef.current = null; }}
-        onDoubleClick={onDoubleClick}
-        onContextMenu={onContextMenu}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
+        onPointerDown={pointerHandlers.onPointerDown}
+        onPointerMove={pointerHandlers.onViewportPointerMove}
+        onPointerLeave={pointerHandlers.onPointerLeave}
+        onDoubleClick={pointerHandlers.onDoubleClick}
+        onContextMenu={pointerHandlers.onContextMenu}
+        onDragOver={pointerHandlers.onDragOver}
+        onDrop={pointerHandlers.onDrop}
       >
         <div
           ref={worldRef}
           className="absolute left-0 top-0 h-0 w-0 origin-top-left overflow-visible"
         >
-          {objects.filter((obj) => !isHiddenBoardObject(obj)).map((obj) => (
-            <BoardObject
-              key={obj.id}
-              obj={obj}
-              zoom={camera.zoom}
-              teacher={audience === 'teacher'}
-              selected={selectedSet.has(obj.id)}
-              handles={selectedIds.length === 1 && selectedSet.has(obj.id)}
-              activeLabel={activeLabel?.id === obj.id ? activeLabel.key : ''}
-              editing={obj.id === editingId}
-              onChangeText={changeText}
-              onBlurText={commitEdit}
-              onToggleGeo={toggleGeo}
-              onGeoReady={(id, api) => {
-                if (api) apiMap.current.set(id, api);
-                else apiMap.current.delete(id);
-              }}
-              onGeoChange={(id) => {
-                if (editingIdRef.current !== id || readOnlyRef.current) return;
-                scheduleGeoSave(id);
-              }}
-              onGeoLayout={(id) => liveRef.current.geoLayoutChanged?.(id)}
-              onGeoCamera={(id, wire) => socketRef.current?.geocam({ id, ...wire })}
-              onGeoCamBind={(id, fn) => {
-                if (fn) {
-                  geoCamInRef.current.set(id, fn);
-                  const last = geoCamLastRef.current.get(id);
-                  if (last) fn(last);
-                } else geoCamInRef.current.delete(id);
-              }}
-              onGeoInput={(id, body) => socketRef.current?.geoinput({ id, ...body })}
-              onGeoInputBind={(id, fn) => {
-                if (fn) geoInputInRef.current.set(id, fn);
-                else geoInputInRef.current.delete(id);
-              }}
-              onTaskMeasure={(id, height) => liveRef.current.measureTask?.(id, height)}
-              onGeoControls={changeGeoControls}
-            />
-          ))}
+          <ObjectLayer
+            store={store}
+            motion={motion}
+            camera={camera}
+            viewSize={viewSize}
+            selectedIds={selectedIds}
+            editingId={editingId}
+            teacher={audience === 'teacher'}
+            selfId={selfId}
+            peers={peers}
+            callbacks={objectCallbacks}
+          />
           <div ref={groupBoxRef} className="pointer-events-none absolute" style={{ display: 'none' }} />
           <div ref={guideHostRef} className="pointer-events-none absolute left-0 top-0" />
           <div ref={draftHostRef} className="pointer-events-none absolute left-0 top-0" />
@@ -4018,7 +2023,7 @@ export default function BoardEditor({
         </div>
       </div>
 
-      {objects.filter((obj) => !isHiddenBoardObject(obj)).length === 0 && (
+      {canvasEmpty && (
         <div ref={hintRef} className="pointer-events-none absolute inset-0 grid place-items-center px-6 pb-28 text-center min-[720px]:pb-6">
           <p className="max-w-md text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             Пустой холст. N — стикер, T или двойной клик — текст, P — кисть, G — GeoGebra.
@@ -4056,11 +2061,13 @@ export default function BoardEditor({
       </div>
 
       <div ref={barRef} className="absolute left-0 top-0 z-30" style={{ visibility: 'hidden' }}>
-        {!readOnly && selectedObjects.length > 0 && (
-          <SelectionToolbar
-            objects={selectedObjects}
-            canLock
-            geoEditing={geoEditing}
+        {!readOnly && selectedIds.length > 0 && (
+          <SelectionBar
+            store={store}
+            selectedIds={selectedIds}
+            editingId={editingId}
+            frozen={isDragging}
+            canLock={audience === 'teacher'}
             onPatch={patchSelected}
             onDuplicate={duplicateSelected}
             onDelete={deleteSelected}
@@ -4069,7 +2076,8 @@ export default function BoardEditor({
             onToggleLock={toggleLock}
             onArrowSide={arrowSide}
             onJoin={joinSelected}
-            onToggleGeo={() => selectedObjects[0] && toggleGeo(selectedObjects[0].id)}
+            onToggleGeo={toggleGeo}
+            onRendered={paintSelectionUi}
           />
         )}
       </div>
@@ -4183,17 +2191,17 @@ export default function BoardEditor({
             <IconButton label="Повторить (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Redo2 size={18} /></IconButton>
           </div>
           <div className="hidden items-center rounded-2xl border border-zinc-200/80 bg-white/95 p-1 shadow-sm min-[720px]:flex dark:border-zinc-800 dark:bg-zinc-950/95">
-            <IconButton label="Уменьшить" onClick={() => zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
+            <IconButton label="Уменьшить" onClick={() => cam.zoomBy(1 / 1.2)}><Minus size={18} /></IconButton>
             <button
               ref={zoomLabelRef}
               type="button"
               title="100% (Shift+0)"
-              onClick={() => zoomTo(1)}
+              onClick={() => cam.zoomTo(1)}
               className="h-8 w-12 text-center text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-300"
             >
               {Math.round(camera.zoom * 100)}%
             </button>
-            <IconButton label="Увеличить" onClick={() => zoomBy(1.2)}><Plus size={18} /></IconButton>
+            <IconButton label="Увеличить" onClick={() => cam.zoomBy(1.2)}><Plus size={18} /></IconButton>
             <IconButton label="Показать всё (Shift+1)" onClick={fitAll}><Maximize2 size={16} /></IconButton>
           </div>
         </div>
@@ -4340,7 +2348,7 @@ export default function BoardEditor({
         multiple
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
-        onChange={onImageFile}
+        onChange={pointerHandlers.onImageFile}
       />
       </div>
       {audience === 'teacher' && (
@@ -4348,431 +2356,11 @@ export default function BoardEditor({
           pane={sidePane}
           kept={keptPanes}
           groupId={initialBoard.groupId ?? null}
-          studentIds={sideStudentsRef.current}
+          studentIds={sideStudents}
           onTheory={copyTheoryToBoard}
           onTasks={copyTasksToBoard}
         />
       )}
-    </div>
-  );
-}
-
-const EMPTY_STUDENTS = [];
-
-const BoardSidePanes = memo(function BoardSidePanes({ pane, kept, groupId, studentIds, onTheory, onTasks }) {
-  if (!kept.theory && !kept.tasks && !kept.students) return null;
-  const open = pane != null;
-  return (
-    <aside
-      hidden={!open}
-      inert={!open}
-      className={`h-full min-w-0 w-1/2 overflow-hidden border-l border-zinc-200 [contain:layout_paint] dark:border-zinc-800 ${open ? 'hidden min-[720px]:block' : 'hidden'}`}
-    >
-      {kept.theory && (
-        <div className="h-full" hidden={pane !== 'theory'} inert={pane !== 'theory'}>
-          <BoardTheoryPane onCopy={onTheory} />
-        </div>
-      )}
-      {kept.tasks && (
-        <div className="h-full" hidden={pane !== 'tasks'} inert={pane !== 'tasks'}>
-          <BoardTasksPane onCopy={onTasks} />
-        </div>
-      )}
-      {kept.students && (
-        <div className="h-full" hidden={pane !== 'students'} inert={pane !== 'students'}>
-          <BoardStudentsPane groupId={groupId} studentIds={studentIds || EMPTY_STUDENTS} onCopy={onTasks} />
-        </div>
-      )}
-    </aside>
-  );
-});
-
-function ShareButton({ open, access, token, onToggle, onClose, onApply }) {
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
-  const link = token ? `${window.location.origin}/board/shared/${token}` : '';
-  async function apply(next, resetLink = false) {
-    setBusy(true);
-    setNote('');
-    try {
-      await onApply(next, resetLink);
-      setNote(resetLink ? 'Новая ссылка' : '');
-    } catch (error) {
-      setNote(boardErrorMessage(error, 'Не удалось изменить ссылку'));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        title="Ссылка на доску"
-        aria-pressed={open}
-        onClick={onToggle}
-        className={`flex h-9 w-9 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white/95 shadow-sm hover:bg-zinc-50 min-[720px]:h-8 dark:border-zinc-800 dark:bg-zinc-950/95 ${access === 'off' ? 'text-zinc-400' : 'text-zinc-800 dark:text-zinc-100'}`}
-      >
-        <Link2 size={16} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-11 z-50 w-72 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold">Ссылка</p>
-            <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"><X size={14} /></button>
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            {[['off', 'Выкл'], ['view', 'Смотреть'], ['edit', 'Править']].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                disabled={busy}
-                onClick={() => apply(id)}
-                className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${access === id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {access !== 'off' && link && (
-            <div className="mt-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => navigator.clipboard?.writeText(link).then(() => setNote('Ссылка скопирована')).catch(() => setNote(link))}
-                className="w-full truncate rounded-lg bg-zinc-100 px-2 py-1.5 text-left text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-              >
-                {link}
-              </button>
-              <button type="button" disabled={busy} onClick={() => apply(access, true)} className="text-xs font-medium text-zinc-500 hover:text-zinc-800">
-                Новая ссылка, старая перестанет работать
-              </button>
-            </div>
-          )}
-          {note && <p className="mt-2 text-xs text-zinc-500">{note}</p>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LinkStatus({ link }) {
-  if (link.state !== 'offline') return null;
-  const base = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium';
-  const text = link.pending ? `Потеряно соединение · ${link.pending} в очереди` : 'Потеряно соединение';
-  return (
-    <span className={`${base} text-amber-600`} title="Правки отправятся после переподключения">
-      <WifiOff size={13} />
-      <span className="hidden sm:inline">{text}</span>
-    </span>
-  );
-}
-
-function PeerList({ peers, compact = false }) {
-  if (!peers.length) return null;
-  const shown = peers.slice(0, 4);
-  const rest = peers.length - shown.length;
-  return (
-    <div
-      className={`flex shrink-0 items-center ${compact ? 'pr-1' : 'rounded-2xl border border-zinc-200/80 bg-white/90 py-1 pl-1 pr-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/90'}`}
-      title={peers.map(peerName).join(', ')}
-    >
-      <div className="flex -space-x-1.5">
-        {shown.map((peer) => (
-          <span
-            key={peer.clientId}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white ring-2 ring-white dark:ring-zinc-950"
-            style={{ background: peerColor(peer.clientId) }}
-          >
-            {initials(peerName(peer))}
-          </span>
-        ))}
-      </div>
-      {rest > 0 && <span className="ml-1.5 text-[11px] font-medium text-zinc-500">+{rest}</span>}
-    </div>
-  );
-}
-
-function IconButton({ label, onClick, disabled, className = '', children }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 min-[720px]:h-8 min-[720px]:w-8 dark:text-zinc-200 dark:hover:bg-zinc-900 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function StyleTray({ context, style, onStyle }) {
-  if (context === 'sticky') {
-    return (
-      <SwatchCard label="Цвет стикера">
-        <div className="flex flex-wrap gap-1.5">
-          {STICKY_COLORS.map((color) => (
-            <ColorDot
-              key={color.id}
-              color={color.bg}
-              label={color.label}
-              active={style.sticky === color.bg}
-              onClick={() => onStyle((prev) => ({ ...prev, sticky: color.bg }))}
-            />
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'text') {
-    return (
-      <SwatchCard label="Текст">
-        <div className="flex gap-1">
-          {TEXT_SIZES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, textSize: item.size }))}
-              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.textSize === item.size ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'laser') {
-    return (
-      <SwatchCard label="Указка">
-        <div className="flex flex-wrap gap-1.5">
-          {LASER_COLORS.map((color) => (
-            <ColorDot
-              key={color}
-              color={color}
-              label={color}
-              active={style.laserColor === color}
-              onClick={() => onStyle((prev) => ({ ...prev, laserColor: color }))}
-            />
-          ))}
-        </div>
-        <div className="mt-2 flex gap-1">
-          {LASER_WIDTHS.map((width) => (
-            <button
-              key={width}
-              type="button"
-              title={width === 8 ? 'Тонкая' : width === 18 ? 'Широкая' : 'Средняя'}
-              onClick={() => onStyle((prev) => ({ ...prev, laserWidth: width }))}
-              className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.laserWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-            >
-              <span className="rounded-full bg-current" style={{ width: width * 0.55, height: width * 0.55 }} />
-            </button>
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'pen' || context === 'eraser') {
-    return (
-      <SwatchCard label={context === 'eraser' ? 'Ластик стирает штрихи кисти' : 'Кисть'}>
-        {context === 'pen' && (
-          <>
-            <div className="flex flex-wrap gap-1.5">
-              {PEN_COLORS.map((color) => (
-                <ColorDot
-                  key={color}
-                  color={color}
-                  label={color}
-                  active={style.pen === color}
-                  onClick={() => onStyle((prev) => ({ ...prev, pen: color }))}
-                />
-              ))}
-            </div>
-            <div className="mt-2 flex gap-1">
-              {PEN_WIDTHS.map((width) => (
-                <button
-                  key={width}
-                  type="button"
-                  onClick={() => onStyle((prev) => ({ ...prev, penWidth: width }))}
-                  className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.penWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                >
-                  {width}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'shape') {
-    return (
-      <SwatchCard label="Стереометрия" wide>
-        <div className="max-h-64 space-y-2 overflow-y-auto">
-          {SHAPE_GROUPS.map((group) => (
-            <div key={group.id}>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{group.label}</p>
-              <div className="grid grid-cols-5 gap-1">
-                {group.kinds.map((kind) => (
-                  <button
-                    key={kind.id}
-                    type="button"
-                    aria-label={kind.label}
-                    title={kind.label}
-                    onClick={() => onStyle((prev) => ({ ...prev, shape: kind.id }))}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.shape === kind.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900'}`}
-                  >
-                    <ShapeGlyph id={kind.id} size={16} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {SHAPE_FILLS.map((fill) => (
-            <ColorDot
-              key={fill.id}
-              color={fill.fill}
-              label={fill.label}
-              active={style.fill.fill === fill.fill}
-              onClick={() => onStyle((prev) => ({ ...prev, fill }))}
-            />
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'arrow') {
-    return (
-      <SwatchCard label="Отрезок">
-        <div className="flex flex-wrap gap-1.5">
-          {PEN_COLORS.map((color) => (
-            <ColorDot
-              key={color}
-              color={color}
-              label={color}
-              active={style.arrow === color}
-              onClick={() => onStyle((prev) => ({ ...prev, arrow: color }))}
-            />
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'image') {
-    return (
-      <SwatchCard label="Изображение" wide>
-        <p className="text-[11px] leading-snug text-zinc-500">
-          Клик по доске открывает файл. Ещё можно вставить картинку через Ctrl+V или перетащить её на холст.
-        </p>
-      </SwatchCard>
-    );
-  }
-
-  if (context === 'geogebra') {
-    return (
-      <SwatchCard label="GeoGebra" wide>
-        <div className="flex flex-col gap-1">
-          {GEOGEBRA_APPS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, appName: item.id, templateId: '' }))}
-              className={`rounded-lg px-2 py-1.5 text-left text-xs font-medium ${style.appName === item.id ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`}
-            >
-              {item.title}
-            </button>
-          ))}
-        </div>
-      </SwatchCard>
-    );
-  }
-
-  return null;
-}
-
-function SwatchCard({ label, children, wide = false }) {
-  return (
-    <div className={`${wide ? 'w-[min(100vw-1.5rem,18rem)]' : 'w-[min(100vw-1.5rem,15rem)]'} max-h-[38vh] overflow-y-auto rounded-2xl border border-zinc-200/80 bg-white/95 p-2.5 shadow-sm min-[720px]:max-h-none ${wide ? 'min-[720px]:w-56' : 'min-[720px]:w-40'} dark:border-zinc-800 dark:bg-zinc-950/95`}>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function ColorDot({ color, label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={`h-5 w-5 rounded-full border ${active ? 'ring-2 ring-zinc-900 ring-offset-2 ring-offset-white dark:ring-white dark:ring-offset-zinc-950' : 'border-zinc-300 dark:border-zinc-700'}`}
-      style={color === 'none'
-        ? { background: 'linear-gradient(135deg, transparent 46%, currentColor 46%, currentColor 54%, transparent 54%)' }
-        : { background: color }}
-    />
-  );
-}
-
-function SurfacePanel({ surface, onChange, onClose }) {
-  const grids = [
-    { id: 'empty', label: 'Пустой' },
-    { id: 'cell', label: 'Клетка' },
-    { id: 'rule', label: 'Линейка' },
-  ];
-  return (
-    <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-lg min-[720px]:absolute min-[720px]:inset-x-auto min-[720px]:right-0 min-[720px]:top-11 min-[720px]:max-h-none min-[720px]:w-[22rem] dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Фон и сетка</p>
-        <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900">
-          <X size={16} />
-        </button>
-      </div>
-      <p className="mb-2 text-sm text-zinc-500">Цвет фона</p>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {SURFACE_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            aria-label={color}
-            onClick={() => onChange({ ...surface, color })}
-            className={`h-9 w-9 rounded-xl border ${surface.color === color ? 'border-sky-500 ring-2 ring-sky-200' : 'border-zinc-200 dark:border-zinc-700'}`}
-            style={{ background: color }}
-          />
-        ))}
-      </div>
-      <p className="mb-2 text-sm text-zinc-500">Тип сетки</p>
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        {grids.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onChange({ ...surface, grid: item.id })}
-            className={`rounded-xl border px-2 py-2 text-xs font-medium ${surface.grid === item.id ? 'border-sky-500 bg-sky-50 text-sky-900' : 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <div
-        className="h-28 rounded-xl border border-zinc-200"
-        style={{
-          backgroundColor: surface.color,
-          backgroundImage: surface.grid === 'cell'
-            ? 'linear-gradient(to right, rgba(120,132,148,0.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,132,148,0.45) 1px, transparent 1px)'
-            : surface.grid === 'rule'
-              ? 'linear-gradient(to bottom, transparent 15px, rgba(120,132,148,0.45) 15px)'
-              : 'none',
-          backgroundSize: surface.grid === 'rule' ? '100% 16px' : '20px 20px',
-        }}
-      />
     </div>
   );
 }

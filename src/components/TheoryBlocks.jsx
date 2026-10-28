@@ -1,27 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import React, { useCallback, useState, useRef } from 'react';
 import { AlertCircle, Bookmark, ChevronDown, ChevronUp, Lightbulb, Pencil } from 'lucide-react';
-import remarkGfm from 'remark-gfm';
-import { continueOrderedListNumbers, normalizeDisplayMath } from './theoryMath';
+import { sanitizeHtml } from '../shared/lib/sanitizeHtml';
+import GeoGebraApplet from '../shared/geogebra/GeoGebraApplet';
+import GeoGebraControls from '../shared/geogebra/GeoGebraControls';
+import MathText from './MathText';
 
-export function MathText({ text }) {
-  if (text == null || text === '') return null;
-  const value = String(text);
-  if (!value.includes('$')) return value;
-  return (
-    <span className="theory-attr-math">
-      <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{ p: ({ children }) => <>{children}</> }}
-      >
-        {normalizeDisplayMath(value)}
-      </ReactMarkdown>
-    </span>
-  );
-}
+export { MathText };
 
 function IconMark({ children, invert = false }) {
   return (
@@ -234,14 +218,10 @@ export const Steps = ({ children }) => (
   </div>
 );
 
-function stripScripts(html) {
-  return String(html || '').replace(/<script\b[\s\S]*?<\/script>/gi, '');
-}
-
 export const Html = ({ html, children }) => {
   const markup = html
     ?? (typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : '');
-  const cleaned = stripScripts(markup).trim();
+  const cleaned = sanitizeHtml(markup).trim();
   if (!cleaned) return null;
 
   return (
@@ -252,422 +232,26 @@ export const Html = ({ html, children }) => {
   );
 };
 
-function hexToRgb(hex) {
-  hex = hex.replace('#', '');
-  if (hex.length === 3) {
-    hex = hex.split('').map((c) => c + c).join('');
-  }
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  return [r, g, b];
-}
-
-function roundToStep(value, step) {
-  if (!Number.isFinite(step) || step <= 0) return value;
-  const text = String(step);
-  const dot = text.indexOf('.');
-  const places = dot === -1 ? 0 : text.length - dot - 1;
-  const snapped = Math.round(value / step) * step;
-  return Number(snapped.toFixed(places));
-}
-
-function clampControl(value, control, snap) {
-  let next = value;
-  if (Number.isFinite(control.min)) next = Math.max(control.min, next);
-  if (Number.isFinite(control.max)) next = Math.min(control.max, next);
-  if (snap) next = roundToStep(next, control.step);
-  return next;
-}
-
-function formatExprValue(value) {
-  if (value == null || value === '') return '';
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return '';
-    return String(Math.round(value * 1e6) / 1e6);
-  }
-  return String(value);
-}
-
-function evalTextExpr(source, scope, cache) {
-  let fn = cache.get(source);
-  if (fn === undefined) {
-    try {
-      const compiled = new Function(`return (${source})`)();
-      fn = typeof compiled === 'function' ? compiled : null;
-    } catch (err) {
-      fn = null;
-    }
-    cache.set(source, fn);
-  }
-  if (!fn) return '';
-  try {
-    return formatExprValue(fn(scope));
-  } catch (err) {
-    return '';
-  }
-}
-
-function renderGeogebraText(text, scope, cache) {
-  const markdown = (text.parts || []).map((part) => (
-    part.type === 'expr' ? evalTextExpr(part.source, scope, cache) : part.value
-  )).join('');
-  return continueOrderedListNumbers(normalizeDisplayMath(markdown));
-}
-
-function theoryAppletBox(container, requestedHeight) {
-  const width = Math.max(260, Math.round(container?.clientWidth || 320));
+function theoryAppletBox(containerWidth, requestedHeight) {
+  const width = Math.max(260, Math.round(containerWidth || 320));
   const asked = Math.max(280, parseInt(requestedHeight, 10) || 400);
   const height = width < 640 ? Math.max(asked, Math.round(width * 1.15)) : Math.min(asked, 520);
   return { width, height };
 }
 
-function applyControlValue(api, control, value) {
-  if (!api || !control?.name || !Number.isFinite(value)) return;
-  try {
-    api.setValue(control.name, value);
-  } catch (err) {
-    console.error(`GeoGebra setValue ${control.name}:`, err);
-  }
-}
-
 export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] }) => {
-  const containerRef = useRef(null);
   const apiRef = useRef(null);
-  const exprCache = useRef(new Map());
-  const controlsRef = useRef(controls);
-  const valuesRef = useRef(controls.map((control) => control.value));
-  const appletId = useRef(`ggb-${Math.random().toString(36).substring(2, 9)}`);
-  const [values, setValues] = useState(() => controls.map((control) => control.value));
-  const [drafts, setDrafts] = useState(() => controls.map((control) => String(control.value)));
-  const controlsKey = controls
-    .map((control) => [control.kind, control.name, control.label, control.min, control.max, control.step, control.value].join(':'))
-    .join('|');
-
-  controlsRef.current = controls;
-  valuesRef.current = values;
-
-  useEffect(() => {
-    const next = controlsRef.current.map((control) => control.value);
-    setValues(next);
-    setDrafts(next.map((value) => String(value)));
-    valuesRef.current = next;
-    controlsRef.current.forEach((control, index) => {
-      applyControlValue(apiRef.current, control, next[index]);
-    });
-  }, [controlsKey]);
-
-  useEffect(() => {
-    const initApplet = () => {
-      if (!containerRef.current) return;
-
-      const frame = theoryAppletBox(containerRef.current, height);
-      containerRef.current.style.height = `${frame.height}px`;
-      const parameters = {
-        id: appletId.current,
-        width: frame.width,
-        height: frame.height,
-        showToolBar: false,
-        showMenuBar: false,
-        showAlgebraInput: false,
-        enableLabelDrags: false,
-        enableShiftDragZoom: true,
-        language: 'ru',
-        useBrowserForJS: false,
-        scale: 1,
-        allowUpscale: false,
-        ...(id ? { material_id: id } : {}),
-        appletOnLoad: (api) => {
-          apiRef.current = api;
-          if (!id) {
-            api.evalCommand('ShowAxes(true)');
-            api.evalCommand('ShowGrid(true)');
-          }
-
-          if (setup) {
-            const commands = setup
-              .split('\n')
-              .map((cmd) => cmd.trim())
-              .filter((cmd) => cmd.length > 0 && !cmd.startsWith('//') && !cmd.startsWith('#'));
-
-            const viewCommands = [];
-            let perspectiveCommand = null;
-            const evalCommands = [];
-            const delayedCommands = [];
-
-            commands.forEach((cmd) => {
-              if (!cmd) return;
-
-              if (cmd.startsWith('view:')) {
-                const parts = cmd.substring(5).split(',').map((s) => s.trim());
-                viewCommands.push(parts);
-              } else if (cmd.startsWith('perspective:')) {
-                perspectiveCommand = cmd.substring(12).trim();
-              } else if (cmd.startsWith('color:')) {
-                const match = cmd.match(/color:\s*(\w+)\s*,\s*([\w#]+)/);
-                if (match) {
-                  delayedCommands.push({ type: 'color', obj: match[1], color: match[2] });
-                }
-              } else if (cmd.startsWith('size:')) {
-                const match = cmd.match(/size:\s*(\w+)\s*,\s*(\d+)/);
-                if (match) {
-                  delayedCommands.push({ type: 'size', obj: match[1], size: match[2] });
-                }
-              } else if (cmd.startsWith('label:')) {
-                const match = cmd.match(/label:\s*(\w+)\s*,\s*"([^"]+)"/);
-                if (match) {
-                  delayedCommands.push({ type: 'label', obj: match[1], label: match[2] });
-                }
-              } else if (cmd.startsWith('show:')) {
-                delayedCommands.push({ type: 'show', items: cmd.substring(5).split(',').map((s) => s.trim()) });
-              } else if (cmd.startsWith('hide:')) {
-                delayedCommands.push({ type: 'hide', items: cmd.substring(5).split(',').map((s) => s.trim()) });
-              } else if (cmd.startsWith('animate:')) {
-                const match = cmd.match(/animate:\s*(\w+)\s*,\s*(\w+)\s*,?\s*(\d+)?/);
-                if (match) {
-                  delayedCommands.push({
-                    type: 'animate',
-                    obj: match[1],
-                    animate: match[2] === 'true',
-                    speed: match[3] || null,
-                  });
-                }
-              } else {
-                evalCommands.push(cmd);
-              }
-            });
-
-            viewCommands.forEach((parts) => {
-              if (parts.length >= 4) {
-                const xMin = parseFloat(parts[0]) || -10;
-                const xMax = parseFloat(parts[1]) || 10;
-                const yMin = parseFloat(parts[2]) || -10;
-                const yMax = parseFloat(parts[3]) || 10;
-
-                if (parts.length >= 6) {
-                  api.setCoordSystem(xMin, xMax, yMin, yMax, parseFloat(parts[4]) || -10, parseFloat(parts[5]) || 10);
-                } else {
-                  api.setCoordSystem(xMin, xMax, yMin, yMax);
-                }
-
-                if (parts.includes('grid')) api.setGridVisible(true);
-                if (parts.includes('axes')) api.setAxesVisible(true, true);
-              }
-            });
-
-            if (perspectiveCommand) api.setPerspective(perspectiveCommand);
-
-            evalCommands.forEach((cmd) => {
-              try {
-                api.evalCommand(cmd);
-              } catch (err) {
-                console.error(`Ошибка выполнения команды "${cmd}":`, err);
-              }
-            });
-
-            if (delayedCommands.length > 0) {
-              setTimeout(() => {
-                delayedCommands.forEach((dCmd) => {
-                  try {
-                    switch (dCmd.type) {
-                      case 'color':
-                        api.setColor(dCmd.obj, ...hexToRgb(dCmd.color));
-                        break;
-                      case 'size':
-                        api.setPointSize(dCmd.obj, parseInt(dCmd.size, 10));
-                        break;
-                      case 'label':
-                        api.setCaption(dCmd.obj, dCmd.label);
-                        break;
-                      case 'show':
-                        dCmd.items.forEach((item) => {
-                          if (item === 'grid') api.setGridVisible(true);
-                          else if (item === 'axes') api.setAxesVisible(true, true);
-                          else api.setVisible(item, true);
-                        });
-                        break;
-                      case 'hide':
-                        dCmd.items.forEach((item) => {
-                          if (item === 'grid') api.setGridVisible(false);
-                          else if (item === 'axes') api.setAxesVisible(false, false);
-                          else api.setVisible(item, false);
-                        });
-                        break;
-                      case 'animate':
-                        api.setAnimating(dCmd.obj, dCmd.animate);
-                        if (dCmd.animate) api.startAnimation();
-                        else api.stopAnimation();
-                        if (dCmd.speed) api.setAnimationSpeed(dCmd.obj, parseFloat(dCmd.speed));
-                        break;
-                      default:
-                        break;
-                    }
-                  } catch (err) {
-                    console.error('Ошибка отложенной команды:', dCmd, err);
-                  }
-                });
-              }, 200);
-            }
-          }
-
-          controlsRef.current.forEach((control, index) => {
-            applyControlValue(api, control, valuesRef.current[index]);
-          });
-        },
-      };
-
-      apiRef.current = null;
-      const applet = new window.GGBApplet(parameters, true);
-      applet.inject(containerRef.current);
-    };
-
-    if (!window.GGBApplet) {
-      const script = document.createElement('script');
-      script.src = 'https://www.geogebra.org/apps/deployggb.js';
-      script.id = 'ggb-api-script';
-      script.onload = initApplet;
-      document.head.appendChild(script);
-    } else {
-      initApplet();
-    }
-
-    const box = containerRef.current;
-    let lastWidth = 0;
-    const fit = () => {
-      const el = containerRef.current;
-      if (!el) return;
-      const frame = theoryAppletBox(el, height);
-      if (frame.width === lastWidth) return;
-      lastWidth = frame.width;
-      el.style.height = `${frame.height}px`;
-      const api = apiRef.current;
-      if (!api || typeof api.setSize !== 'function') return;
-      try { api.setSize(frame.width, frame.height); } catch { /* апплет ещё меняет размер */ }
-    };
-    const observer = box ? new ResizeObserver(fit) : null;
-    if (box && observer) observer.observe(box);
-
-    return () => {
-      observer?.disconnect();
-      apiRef.current = null;
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
-    };
-  }, [id, setup, height]);
-
-  const publishValue = (index, next) => {
-    setValues((prev) => {
-      const copy = [...prev];
-      copy[index] = next;
-      valuesRef.current = copy;
-      return copy;
-    });
-    applyControlValue(apiRef.current, controls[index], next);
-  };
-
-  const commitValue = (index, raw, snap) => {
-    const control = controls[index];
-    if (!control) return;
-    const parsed = Number(String(raw).trim().replace(',', '.'));
-    if (!Number.isFinite(parsed)) {
-      setDrafts((prev) => {
-        const copy = [...prev];
-        copy[index] = String(valuesRef.current[index] ?? '');
-        return copy;
-      });
-      return;
-    }
-    const next = clampControl(parsed, control, snap);
-    setDrafts((prev) => {
-      const copy = [...prev];
-      copy[index] = String(next);
-      return copy;
-    });
-    publishValue(index, next);
-  };
-
-  const previewTypedValue = (index, raw) => {
-    const control = controls[index];
-    const text = String(raw).trim().replace(',', '.');
-    if (!/^-?\d+(\.\d+)?$/.test(text)) return;
-    const parsed = Number(text);
-    if (!Number.isFinite(parsed)) return;
-    if (Number.isFinite(control.min) && parsed < control.min) return;
-    if (Number.isFinite(control.max) && parsed > control.max) return;
-    publishValue(index, parsed);
-  };
-
-  const scope = {};
-  controls.forEach((control, index) => {
-    scope[control.name] = values[index];
-  });
-  const hasPanel = controls.length > 0 || texts.length > 0;
+  const [apiReady, setApiReady] = useState(false);
+  const sizeFor = useCallback((width) => theoryAppletBox(width, height), [height]);
+  const onReady = useCallback((api) => {
+    apiRef.current = api;
+    setApiReady(Boolean(api));
+  }, []);
 
   return (
     <div className="theory-geogebra my-6 w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60">
-      <div ref={containerRef} className="w-full max-w-full" style={{ height: `${Math.min(parseInt(height, 10) || 400, 560)}px` }} />
-      {hasPanel && (
-        <div className="flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
-          {controls.map((control, index) => (
-            <div key={`${control.kind}-${control.name}-${index}`} className="flex min-w-0 flex-col gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="min-w-0 text-sm text-zinc-700 dark:text-zinc-300">
-                  <MathText text={control.label} />
-                </span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={control.min}
-                  max={control.max}
-                  step={control.step || 'any'}
-                  value={drafts[index] ?? ''}
-                  aria-label={control.label.replace(/\$/g, '')}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    setDrafts((prev) => {
-                      const copy = [...prev];
-                      copy[index] = raw;
-                      return copy;
-                    });
-                    previewTypedValue(index, raw);
-                  }}
-                  onBlur={(event) => commitValue(index, event.target.value, control.kind === 'slider')}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.currentTarget.blur();
-                  }}
-                  className="w-24 shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-600"
-                />
-              </div>
-              {control.kind === 'slider' && (
-                <input
-                  type="range"
-                  min={control.min}
-                  max={control.max}
-                  step={control.step}
-                  value={values[index] ?? control.value}
-                  aria-label={control.label.replace(/\$/g, '')}
-                  onChange={(event) => commitValue(index, event.target.value, true)}
-                  className="h-2 w-full accent-zinc-900 dark:accent-zinc-100"
-                />
-              )}
-            </div>
-          ))}
-          {texts.map((text, index) => (
-            <div
-              key={`text-${index}`}
-              className={`dynamic-markdown text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 [&_p]:mb-2 [&_p:last-child]:mb-0 ${
-                controls.length > 0 ? 'border-t border-zinc-200 pt-3 dark:border-zinc-800' : ''
-              }`}
-            >
-              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-                {renderGeogebraText(text, scope, exprCache.current)}
-              </ReactMarkdown>
-            </div>
-          ))}
-        </div>
-      )}
+      <GeoGebraApplet materialId={id ? String(id) : ''} setup={setup || ''} sizeFor={sizeFor} onReady={onReady} />
+      <GeoGebraControls controls={controls} texts={texts} apiRef={apiRef} apiReady={apiReady} variant="page" />
     </div>
   );
 };
-
