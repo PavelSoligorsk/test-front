@@ -1,9 +1,7 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  BookOpen, Eye, Edit3, Sparkles, FileText, Copy, Check,
-  ListTree, Maximize2, Printer, Download, FileDown,
-  Moon, Sun, Layout, Grid, PanelLeft, PanelRight,
-  Type, Bold, Italic, Strikethrough, Heading1, Heading2
+  BookOpen, Eye, Edit3, Copy, Check,
+  ListTree, Maximize2, FileDown,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -127,7 +125,7 @@ function TableOfContents({ md }) {
     let m;
     while ((m = re.exec(md)) !== null) {
       const level = m[1].length;
-      const text = m[2].replace(/[`*_~\[\]()]/g, '').trim();
+      const text = m[2].replace(/[`*_~[\]()]/g, '').trim();
       const id = text.toLowerCase()
         .replace(/[^a-zа-яё0-9\s-]/g, '')
         .replace(/\s+/g, '-');

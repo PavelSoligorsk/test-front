@@ -1,15 +1,14 @@
 // components/TheoryAIChat.jsx
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import 'katex/dist/katex.min.css';
 import { API_URL } from '../shared/config';
 import { ENDPOINTS } from '../shared/api/endpoints';
 import MarkdownWithGeoGebra from '../shared/ui/MarkdownWithGeoGebra';
-import { 
-  X, 
-  Send, 
-  Bot, 
-  User, 
+import {
+  Send,
+  Bot,
+  User,
   Sparkles,
   Loader2,
   Trash2,
@@ -20,9 +19,7 @@ import {
   XCircle,
   CheckCircle2,
   GripHorizontal,
-  PanelRightClose,
-  PanelRightOpen,
-  MessageSquare
+  MessageSquare,
 } from 'lucide-react';
 
 
@@ -138,7 +135,6 @@ const TheoryAIChat = ({
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [panelWidth, setPanelWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
@@ -223,7 +219,6 @@ const TheoryAIChat = ({
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
-    setError(null);
 
     try {
       const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
@@ -254,7 +249,6 @@ const TheoryAIChat = ({
       }]);
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Не удалось получить ответ. Попробуйте позже.';
-      setError(errorMsg);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: errorMsg,
@@ -291,7 +285,6 @@ const TheoryAIChat = ({
   const handleClearChat = () => {
     if (messages.length > 0 && window.confirm('Очистить историю чата?')) {
       setMessages([]);
-      setError(null);
     }
   };
 

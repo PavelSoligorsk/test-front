@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -15,6 +15,7 @@ import {
   Repeat,
 } from 'lucide-react';
 import { teacherApi } from '../../features/teacher/api';
+import { useAsyncData } from '../../shared/hooks';
 import LessonModal from './LessonModal';
 import CreateScheduleModal from './CreateScheduleModal';
 import SchedulesListModal from './SchedulesListModal';
@@ -44,7 +45,7 @@ function getEventColors(lesson) {
 // Custom event content — show title, time, student name, balance
 function renderEventContent(eventInfo) {
   const { event } = eventInfo;
-  const { studentName, balanceStr, lesson } = event.extendedProps || {};
+  const { studentName, balanceStr } = event.extendedProps || {};
 
   return (
     <div style={{ padding: '2px 4px', fontSize: '11px', lineHeight: '1.2' }}>
@@ -65,13 +66,52 @@ function renderEventContent(eventInfo) {
   );
 }
 
+const NO_EVENTS = [];
+
+// Дни календаря с занятиями → события FullCalendar.
+async function loadCalendarEvents(dateFrom, dateTo) {
+  try {
+    const res = await teacherApi.getCalendar(dateFrom, dateTo);
+    const days = res.data?.days || [];
+
+    // Flatten days into FullCalendar events
+    const allEvents = [];
+    for (const day of days) {
+      for (const lesson of day.lessons || []) {
+        const start = dayjs.utc(lesson.scheduled_date);
+        const end = start.add(lesson.duration_minutes || 60, 'minute');
+        const colors = getEventColors(lesson);
+        const studentName = lesson.student_name || `ID: ${lesson.student_id}`;
+        const groupLabel = lesson.group_name ? ` [${lesson.group_name}]` : '';
+        const balanceStr = formatBalance(lesson.student_balance);
+
+        allEvents.push({
+          id: String(lesson.id),
+          title: `${lesson.title || 'Занятие'}${groupLabel}`,
+          start: start.format('YYYY-MM-DDTHH:mm:ss'),
+          end: end.format('YYYY-MM-DDTHH:mm:ss'),
+          backgroundColor: colors.bg,
+          borderColor: colors.border,
+          textColor: colors.text,
+          extendedProps: {
+            lesson,
+            studentName,
+            balanceStr,
+          },
+        });
+      }
+    }
+    return allEvents;
+  } catch (e) {
+    console.error('Calendar fetch error:', e);
+    throw e;
+  }
+}
+
 export default function CalendarTab({ students, groups, onRefresh }) {
   const calendarRef = useRef(null);
   const [viewMode, setViewMode] = useState('dayGridMonth'); // 'dayGridMonth' | 'timeGridWeek'
   const [currentTitle, setCurrentTitle] = useState('');
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // Modals
   const [selectedLesson, setSelectedLesson] = useState(null); // lesson data for LessonModal
@@ -79,67 +119,28 @@ export default function CalendarTab({ students, groups, onRefresh }) {
   const [createDate, setCreateDate] = useState(null); // pre-fill date from calendar click
   const [showSchedulesList, setShowSchedulesList] = useState(false);
 
-  // Fetch calendar data
-  const fetchCalendar = useCallback(async (dateFrom, dateTo) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await teacherApi.getCalendar(dateFrom, dateTo);
-      const days = res.data?.days || [];
-
-      // Flatten days into FullCalendar events
-      const allEvents = [];
-      for (const day of days) {
-        for (const lesson of day.lessons || []) {
-          const start = dayjs.utc(lesson.scheduled_date);
-          const end = start.add(lesson.duration_minutes || 60, 'minute');
-          const colors = getEventColors(lesson);
-          const studentName = lesson.student_name || `ID: ${lesson.student_id}`;
-          const groupLabel = lesson.group_name ? ` [${lesson.group_name}]` : '';
-          const balanceStr = formatBalance(lesson.student_balance);
-
-          allEvents.push({
-            id: String(lesson.id),
-            title: `${lesson.title || 'Занятие'}${groupLabel}`,
-            start: start.format('YYYY-MM-DDTHH:mm:ss'),
-            end: end.format('YYYY-MM-DDTHH:mm:ss'),
-            backgroundColor: colors.bg,
-            borderColor: colors.border,
-            textColor: colors.text,
-            extendedProps: {
-              lesson,
-              studentName,
-              balanceStr,
-            },
-          });
-        }
-      }
-      setEvents(allEvents);
-    } catch (e) {
-      console.error('Calendar fetch error:', e);
-      setError('Не удалось загрузить календарь');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Initial fetch: wide range (past month + current + 3 months ahead)
-  useEffect(() => {
-    const now = dayjs.utc();
-    const from = now.subtract(30, 'day').startOf('day').format('YYYY-MM-DDTHH:mm:ss');
-    const to = now.add(90, 'day').endOf('day').format('YYYY-MM-DDTHH:mm:ss');
-    fetchCalendar(from, to);
-  }, [fetchCalendar]);
+  // Диапазон сообщает сам календарь (datesSet приходит и при первом показе).
+  const [range, setRange] = useState(null);
+  const calendarQuery = useAsyncData(
+    range ? `${range.from}|${range.to}` : null,
+    () => loadCalendarEvents(range.from, range.to),
+    { keepPrevious: true },
+  );
+  const events = calendarQuery.data || NO_EVENTS;
+  const loading = calendarQuery.loading;
+  const error = calendarQuery.error ? 'Не удалось загрузить календарь' : null;
+  const reloadCalendar = calendarQuery.reload;
 
   // Refetch on dates change (FullCalendar callback)
   const handleDatesSet = useCallback(
     (arg) => {
       setCurrentTitle(arg.view.title);
-      const from = dayjs.utc(arg.start).format('YYYY-MM-DDTHH:mm:ss');
-      const to = dayjs.utc(arg.end).format('YYYY-MM-DDTHH:mm:ss');
-      fetchCalendar(from, to);
+      setRange({
+        from: dayjs.utc(arg.start).format('YYYY-MM-DDTHH:mm:ss'),
+        to: dayjs.utc(arg.end).format('YYYY-MM-DDTHH:mm:ss'),
+      });
     },
-    [fetchCalendar],
+    [],
   );
 
   // Click on event → open LessonModal
@@ -172,15 +173,9 @@ export default function CalendarTab({ students, groups, onRefresh }) {
   // Callback after lesson action → refresh calendar
   const handleLessonUpdated = useCallback(() => {
     setSelectedLesson(null);
-    // Trigger refetch by navigating calendar API
-    const api = calendarRef.current?.getApi();
-    if (api) {
-      const from = dayjs.utc(api.view.activeStart).format('YYYY-MM-DDTHH:mm:ss');
-      const to = dayjs.utc(api.view.activeEnd).format('YYYY-MM-DDTHH:mm:ss');
-      fetchCalendar(from, to);
-    }
+    reloadCalendar();
     onRefresh?.();
-  }, [fetchCalendar, onRefresh]);
+  }, [reloadCalendar, onRefresh]);
 
   const handleScheduleCreated = useCallback(() => {
     setShowCreateModal(false);

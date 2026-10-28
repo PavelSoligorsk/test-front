@@ -1,16 +1,41 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { INITIAL_TASK_STATE } from './constants';
 import {
-  fetchUsers, fetchTasks, fetchTasksMeta, fetchAllowedEmails, fetchTheoryMeta,
+  fetchUsers, fetchTask, fetchTasks, fetchTasksMeta, fetchAllowedEmails, fetchTheoryMeta,
   createTask, updateTask, createTheory, updateTheory, deleteTheory,
   addAllowedEmail, deleteAllowedEmail, rebuildStaticTests,
 } from './api';
 import { formatApiDetail } from '../../shared/ui';
 import { ADMIN_PATHS } from './adminPaths';
 import { nextArticlePriority } from '../../shared/lib/theoryMeta';
+import { AdminWorkspaceContext } from './adminWorkspaceContext';
 
-const AdminWorkspaceContext = createContext(null);
+const EMPTY_RETURN_CONTEXT = {
+  sourceTab: null, bankClass: null, bankTopic: null, bankSection: null, scrollPosition: 0, resultId: null,
+};
+
+// Страница результата оставляет здесь, куда вернуться после правки задания.
+function readReturnContext() {
+  try {
+    const saved = sessionStorage.getItem('adminReturnContext');
+    return saved ? { ...EMPTY_RETURN_CONTEXT, ...JSON.parse(saved) } : EMPTY_RETURN_CONTEXT;
+  } catch {
+    return EMPTY_RETURN_CONTEXT;
+  }
+}
+
+// Задание из API → значения формы: пустые текстовые поля — пустые строки, варианты — через «; ».
+function taskToForm(task) {
+  const form = { ...task };
+  for (const [key, initial] of Object.entries(INITIAL_TASK_STATE)) {
+    if (typeof initial === 'string' && form[key] == null) form[key] = initial;
+  }
+  form.options = task.options
+    ? (Array.isArray(task.options) ? task.options.join('; ') : task.options)
+    : '';
+  return form;
+}
 
 export function AdminWorkspaceProvider({ children }) {
   const navigate = useNavigate();
@@ -23,9 +48,8 @@ export function AdminWorkspaceProvider({ children }) {
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
   const [taskData, setTaskData] = useState(INITIAL_TASK_STATE);
-  const [returnContext, setReturnContext] = useState({
-    sourceTab: null, bankClass: null, bankTopic: null, bankSection: null, scrollPosition: 0, resultId: null,
-  });
+  const [returnContext, setReturnContext] = useState(readReturnContext);
+  const [editTaskId] = useState(() => Number.parseInt(sessionStorage.getItem('editTaskId') || '', 10));
   const [bankClass, setBankClass] = useState(null);
   const [bankTopic, setBankTopic] = useState(null);
   const [theoryMeta, setTheoryMeta] = useState({});
@@ -61,27 +85,25 @@ export function AdminWorkspaceProvider({ children }) {
     })();
   }, []);
 
+  // «Править» на странице результата: контекст возврата и id задания читаем при монтировании,
+  // из хранилища убираем, задание грузим по id.
   useEffect(() => {
-    const editTaskId = sessionStorage.getItem('editTaskId');
-    if (editTaskId) {
-      sessionStorage.removeItem('editTaskId');
-      const task = tasks.find((t) => t.id === parseInt(editTaskId, 10));
-      if (task) {
-        setTaskData({
-          ...task,
-          options: task.options
-            ? (Array.isArray(task.options) ? task.options.join('; ') : task.options)
-            : '',
-        });
+    sessionStorage.removeItem('adminReturnContext');
+    sessionStorage.removeItem('editTaskId');
+  }, []);
+
+  useEffect(() => {
+    if (!Number.isFinite(editTaskId)) return undefined;
+    let cancelled = false;
+    fetchTask(editTaskId)
+      .then((task) => {
+        if (cancelled || !task) return;
+        setTaskData(taskToForm(task));
         navigate(ADMIN_PATHS.create);
-      }
-    }
-    const savedContext = sessionStorage.getItem('adminReturnContext');
-    if (savedContext) {
-      setReturnContext(JSON.parse(savedContext));
-      sessionStorage.removeItem('adminReturnContext');
-    }
-  }, [tasks, navigate]);
+      })
+      .catch((err) => console.error(err));
+    return () => { cancelled = true; };
+  }, [editTaskId, navigate]);
 
   const availableClasses = useMemo(() => {
     if (!tasksMeta) return [];
@@ -163,7 +185,7 @@ export function AdminWorkspaceProvider({ children }) {
         showSuccess('Задание обновлено');
         if (returnContext.sourceTab === 'result' && returnContext.resultId) {
           const taskId = taskData.id;
-          setReturnContext({ sourceTab: null, bankClass: null, bankTopic: null, bankSection: null, scrollPosition: 0, resultId: null });
+          setReturnContext(EMPTY_RETURN_CONTEXT);
           setTaskData(INITIAL_TASK_STATE);
           navigate(`/admin/results/${returnContext.resultId}`);
           setTimeout(() => {
@@ -178,7 +200,7 @@ export function AdminWorkspaceProvider({ children }) {
           navigate(ADMIN_PATHS.bank);
           setTimeout(() => { window.scrollTo({ top: returnContext.scrollPosition, behavior: 'smooth' }); }, 500);
         }
-        setReturnContext({ sourceTab: null, bankClass: null, bankTopic: null, bankSection: null, scrollPosition: 0, resultId: null });
+        setReturnContext(EMPTY_RETURN_CONTEXT);
         setTaskData(INITIAL_TASK_STATE);
       } else {
         await createTask(finalTask);
@@ -202,12 +224,7 @@ export function AdminWorkspaceProvider({ children }) {
 
   const handleEditTask = (task) => {
     setReturnContext({ sourceTab: 'bank', bankClass, bankTopic, scrollPosition: window.scrollY, resultId: null });
-    setTaskData({
-      ...task,
-      options: task.options
-        ? (Array.isArray(task.options) ? task.options.join('; ') : task.options)
-        : '',
-    });
+    setTaskData(taskToForm(task));
     navigate(ADMIN_PATHS.create);
   };
 
@@ -217,7 +234,7 @@ export function AdminWorkspaceProvider({ children }) {
       setBankTopic(returnContext.bankTopic);
       navigate(ADMIN_PATHS.bank);
       setTimeout(() => window.scrollTo({ top: returnContext.scrollPosition, behavior: 'smooth' }), 300);
-      setReturnContext({ sourceTab: null, bankClass: null, bankTopic: null, bankSection: null, scrollPosition: 0, resultId: null });
+      setReturnContext(EMPTY_RETURN_CONTEXT);
     }
     setTaskData(INITIAL_TASK_STATE);
   };
@@ -262,7 +279,8 @@ export function AdminWorkspaceProvider({ children }) {
     setTasksMeta(await fetchTasksMeta());
   };
 
-  const value = useMemo(() => ({
+  // Обработчики и filteredUsers и так новые на каждый рендер — useMemo здесь ничего не кэшировал.
+  const value = {
     notice, clearNotice, showError, showSuccess, loading,
     users, tasks, tasksMeta, allowedEmails, newEmail, setNewEmail,
     userSearch, setUserSearch, userRoleFilter, setUserRoleFilter,
@@ -272,22 +290,11 @@ export function AdminWorkspaceProvider({ children }) {
     handleTaskSubmit, handleEditTask, handleCancelEdit,
     handleAddEmail, handleDeleteEmail, handleGlobalSync,
     handleTheorySubmit, handleDeleteTheory, handleUsersUpdate, refreshTasksMeta, refreshTheoryMeta,
-  }), [
-    notice, loading, users, tasks, tasksMeta, allowedEmails, newEmail,
-    userSearch, userRoleFilter, taskData, bankClass, bankTopic, theoryMeta,
-    theoryData, selectedTopic, selectedSection, selectedTheoryClass, availableClasses, filteredUsers,
-    clearNotice, showError, showSuccess, refreshTheoryMeta,
-  ]);
+  };
 
   return (
     <AdminWorkspaceContext.Provider value={value}>
       {children}
     </AdminWorkspaceContext.Provider>
   );
-}
-
-export function useAdminWorkspace() {
-  const ctx = useContext(AdminWorkspaceContext);
-  if (!ctx) throw new Error('useAdminWorkspace must be used within AdminWorkspaceProvider');
-  return ctx;
 }

@@ -1,5 +1,5 @@
 import { PageShell } from '../../shared/ui';
-import { useAdminWorkspace } from './AdminWorkspace';
+import { useAdminWorkspace } from './adminWorkspaceContext';
 import BankTab from './BankTab';
 
 export default function BankPage() {

@@ -1,15 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Search, XCircle, CheckCircle2, Clock, Users, BookOpen, CheckSquare, Square, Send, Calendar, FileText, Trash2, ArrowRight, Layers } from 'lucide-react';
+import { Search, XCircle, CheckCircle2, Clock, Users, CheckSquare, Square, Send, FileText, Trash2, Layers } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { restoreSession } from '../../shared/lib/session';
+import { useAsyncData } from '../../shared/hooks';
+
+const NO_ASSIGNMENTS = [];
+
+function getAuthHeaders() {
+  const user = restoreSession();
+  const token = user?.token || user?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function TestManageModal({ test, students, groups, onClose, onAssign, onAssignToGroup }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState("view");
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGroups, setSelectedGroups] = useState([]);
@@ -18,27 +25,24 @@ export default function TestManageModal({ test, students, groups, onClose, onAss
   const [groupAssignResults, setGroupAssignResults] = useState(null);
   const [localError, setLocalError] = useState('');
 
-  const getAuthHeaders = () => {
-    const user = restoreSession();
-    const token = user?.token || user?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
-  useEffect(() => { fetchAssignments(); }, []);
-
-  const fetchAssignments = async () => {
-    setLoading(true);
+  const assignmentsQuery = useAsyncData(test.id ?? null, async () => {
     try {
       const res = await axios.get(`${API_BASE}/teacher/test/${test.id}/assignments`, { headers: getAuthHeaders() });
-      setAssignments(res.data);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
+      return res.data;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+  const assignments = assignmentsQuery.data || NO_ASSIGNMENTS;
+  const loading = assignmentsQuery.loading;
+  const fetchAssignments = assignmentsQuery.reload;
+  const setAssignments = assignmentsQuery.mutate;
 
   const assignedIds = assignments.map((a) => a.user_id);
   const assignedStudents = students.filter((s) => assignedIds.includes(s.id));
   const availableStudents = students.filter((s) => !assignedIds.includes(s.id));
   const filteredAvailable = availableStudents.filter((s) => `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase().includes(searchTerm.toLowerCase()));
-  const filteredAssigned = assignedStudents.filter((s) => `${s.first_name} ${s.last_name} ${s.username}`.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const toggleStudent = (id) => setSelectedStudents((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
 

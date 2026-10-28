@@ -24,26 +24,49 @@ function notifySessionChange() {
 }
 
 /**
+ * Строка сессии из хранилища: localStorage, а если там нет или мусор — sessionStorage.
+ * Строка сравнима по значению, поэтому годится снимком для useSyncExternalStore.
+ */
+export function readStoredSession() {
+  for (const storage of [getStorage, getSessionStorage]) {
+    try {
+      const saved = storage()?.getItem(STORAGE_KEY);
+      if (saved && JSON.parse(saved)) return saved;
+    } catch {}
+  }
+  return null;
+}
+
+/** Пользователь из строки сессии (без роли сессия не считается). */
+export function parseSession(saved) {
+  if (!saved) return null;
+  try {
+    const userData = JSON.parse(saved);
+    return userData && userData.role ? userData : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Подписка на смену сессии: в этой вкладке (SESSION_EVENT) и в соседних (storage). */
+export function subscribeSession(onChange) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(SESSION_EVENT, onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    window.removeEventListener(SESSION_EVENT, onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+/**
  * Надежное восстановление сессии из всех источников
  */
 export function restoreSession() {
-  let userData = null;
+  const saved = readStoredSession();
+  const userData = saved ? JSON.parse(saved) : null;
 
-  // 1. Пробуем из localStorage
-  try {
-    const saved = getStorage()?.getItem(STORAGE_KEY);
-    if (saved) userData = JSON.parse(saved);
-  } catch (e) {}
-
-  // 2. Если нет — пробуем из sessionStorage
-  if (!userData) {
-    try {
-      const saved = getSessionStorage()?.getItem(STORAGE_KEY);
-      if (saved) userData = JSON.parse(saved);
-    } catch (e) {}
-  }
-
-  // 3. Устанавливаем заголовок axios
+  // Заголовок axios — по найденному токену
   const token = userData?.token || userData?.access_token;
   if (token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -91,7 +114,7 @@ export function clearSession() {
     getSessionStorage()?.removeItem(TOKEN_KEY);
     document.cookie = `${STORAGE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
     document.cookie = `${TOKEN_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-  } catch (e) {}
+  } catch {}
 
   delete axios.defaults.headers.common['Authorization'];
   notifySessionChange();

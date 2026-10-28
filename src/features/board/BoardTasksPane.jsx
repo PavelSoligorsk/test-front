@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowLeft, Check, ClipboardList, Search } from 'lucide-react';
+import { useAsyncData } from '../../shared/hooks';
 import { MarkdownRenderer } from '../../shared/ui';
 import { MAIN_TOPICS } from '../../pages/AdminDashboardPage/constants';
 import {
@@ -104,64 +105,48 @@ function TaskRow({ task, index, checked, onToggle, onCopy }) {
 
 export default function BoardTasksPane({ onCopy }) {
   const [mode, setMode] = useState('tests');
-  const [tests, setTests] = useState(null);
-  const [classMeta, setClassMeta] = useState(null);
-  const [topicMeta, setTopicMeta] = useState(null);
   const [test, setTest] = useState(null);
   const [taskClass, setTaskClass] = useState(null);
   const [topicNumber, setTopicNumber] = useState(null);
   const [topicKey, setTopicKey] = useState(null);
   const [section, setSection] = useState(null);
-  const [tasks, setTasks] = useState(null);
-  const [selected, setSelected] = useState(() => new Set());
+  const [selection, setSelection] = useState({ key: null, ids: new Set() });
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
-  const leaf = mode === 'tests'
-    ? test
-    : mode === 'class' ? (taskClass != null && topicNumber != null) : (topicKey != null && section != null);
+  // Списки грузятся при первом заходе в режим и остаются на месте при переключении.
+  const testsQuery = useAsyncData(mode === 'tests' ? 'tests' : null, async () => (await fetchTests()) || []);
+  const classQuery = useAsyncData(mode === 'class' ? 'class' : null, async () => (await fetchTasksMetaByClass()) || {});
+  const topicQuery = useAsyncData(mode === 'topic' ? 'topic' : null, async () => (await fetchTasksMetaByTopic()) || {});
+  const listQuery = { tests: testsQuery, class: classQuery, topic: topicQuery }[mode];
+  const tests = testsQuery.data;
+  const classMeta = classQuery.data;
+  const topicMeta = topicQuery.data;
 
-  useEffect(() => {
-    let cancelled = false;
-    const loaders = {
-      tests: [tests, fetchTests, setTests],
-      class: [classMeta, fetchTasksMetaByClass, setClassMeta],
-      topic: [topicMeta, fetchTasksMetaByTopic, setTopicMeta],
-    };
-    const [current, load, store] = loaders[mode];
-    if (current != null) return undefined;
-    setLoading(true);
-    setError(null);
-    load()
-      .then((data) => { if (!cancelled) store(data || (mode === 'tests' ? [] : {})); })
-      .catch((err) => { if (!cancelled) setError(errorText(err, 'Не удалось загрузить список')); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [mode, tests, classMeta, topicMeta]);
-
-  useEffect(() => {
-    if (!leaf) return undefined;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setTasks(null);
-    const request = mode === 'tests'
-      ? fetchTest(test.id).then((data) => data?.tasks || [])
+  const leafKey = mode === 'tests'
+    ? (test ? `tests:${test.id}` : null)
+    : mode === 'class'
+      ? (taskClass != null && topicNumber != null ? `class:${taskClass}:${topicNumber}` : null)
+      : (topicKey != null && section != null ? `topic:${topicKey}:${section}` : null);
+  const leaf = leafKey != null;
+  const tasksQuery = useAsyncData(leafKey, async () => {
+    const list = mode === 'tests'
+      ? (await fetchTest(test.id))?.tasks
       : mode === 'class'
-        ? fetchTasksByClass(taskClass, topicNumber)
-        : fetchTasksByTopic(topicKey, section);
-    request
-      .then((list) => {
-        if (cancelled) return;
-        const items = Array.isArray(list) ? list : [];
-        setTasks(items);
-        setSelected(new Set(mode === 'tests' ? items.map((item) => item.id) : []));
-      })
-      .catch((err) => { if (!cancelled) setError(errorText(err, 'Не удалось загрузить задания')); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [leaf, mode, test, taskClass, topicNumber, topicKey, section]);
+        ? await fetchTasksByClass(taskClass, topicNumber)
+        : await fetchTasksByTopic(topicKey, section);
+    return Array.isArray(list) ? list : [];
+  });
+  const tasks = tasksQuery.data || null;
+
+  const active = leaf ? tasksQuery : listQuery;
+  const loading = active.loading;
+  const error = active.error ? errorText(active.error, leaf ? 'Не удалось загрузить задания' : 'Не удалось загрузить список') : null;
+
+  // В тесте сразу выбраны все задания, в банке — ни одного; выбор живёт, пока открыт тот же лист.
+  const selected = selection.key === leafKey
+    ? selection.ids
+    : new Set(mode === 'tests' && tasks ? tasks.map((item) => item.id) : []);
+  const updateSelected = (update) => setSelection({ key: leafKey, ids: update(selected) });
 
   const needle = query.trim().toLowerCase();
   const visibleTests = useMemo(() => {
@@ -186,8 +171,6 @@ export default function BoardTasksPane({ onCopy }) {
   const deep = Boolean(test || taskClass != null || topicKey != null);
 
   const resetLeaf = () => {
-    setTasks(null);
-    setSelected(new Set());
     setQuery('');
   };
 
@@ -212,7 +195,7 @@ export default function BoardTasksPane({ onCopy }) {
   };
 
   const toggle = (id) => {
-    setSelected((prev) => {
+    updateSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -277,7 +260,7 @@ export default function BoardTasksPane({ onCopy }) {
             <div className="mt-2 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setSelected((prev) => {
+                onClick={() => updateSelected((prev) => {
                   const next = new Set(prev);
                   visibleTasks.forEach((item) => (allVisibleOn ? next.delete(item.id) : next.add(item.id)));
                   return next;

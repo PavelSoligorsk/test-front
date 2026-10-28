@@ -17,7 +17,7 @@ function readIsDark() {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === 'dark' || saved === 'light') return saved === 'dark';
-  } catch (e) {}
+  } catch {}
   if (typeof window !== 'undefined') {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
@@ -33,7 +33,7 @@ export default function useTheme() {
     applyTheme(dark);
     try {
       localStorage.setItem(KEY, dark ? 'dark' : 'light');
-    } catch (e) {}
+    } catch {}
   }, [dark]);
 
   return { dark, toggle };

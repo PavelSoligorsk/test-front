@@ -1,12 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../../shared/api';
 import { restoreSession } from '../../shared/lib/session';
 import { formatApiDetail } from '../../shared/ui';
 import { TEACHER_PATHS } from './teacherPaths';
+import { TeacherWorkspaceContext } from './teacherWorkspaceContext';
 
-const TeacherWorkspaceContext = createContext(null);
+function getTeacher(path) {
+  return axios.get(`${API_BASE}/teacher/${path}`, { headers: authHeaders() }).then((res) => res.data);
+}
 
 function authHeaders() {
   const user = restoreSession();
@@ -38,41 +41,14 @@ export function TeacherWorkspaceProvider({ children }) {
   const showSuccess = useCallback((text) => setNotice({ tone: 'success', text }), []);
   const clearNotice = useCallback(() => setNotice(null), []);
 
-  const fetchTests = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/tests`, { headers: authHeaders() });
-      setTests(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const fetchStudents = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/students`, { headers: authHeaders() });
-      setStudents(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const fetchGroups = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/groups/`, { headers: authHeaders() });
-      setGroups(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const fetchTopicSectionMeta = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/teacher/tasks-meta-by-topic-section`, { headers: authHeaders() });
-      setTopicSectionMeta(res.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  // Списки кабинета. Ошибка только в консоль — на экране остаётся прежний список.
+  const fetchTests = useCallback(() => getTeacher('tests').then(setTests, console.error), []);
+  const fetchStudents = useCallback(() => getTeacher('students').then(setStudents, console.error), []);
+  const fetchGroups = useCallback(() => getTeacher('groups/').then(setGroups, console.error), []);
+  const fetchTopicSectionMeta = useCallback(
+    () => getTeacher('tasks-meta-by-topic-section').then(setTopicSectionMeta, console.error),
+    [],
+  );
 
   useEffect(() => {
     Promise.all([fetchTests(), fetchStudents(), fetchGroups(), fetchTopicSectionMeta()])
@@ -208,7 +184,8 @@ export function TeacherWorkspaceProvider({ children }) {
     }
   };
 
-  const value = useMemo(() => ({
+  // Обработчики пересоздаются на каждый рендер — useMemo с неполным списком зависимостей тут не нужен.
+  const value = {
     notice,
     clearNotice,
     showError,
@@ -249,23 +226,11 @@ export function TeacherWorkspaceProvider({ children }) {
     handleGenerateAiTest,
     handleEditTest,
     handleDeleteTest,
-  }), [
-    notice, loading, tests, students, groups, topicSectionMeta, selectedTasks,
-    manageTestModal, groupStudentsModal, assignGroupModal,
-    groupCreateModal, aiGeneratorModal, openSolutions, openHints, editingTest,
-    clearNotice, showError, showSuccess, fetchTests, fetchStudents, fetchGroups,
-    toggleTaskSelection,
-  ]);
+  };
 
   return (
     <TeacherWorkspaceContext.Provider value={value}>
       {children}
     </TeacherWorkspaceContext.Provider>
   );
-}
-
-export function useTeacherWorkspace() {
-  const ctx = useContext(TeacherWorkspaceContext);
-  if (!ctx) throw new Error('useTeacherWorkspace must be used within TeacherWorkspaceProvider');
-  return ctx;
 }

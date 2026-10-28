@@ -11,7 +11,7 @@ import { deleteBoard, saveBoard } from '../../features/board/storage';
 import BoardGallery from '../../features/board/BoardGallery';
 import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
 import { PageShell } from '../../shared/ui';
-import { useTeacherWorkspace } from './TeacherWorkspace';
+import { useTeacherWorkspace } from './teacherWorkspaceContext';
 
 function personName(person) {
   const name = `${person.first_name || ''} ${person.last_name || ''}`.trim();

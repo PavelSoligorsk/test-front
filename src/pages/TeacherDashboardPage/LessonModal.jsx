@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   XCircle,
   CheckCircle2,
@@ -90,13 +90,16 @@ function Section({ icon: Icon, title, badge, defaultOpen = false, children }) {
 }
 
 export default function LessonModal({ lesson: initialLesson, students, groups, onClose, onUpdated }) {
+  // Занятие правится тут же после действий; новое от родителя заменяет правки.
+  const [lessonSource, setLessonSource] = useState(initialLesson);
   const [lesson, setLesson] = useState(initialLesson);
+  if (lessonSource !== initialLesson) {
+    setLessonSource(initialLesson);
+    setLesson(initialLesson);
+  }
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-
-  // Keep lesson in sync with prop changes
-  useEffect(() => { setLesson(initialLesson); }, [initialLesson]);
 
   // --- Reschedule ---
   const [showReschedule, setShowReschedule] = useState(false);
@@ -113,7 +116,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
 
   // --- Schedule section ---
   const [schedule, setSchedule] = useState(null);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(() => Boolean(initialLesson.schedule_id));
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({});
   const [scheduleDayToggle, setScheduleDayToggle] = useState([]);
@@ -123,7 +126,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
 
   // --- Payment section ---
   const [payments, setPayments] = useState([]);
-  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [showPayForm, setShowPayForm] = useState(false);
   const [payForm, setPayForm] = useState({ payment_type: 'per_lesson', amount: '', comment: '', lesson_id: lesson.id, package_total: '', valid_from: '', valid_until: '' });
   const [payStats, setPayStats] = useState(null);
@@ -132,12 +135,12 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
 
   // --- Parent section ---
   const [parents, setParents] = useState([]);
-  const [parentLoading, setParentLoading] = useState(false);
+  const [parentLoading, setParentLoading] = useState(() => students.some((s) => s.id === initialLesson.student_id));
   const [showParentForm, setShowParentForm] = useState(false);
   const [editingParentId, setEditingParentId] = useState(null);
   const [parentForm, setParentForm] = useState({ name: '', phone: '', tg_username: '', comment: '' });
   const [allParents, setAllParents] = useState([]);
-  const [parentsLoading, setParentsLoading] = useState(false);
+  const [parentsLoading, setParentsLoading] = useState(true);
   const [showParentPicker, setShowParentPicker] = useState(false);
   const [parentSearch, setParentSearch] = useState('');
 
@@ -153,56 +156,54 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   const studentBalance = lesson.student_balance;
 
   // --- Data fetching ---
-  const fetchSchedule = useCallback(async () => {
-    if (!lesson.schedule_id) return;
-    setScheduleLoading(true);
-    try {
-      const res = await teacherApi.getSchedule(lesson.schedule_id);
-      setSchedule(res.data);
-      setScheduleForm({
-        title: res.data.title || '',
-        description: res.data.description || '',
-        time_start: res.data.time_start || '',
-        duration_minutes: res.data.duration_minutes || 60,
-        price_per_lesson: res.data.price_per_lesson ? (res.data.price_per_lesson / 100).toFixed(2) : '',
-        recur_until: res.data.recur_until || '',
-      });
-      setScheduleDayToggle(res.data.days_of_week || []);
-    } catch { /* ignore */ }
-    finally { setScheduleLoading(false); }
-  }, [lesson.schedule_id]);
+  // Флаги загрузки выставлены при открытии окна; повторные запросы после действий
+  // обновляют разделы на месте, без спиннера.
+  // Ответы разбираются в колбэках промиса — эти же функции зовёт эффект при открытии окна.
+  const scheduleId = lesson.schedule_id;
+  const fetchSchedule = useCallback(() => {
+    if (!scheduleId) return Promise.resolve();
+    return teacherApi.getSchedule(scheduleId)
+      .then((res) => {
+        setSchedule(res.data);
+        setScheduleForm({
+          title: res.data.title || '',
+          description: res.data.description || '',
+          time_start: res.data.time_start || '',
+          duration_minutes: res.data.duration_minutes || 60,
+          price_per_lesson: res.data.price_per_lesson ? (res.data.price_per_lesson / 100).toFixed(2) : '',
+          recur_until: res.data.recur_until || '',
+        });
+        setScheduleDayToggle(res.data.days_of_week || []);
+      })
+      .catch(() => { /* ignore */ })
+      .finally(() => setScheduleLoading(false));
+  }, [scheduleId]);
 
-  const fetchPayments = useCallback(async () => {
-    setPaymentsLoading(true);
-    try {
-      const [payRes, statsRes] = await Promise.all([
-        teacherApi.getPayments(lesson.student_id),
-        teacherApi.getPaymentsStats(null, null, lesson.student_id),
-      ]);
+  const lessonStudentId = lesson.student_id;
+  const fetchPayments = useCallback(() => Promise.all([
+    teacherApi.getPayments(lessonStudentId),
+    teacherApi.getPaymentsStats(null, null, lessonStudentId),
+  ])
+    .then(([payRes, statsRes]) => {
       setPayments(payRes.data || []);
       setPayStats(statsRes.data);
-    } catch { /* ignore */ }
-    finally { setPaymentsLoading(false); }
-  }, [lesson.student_id]);
+    })
+    .catch(() => { /* ignore */ })
+    .finally(() => setPaymentsLoading(false)), [lessonStudentId]);
 
-  const fetchParent = useCallback(async () => {
-    if (!student?.id) { setParents([]); return; }
-    setParentLoading(true);
-    try {
-      const res = await teacherApi.getStudentParents(student.id);
-      setParents(res.data || []);
-    } catch { /* ignore */ }
-    finally { setParentLoading(false); }
-  }, [student?.id]);
+  const studentId = students.find((s) => s.id === lessonStudentId)?.id;
+  const fetchParent = useCallback(() => {
+    if (!studentId) return Promise.resolve();
+    return teacherApi.getStudentParents(studentId)
+      .then((res) => setParents(res.data || []))
+      .catch(() => { /* ignore */ })
+      .finally(() => setParentLoading(false));
+  }, [studentId]);
 
-  const fetchAllParents = useCallback(async () => {
-    setParentsLoading(true);
-    try {
-      const res = await teacherApi.getParents();
-      setAllParents(res.data || []);
-    } catch { /* ignore */ }
-    finally { setParentsLoading(false); }
-  }, []);
+  const fetchAllParents = useCallback(() => teacherApi.getParents()
+    .then((res) => setAllParents(res.data || []))
+    .catch(() => { /* ignore */ })
+    .finally(() => setParentsLoading(false)), []);
 
   const handleLinkExistingParent = async (p) => {
     setActionLoading('parent'); setError(null);
@@ -221,7 +222,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
     fetchPayments();
     fetchParent();
     fetchAllParents();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchSchedule, fetchPayments, fetchParent, fetchAllParents]);
 
   // --- Lesson actions ---
   const handleComplete = async () => {

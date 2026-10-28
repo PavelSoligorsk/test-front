@@ -1,4 +1,3 @@
-import React from 'react';
 
 export const DifficultyBadge = ({ level, correct, total }) => {
   const percent = total > 0 ? Math.round((correct / total) * 100) : 0;

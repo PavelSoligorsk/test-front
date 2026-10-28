@@ -22,7 +22,6 @@ export default function Navbar() {
   };
 
   const badge = user ? getRoleBadge(user.role) : null;
-  const RoleIcon = badge?.icon;
 
   return (
         <nav className="bg-slate-900/95 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50">

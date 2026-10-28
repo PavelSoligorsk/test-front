@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchStudentMe, updateStudentProfile } from './api';
 import ProfileTab from './ProfileTab';
 import StudentPageLoading from './StudentPageLoading';
@@ -36,7 +36,7 @@ export default function ProfilePage() {
       });
       setProfile(prev => ({ ...prev, user: res }));
       alert('Данные сохранены!');
-    } catch (err) {
+    } catch {
       alert('Ошибка при сохранении');
     } finally {
       setSaving(false);

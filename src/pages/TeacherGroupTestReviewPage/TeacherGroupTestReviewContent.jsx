@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { ChevronLeft, FileText, Users } from 'lucide-react';
@@ -246,24 +246,25 @@ export default function TeacherGroupTestReviewContent() {
     run();
   }, [groupId, testId, navigate]);
 
-  const tasks = data?.tasks || [];
+  const tasks = useMemo(() => data?.tasks || [], [data]);
+  const answers = data?.answers;
   const clustersByTask = useMemo(() => {
     const map = new Map();
     for (const task of tasks) {
-      map.set(taskKey(task), clusterAnswers(data?.answers, taskKey(task)));
+      map.set(taskKey(task), clusterAnswers(answers, taskKey(task)));
     }
     return map;
-  }, [tasks, data?.answers]);
+  }, [tasks, answers]);
   const groupStats = useMemo(
     () => tasks.map((task) => {
-      const rows = (data?.answers || []).filter((a) => (a.task_id ?? a.id) === taskKey(task));
+      const rows = (answers || []).filter((a) => (a.task_id ?? a.id) === taskKey(task));
       return {
         task_id: taskKey(task),
         correct: rows.filter((r) => r.is_correct).length,
         wrong: rows.filter((r) => !r.is_correct).length,
       };
     }),
-    [tasks, data?.answers]
+    [tasks, answers]
   );
   const notSubmitted = data?.not_submitted || [];
 

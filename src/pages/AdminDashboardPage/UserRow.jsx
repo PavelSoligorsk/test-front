@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, XCircle, UserPlus, UserX } from 'lucide-react';
 import { assignStudentToTeacher, removeStudentFromTeacher, changeUserRole, deleteUser } from './api';
-import { useAdminWorkspace } from './AdminWorkspace';
+import { useAdminWorkspace } from './adminWorkspaceContext';
 import { fieldClass } from '../../shared/ui';
 
 export default function UserRow({ user, users, navigate, onUsersUpdate }) {

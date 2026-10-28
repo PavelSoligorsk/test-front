@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { PageShell } from '../../shared/ui';
-import { useAdminWorkspace } from './AdminWorkspace';
+import { useAdminWorkspace } from './adminWorkspaceContext';
 import { ADMIN_PATHS } from './adminPaths';
 import { nextArticlePriority } from '../../shared/lib/theoryMeta';
 import TheoryBankTab from './TheoryBankTab';

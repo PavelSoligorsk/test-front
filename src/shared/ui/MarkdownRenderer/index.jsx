@@ -56,5 +56,3 @@ export default function MarkdownRenderer({ children, className = '' }) {
     </div>
   );
 }
-
-export { remarkMath, rehypeKatex, remarkGfm, ReactMarkdown };

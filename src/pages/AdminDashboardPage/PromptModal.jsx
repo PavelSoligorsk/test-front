@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, Clipboard, Check } from 'lucide-react';
 import { IconWell, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 

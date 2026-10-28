@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Users } from 'lucide-react';
 import UserRow from './UserRow';
 import { Sheet, IconWell, fieldClass } from '../../shared/ui';

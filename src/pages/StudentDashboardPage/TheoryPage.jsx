@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Library } from 'lucide-react';
 import { TheoryViewer } from '../../components/Theory';

@@ -36,7 +36,7 @@ export default function StudentLayout() {
       setShowAiModal(false);
       setAiPrompt('');
       navigate(`/test/${newTest.id}?type=ai`);
-    } catch (err) {
+    } catch {
       alert('Не удалось сгенерировать тест. Попробуйте другой запрос.');
     } finally {
       setAiGenerating(false);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   angleGap,
   elementStates,
@@ -821,6 +821,24 @@ export default function GeoGebraWidget({
     applyFile(api);
   }
 
+  // Эффекты зовут помощников выше, но перезапускаться из-за них не должны: помощники работают
+  // с ref-ами апплета и последними пропсами. useEffectEvent отдаёт свежую версию без перезапуска,
+  // в том числе колбэкам GeoGebra, которые живут дольше одного рендера.
+  const onPublishCamera = useEffectEvent((...args) => publishCamera(...args));
+  const onScheduleCamera = useEffectEvent((...args) => scheduleCamera(...args));
+  const onTakeGeoCam = useEffectEvent((...args) => takeGeoCam(...args));
+  const onPlayElement = useEffectEvent((...args) => playElement(...args));
+  const onApplyConstruction = useEffectEvent((...args) => applyConstruction(...args));
+  const onStopGlide = useEffectEvent((...args) => stopGlide(...args));
+  const onFitToFrame = useEffectEvent((...args) => fitToFrame(...args));
+  const onQueueMove = useEffectEvent((...args) => queueMove(...args));
+  const onSharpRatio = useEffectEvent((...args) => sharpRatio(...args));
+  const onGlideToward = useEffectEvent((...args) => glideToward(...args));
+  const onPublishMenu = useEffectEvent((...args) => publishMenu(...args));
+  // Апплет создаётся один раз: файл и размер берутся на момент создания, дальше их догоняют
+  // setXML и ResizeObserver.
+  const readLoadProps = useEffectEvent(() => ({ base64: ggbBase64 || '', width, height }));
+
   useEffect(() => {
     if (!interactive || status !== 'ready' || appName !== '3d') return undefined;
     const host = hostRef.current;
@@ -838,7 +856,7 @@ export default function GeoGebraWidget({
           camPollRef.current = 0;
           return;
         }
-        publishCamera(apiRef.current);
+        onPublishCamera(apiRef.current);
         camPollRef.current = window.setTimeout(poll, Math.max(60, camReadCostRef.current * 3));
       };
       camQuietRef.current = window.setTimeout(() => {
@@ -853,13 +871,13 @@ export default function GeoGebraWidget({
       window.clearTimeout(camQuietRef.current);
       window.clearTimeout(camPollRef.current);
       camPollRef.current = 0;
-      window.setTimeout(() => scheduleCamera(apiRef.current, true), 60);
+      window.setTimeout(() => onScheduleCamera(apiRef.current, true), 60);
       if (!followRef.current) setFollow(false);
     };
     const wheel = () => {
       if (!interactiveRef.current) return;
       window.clearTimeout(camTimerRef.current);
-      camTimerRef.current = window.setTimeout(() => publishCamera(apiRef.current), 150);
+      camTimerRef.current = window.setTimeout(() => onPublishCamera(apiRef.current), 150);
     };
     host.addEventListener('pointerdown', down, true);
     host.addEventListener('wheel', wheel, true);
@@ -874,16 +892,12 @@ export default function GeoGebraWidget({
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
     };
-    // scheduleCamera читает только ref-ы.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactive, status, appName]);
 
   useEffect(() => {
     if (status !== 'ready' || appName !== '3d' || !onCamBind || !boardObjectId) return undefined;
-    onCamBind(boardObjectId, (message) => takeGeoCam(message));
+    onCamBind(boardObjectId, (message) => onTakeGeoCam(message));
     return () => onCamBind(boardObjectId, null);
-    // takeGeoCam читает только ref-ы.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, appName, boardObjectId, onCamBind]);
 
   // Дельты чертящего: свободные точки и числа едут к новым значениям плавно.
@@ -898,12 +912,10 @@ export default function GeoGebraWidget({
         if (!move?.n || !Array.isArray(move.v)) return;
         if (typeof api.exists === 'function' && !api.exists(move.n)) return;
         deltaAtRef.current.set(move.n, now);
-        playElement(api, move.n, move.v, at);
+        onPlayElement(api, move.n, move.v, at);
       });
     });
     return () => onMoveBind(boardObjectId, null);
-    // playElement читает только ref-ы.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, boardObjectId, onMoveBind]);
 
   // В планиметрии и графиках зритель видит курсор ведущего, без передачи нажатий.
@@ -981,11 +993,11 @@ export default function GeoGebraWidget({
     const was = wasInteractiveRef.current;
     wasInteractiveRef.current = interactive;
     if (was && !interactive && status === 'ready' && appName === '3d') {
-      scheduleCamera(apiRef.current, true);
+      onScheduleCamera(apiRef.current, true);
     }
     interactiveRef.current = interactive;
     if (interactive && !was) {
-      stopGlide();
+      onStopGlide();
       glideRef.current.camera.shown = null;
       quietUntilRef.current = performance.now() + 300;
     }
@@ -1000,23 +1012,24 @@ export default function GeoGebraWidget({
       setFollow(true);
       if (resume && appName === '3d' && lastCamRef.current) {
         camSeenRef.current = 0;
-        takeGeoCam(lastCamRef.current);
+        onTakeGeoCam(lastCamRef.current);
       }
       quietUntilRef.current = performance.now() + 300;
       appliedXmlRef.current = '';
-      try { applyConstruction(apiRef.current); } catch { /* чужое построение догонит следующим сообщением */ }
+      try { onApplyConstruction(apiRef.current); } catch { /* чужое построение догонит следующим сообщением */ }
     }
-  }, [interactive, status]);
+  }, [interactive, status, appName]);
 
   useEffect(() => {
     let cancelled = false;
     const host = hostRef.current;
     const frame = frameRef.current;
-    const base64AtLoad = ggbBase64 || '';
+    const atLoad = readLoadProps();
+    const base64AtLoad = atLoad.base64;
     const kind = appletKind(appName);
     const sizeAtStart = {
-      width: frame && frame.clientWidth > 2 ? frame.clientWidth : width,
-      height: frame && frame.clientHeight > 2 ? frame.clientHeight : height,
+      width: frame && frame.clientWidth > 2 ? frame.clientWidth : atLoad.width,
+      height: frame && frame.clientHeight > 2 ? frame.clientHeight : atLoad.height,
     };
 
     let cancelStyles = () => {};
@@ -1029,7 +1042,7 @@ export default function GeoGebraWidget({
           w: Math.max(40, Math.round(sizeAtStart.width)),
           h: Math.max(40, Math.round(sizeAtStart.height)),
         };
-        const pixelScale = sharpRatio(box);
+        const pixelScale = onSharpRatio(box);
         applyWrap(box, pixelScale);
         sharpRef.current = { ...box, scale: pixelScale };
         // Набор панелей зависит только от объекта, а не от того, успел ли
@@ -1061,7 +1074,7 @@ export default function GeoGebraWidget({
             };
             if (typeof api.registerUpdateListener === 'function') {
               api.registerUpdateListener((name) => {
-                const moved = queueMove(api, name);
+                const moved = onQueueMove(api, name);
                 notifyChange(moved ? { moving: true } : undefined);
               });
             }
@@ -1074,7 +1087,7 @@ export default function GeoGebraWidget({
                 if (type === 'viewChanged3D') {
                   if (appName === '3d' && interactiveRef.current && !camHeldRef.current) {
                     window.clearTimeout(camTimerRef.current);
-                    camTimerRef.current = window.setTimeout(() => publishCamera(api), 150);
+                    camTimerRef.current = window.setTimeout(() => onPublishCamera(api), 150);
                   }
                   return;
                 }
@@ -1086,7 +1099,7 @@ export default function GeoGebraWidget({
                 if (type === 'viewChanged2D' || type === 'movingGeos') notifyChange();
               });
             }
-            fitToFrame(api);
+            onFitToFrame(api);
             if ((setupRef.current || materialId) && !fileRef.current && !xmlRef.current) {
               cancelStyles = runSetup(api, setupRef.current, { material: Boolean(materialId) });
               controlsRef.current.forEach((control) => {
@@ -1096,7 +1109,7 @@ export default function GeoGebraWidget({
               });
             } else {
               restoreTheoryPerspective(api);
-              applyConstruction(api);
+              onApplyConstruction(api);
             }
             setStatus('ready');
           },
@@ -1113,14 +1126,12 @@ export default function GeoGebraWidget({
     return () => {
       cancelled = true;
       cancelStyles();
-      stopGlide();
+      onStopGlide();
       removeApplet(appletObjRef.current, appletId, host);
       apiRef.current = null;
       appletObjRef.current = null;
       onReadyRef.current?.(null);
     };
-    // Апплет создаётся один раз. Чужое построение приходит через setXML, размер — через ResizeObserver.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appletId, attempt, appName, materialId]);
 
   useEffect(() => {
@@ -1130,18 +1141,17 @@ export default function GeoGebraWidget({
       if (control?.name == null || !Number.isFinite(control.value)) return;
       if (appliedControlsRef.current.get(control.name) === control.value) return;
       appliedControlsRef.current.set(control.name, control.value);
-      glideToward(api, [{ name: control.name, kind: 'number', value: control.value }]);
+      onGlideToward(api, [{ name: control.name, kind: 'number', value: control.value }]);
     });
   }, [controls, status]);
 
   useEffect(() => {
     try {
-      applyConstruction(apiRef.current);
+      onApplyConstruction(apiRef.current);
     } catch {
       /* чужое состояние не применилось */
     }
     // Ссылки на файл обновляются в эффекте выше, до этого применения.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ggbBase64, ggbXml, ggbPerspective, ggbView, ggbLayout]);
 
   // Не все действия GeoGebra сообщают о себе событиями (поворот 3D, стили,
@@ -1169,11 +1179,11 @@ export default function GeoGebraWidget({
       if (layout !== lastLayout) {
         lastLayout = layout;
         if (appName === '3d') onLayoutRef.current?.();
-        else publishMenu();
+        else onPublishMenu();
       }
     }, 150);
     return () => window.clearInterval(timer);
-  }, [interactive, status]);
+  }, [interactive, status, appName]);
 
   useEffect(() => {
     if (!interactive || status !== 'ready' || appName === '3d') return undefined;
@@ -1205,7 +1215,7 @@ export default function GeoGebraWidget({
         menuScaleRef.current = null;
         menuDragRef.current = false;
         menuHoldRef.current = false;
-        if (changed) publishMenu();
+        if (changed) onPublishMenu();
         onChangeRef.current?.();
       }, 40);
     };
@@ -1245,15 +1255,13 @@ export default function GeoGebraWidget({
       window.removeEventListener('pointercancel', release, true);
       window.removeEventListener('mouseup', release, true);
     };
-    // publishMenu читает только ref-ы и зовётся в момент отпускания.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactive, status, appName]);
 
   useEffect(() => {
     const frame = frameRef.current;
     const host = hostRef.current;
     if (!frame || !host) return undefined;
-    const fit = () => fitToFrame(apiRef.current);
+    const fit = () => onFitToFrame(apiRef.current);
     fit();
     const resizeObserver = new ResizeObserver(fit);
     resizeObserver.observe(frame);
@@ -1268,13 +1276,12 @@ export default function GeoGebraWidget({
     window.clearTimeout(zoomTimerRef.current);
     zoomTimerRef.current = window.setTimeout(() => {
       const box = frameBox();
-      const need = sharpRatio(box);
+      const need = onSharpRatio(box);
       const have = sharpRef.current?.scale || 1;
-      if (Math.abs(need - have) > 1e-3) fitToFrame(apiRef.current);
+      if (Math.abs(need - have) > 1e-3) onFitToFrame(apiRef.current);
     }, 150);
     return () => window.clearTimeout(zoomTimerRef.current);
     // Пока доску зумят, её CSS просто растягивает холст. Резкость догоняется после жеста.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom, status, appName]);
 
   useEffect(() => {
@@ -1283,7 +1290,7 @@ export default function GeoGebraWidget({
     const onChange = () => {
       bind();
       sharpRef.current = null;
-      fitToFrame(apiRef.current);
+      onFitToFrame(apiRef.current);
     };
     const bind = () => {
       mq?.removeEventListener('change', onChange);
@@ -1292,7 +1299,6 @@ export default function GeoGebraWidget({
     };
     bind();
     return () => mq?.removeEventListener('change', onChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const hasPanel = (controls?.length || 0) + (texts?.length || 0) > 0;

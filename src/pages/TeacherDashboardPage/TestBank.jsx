@@ -1,10 +1,19 @@
 import axios from 'axios';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, ChevronRight, GraduationCap } from 'lucide-react';
 import { API_BASE } from '../../shared/api';
 import { MarkdownRenderer } from '../../shared/ui';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
+
+const getToken = () => {
+  try {
+    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+    return session?.token || session?.access_token;
+  } catch { return null; }
+};
+
+const authHeaders = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 
 const hasExamKeyword = (text) => {
   if (!text) return false;
@@ -29,15 +38,6 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
   const [examFilter, setExamFilter] = useState(false);
   const [examCache, setExamCache] = useState({});  // { "class::topic": true/false }
   const [loadingExamCache, setLoadingExamCache] = useState(false);
-
-  const getToken = () => {
-    try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      return session?.token || session?.access_token;
-    } catch { return null; }
-  };
-
-  const authHeaders = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 
   useEffect(() => {
     axios.get(`${API_BASE}/teacher/tasks-meta`, authHeaders())

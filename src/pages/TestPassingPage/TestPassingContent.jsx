@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, BookOpen, ClipboardList } from 'lucide-react';
 import { ThemeToggle } from '../../shared/ui';
@@ -27,6 +27,46 @@ function getToken() {
   } catch { return null; }
 }
 
+// Сначала тестовые задания, потом открытые; внутри — по id и сложности.
+function sortTasks(tasks) {
+  return [...(tasks || [])].sort((a, b) => {
+    if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
+    if (a.id !== b.id) return a.id - b.id;
+    return (a.difficulty || 0) - (b.difficulty || 0);
+  });
+}
+
+/** Попытка из ответа старта (пересдача приносит его в state навигации, иначе — POST start-test). */
+function readAttempt(d, test) {
+  const limit = d.time_limit_minutes ?? null;
+  const interruptions = d.allow_interruptions ?? true;
+  const spent = d.time_spent_seconds ?? 0;
+  const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
+  const answers = {};
+  prevAnswers.forEach((a) => { answers[a.task_id] = a.user_answer; });
+  return {
+    resultId: d.result_id,
+    timeLimitMinutes: limit,
+    allowInterruptions: interruptions,
+    attemptsUsed: d.attempts_used ?? 0,
+    maxAttempts: d.max_attempts ?? null,
+    examStart: d.exam_start ?? null,
+    examEnd: d.exam_end ?? null,
+    totalSeconds: limit != null ? limit * 60 : null,
+    timeSpent: spent,
+    timeRemaining: limit != null ? Math.max(0, limit * 60 - spent) : null,
+    answers: prevAnswers.length > 0 ? answers : null,
+    test: {
+      title: d.test_title,
+      tasks: sortTasks(d.tasks),
+      time_limit_minutes: limit,
+      max_attempts: d.max_attempts ?? null,
+      allow_interruptions: interruptions,
+      ...test,
+    },
+  };
+}
+
 export default function TestPassingContent() {
   const { testId } = useParams();
   const navigate = useNavigate();
@@ -41,21 +81,26 @@ export default function TestPassingContent() {
   // ── Constraint / block error ──
   const [blockError, setBlockError] = useState(null);
 
-  // ── Attempt / timer metadata from start response ──
-  const [resultId, setResultId] = useState(null);
-  const [timeLimitMinutes, setTimeLimitMinutes] = useState(null);
-  const [allowInterruptions, setAllowInterruptions] = useState(true);
-  const [attemptsUsed, setAttemptsUsed] = useState(0);
-  const [maxAttempts, setMaxAttempts] = useState(null);
-  const [examStart, setExamStart] = useState(null);
-  const [examEnd, setExamEnd] = useState(null);
+  // ── Attempt: из state навигации (пересдача) сразу, иначе — после POST start-test ──
+  const [startAttempt] = useState(() => (startData?.tasks?.length > 0
+    ? readAttempt(startData, { id: startData.test_id ?? testId })
+    : null));
+  const [attempt, setAttempt] = useState(startAttempt);
+  const {
+    resultId = null,
+    timeLimitMinutes = null,
+    allowInterruptions = true,
+    attemptsUsed = 0,
+    maxAttempts = null,
+    examStart = null,
+    examEnd = null,
+  } = attempt || {};
 
   // ── Test content ──
-  const [test, setTest] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const test = attempt?.test ?? null;
+  const loading = !test && !blockError;
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [userAnswers, setUserAnswers] = useState({});
+  const [userAnswers, setUserAnswers] = useState(() => startAttempt?.answers ?? {});
   const [drawings, setDrawings] = useState({});
   const [showDrawing, setShowDrawing] = useState({});
   const [finished, setFinished] = useState(false);
@@ -63,10 +108,9 @@ export default function TestPassingContent() {
   const [submitError, setSubmitError] = useState(null);
 
   // ── Timer ──
-  const [timeRemaining, setTimeRemaining] = useState(null);
-  const [timerWarning, setTimerWarning] = useState(false);
-  const timerRef = useRef(null);
-  const timeSpentRef = useRef(0);
+  const [timeRemaining, setTimeRemaining] = useState(() => startAttempt?.timeRemaining ?? null);
+  const timerWarning = timeRemaining != null && timeRemaining <= 60;
+  const timeSpentRef = useRef(startAttempt?.timeRemaining != null ? startAttempt.timeSpent : 0);
   const submittedRef = useRef(false);
 
   // ── Hints ──
@@ -80,7 +124,12 @@ export default function TestPassingContent() {
   const finishedRef = useRef(false);
   const currentTaskId = test?.tasks?.[currentIdx]?.id;
 
-  const savedToServerRef = useRef(false);
+  const savedToServerRef = useRef(Boolean(startAttempt?.answers));
+  // Таймер отправляет то, что успели ответить к последнему рендеру.
+  const answersRef = useRef(userAnswers);
+  useLayoutEffect(() => {
+    answersRef.current = userAnswers;
+  });
 
   // Shared helper: build payload array from answers object
   const buildAnswersPayload = useCallback((answers) =>
@@ -195,13 +244,14 @@ export default function TestPassingContent() {
   };
 
   // ── Submit function ──
+  const testDbId = test?.id;
   const doSubmit = useCallback(async (answers) => {
     if (submittedRef.current || isSubmitting) return;
     submittedRef.current = true;
     setIsSubmitting(true);
     try {
       const token = getToken();
-      const effectiveTestId = test?.id ?? parseInt(testId);
+      const effectiveTestId = testDbId ?? parseInt(testId);
 
       const hasSavedToServer = savedToServerRef.current;
       let payload;
@@ -233,82 +283,42 @@ export default function TestPassingContent() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [testId, test?.id, isSubmitting, userAnswers, buildAnswersPayload]);
+  }, [testId, testDbId, isSubmitting, userAnswers, buildAnswersPayload]);
 
-  submitRef.current = doSubmit;
+  useLayoutEffect(() => {
+    submitRef.current = doSubmit;
+  });
 
   // ── Timer countdown ──
+  // Интервал живёт, пока есть время; при нуле отправка ниже. Если время кончилось ещё до
+  // открытия (0 при загрузке), сами не отправляем — как и раньше.
+  const timerRunning = timeRemaining !== null && timeRemaining > 0;
+  const countdownRef = useRef(false);
   useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0 || finishedRef.current || blockError) return;
-
-    timerRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev == null) return null;
-        timeSpentRef.current += 1;
-        const next = prev - 1;
-        if (next <= 60 && next > 0) setTimerWarning(true);
-        if (next <= 0) {
-          clearInterval(timerRef.current);
-          if (!finishedRef.current) {
-            finishedRef.current = true;
-            setUserAnswers(current => {
-              submitRef.current?.(current);
-              return current;
-            });
-          }
-          return 0;
-        }
-        return next;
-      });
+    if (!timerRunning || finishedRef.current || blockError) return undefined;
+    countdownRef.current = true;
+    const timer = setInterval(() => {
+      timeSpentRef.current += 1;
+      setTimeRemaining((prev) => (prev == null ? null : Math.max(0, prev - 1)));
     }, 1000);
+    return () => clearInterval(timer);
+  }, [timerRunning, blockError]);
 
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [timeRemaining !== null, blockError]);
+  useEffect(() => {
+    if (timeRemaining !== 0 || !countdownRef.current || finishedRef.current) return;
+    finishedRef.current = true;
+    submitRef.current?.(answersRef.current);
+  }, [timeRemaining]);
 
   // ── Initialisation: start test via POST endpoint ──
+  const goToLogin = useEffectEvent(() => navigate('/login'));
   useEffect(() => {
+    if (startAttempt) return undefined;
     let cancelled = false;
-
-    if (startData?.tasks?.length > 0) {
-      const d = startData;
-      const tasks = [...d.tasks].sort((a, b) => {
-        if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-        if (a.id !== b.id) return a.id - b.id;
-        return (a.difficulty || 0) - (b.difficulty || 0);
-      });
-      const limit = d.time_limit_minutes ?? null;
-      const interruptions = d.allow_interruptions ?? true;
-      const spent = d.time_spent_seconds ?? 0;
-      const totalSec = limit != null ? limit * 60 : null;
-
-      setResultId(d.result_id);
-      setTimeLimitMinutes(limit);
-      setAllowInterruptions(interruptions);
-      setAttemptsUsed(d.attempts_used ?? 0);
-      setMaxAttempts(d.max_attempts ?? null);
-      if (limit != null) {
-        setTimeRemaining(Math.max(0, totalSec - spent));
-        timeSpentRef.current = spent;
-      }
-      setTest({ id: d.test_id ?? testId, title: d.test_title, tasks, time_limit_minutes: limit, max_attempts: d.max_attempts, allow_interruptions: interruptions });
-      setExamStart(d.exam_start ?? null);
-      setExamEnd(d.exam_end ?? null);
-
-      const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
-      if (prevAnswers.length > 0) {
-        const restored = {};
-        prevAnswers.forEach(a => { restored[a.task_id] = a.user_answer; });
-        setUserAnswers(restored);
-        savedToServerRef.current = true;
-      }
-
-      setLoading(false);
-      return;
-    }
 
     const init = async () => {
       const token = getToken();
-      if (!token) return navigate('/login');
+      if (!token) return goToLogin();
 
       try {
         const startUrl = isAi
@@ -320,47 +330,23 @@ export default function TestPassingContent() {
         });
         if (cancelled) return;
 
-        const d = res.data;
-        const tasks = [...(d.tasks || [])].sort((a, b) => {
-          if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-          if (a.id !== b.id) return a.id - b.id;
-          return (a.difficulty || 0) - (b.difficulty || 0);
+        const next = readAttempt(res.data, {
+          id: parseInt(testId),
+          exam_start: res.data.exam_start ?? null,
+          exam_end: res.data.exam_end ?? null,
         });
-        const limit = d.time_limit_minutes ?? null;
-        const interruptions = d.allow_interruptions ?? true;
-        const spent = d.time_spent_seconds ?? 0;
-        const totalSec = limit != null ? limit * 60 : null;
+        const limit = next.timeLimitMinutes;
+        const totalSec = next.totalSeconds;
+        const interruptions = next.allowInterruptions;
 
-        setResultId(d.result_id);
-        setTimeLimitMinutes(limit);
-        setAllowInterruptions(interruptions);
-        setAttemptsUsed(d.attempts_used ?? 0);
-        setMaxAttempts(d.max_attempts ?? null);
-
+        setAttempt(next);
         if (limit != null) {
-          setTimeRemaining(Math.max(0, totalSec - spent));
-          timeSpentRef.current = spent;
+          setTimeRemaining(next.timeRemaining);
+          timeSpentRef.current = next.timeSpent;
         }
 
-        setTest({
-          id: parseInt(testId),
-          title: d.test_title,
-          tasks,
-          time_limit_minutes: limit,
-          max_attempts: d.max_attempts ?? null,
-          allow_interruptions: interruptions,
-          exam_start: d.exam_start ?? null,
-          exam_end: d.exam_end ?? null,
-        });
-
-        setExamStart(d.exam_start ?? null);
-        setExamEnd(d.exam_end ?? null);
-
-        const prevAnswers = Array.isArray(d.previous_answers) ? d.previous_answers : [];
-        if (prevAnswers.length > 0) {
-          const restored = {};
-          prevAnswers.forEach(a => { restored[a.task_id] = a.user_answer; });
-          setUserAnswers(restored);
+        if (next.answers) {
+          setUserAnswers(next.answers);
           savedToServerRef.current = true;
           localStorage.removeItem(`test_progress_${testId}`);
           localStorage.removeItem(`test_restored_${testId}`);
@@ -396,20 +382,17 @@ export default function TestPassingContent() {
           localStorage.removeItem(`test_progress_${testId}`);
           localStorage.removeItem(`test_restored_${testId}`);
         }
-
-        if (!cancelled) setLoading(false);
       } catch (err) {
         if (cancelled) return;
         const detail = err.response?.data?.detail;
         const status = err.response?.status;
-        if (status === 401) return navigate('/login');
+        if (status === 401) return goToLogin();
         setBlockError(typeof detail === 'string' ? detail : 'Не удалось начать тест. Попробуйте позже.');
-        setLoading(false);
       }
     };
     init();
     return () => { cancelled = true; };
-  }, [testId, isAi]);
+  }, [testId, isAi, startAttempt]);
 
   // ── Current task ──
   const currentTask = test?.tasks?.[currentIdx];
@@ -428,7 +411,7 @@ export default function TestPassingContent() {
       if (res.data?.hint) {
         setHintData(prev => ({ ...prev, [taskId]: { hint: res.data.hint, geogebra: res.data.geogebra || null } }));
       }
-    } catch (err) {
+    } catch {
       setHintData(prev => ({ ...prev, [taskId]: 'Не удалось загрузить подсказку. Попробуйте позже.' }));
     } finally {
       setHintLoading(prev => ({ ...prev, [taskId]: false }));
@@ -518,6 +501,9 @@ export default function TestPassingContent() {
              isExamEnded ? 'Экзамен завершён' :
              isAttemptsExhausted ? 'Лимит попыток исчерпан' :
              isTimeUp ? 'Время вышло' :
+             isDeactivated ? 'Тест отключён' :
+             isPastDue ? 'Срок выполнения истёк' :
+             isNoTasks ? 'В тесте нет заданий' :
              'Тест недоступен'}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{blockError}</p>
@@ -556,8 +542,6 @@ export default function TestPassingContent() {
         userAnswers={userAnswers}
         drawings={drawings}
         onBack={() => navigate(getHomeRoute(getUserRole()))}
-        testId={testId}
-        resultId={resultId}
         onRetake={handleRetakeInReport}
       />
     );

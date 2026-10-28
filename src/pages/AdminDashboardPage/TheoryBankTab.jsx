@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { BookOpen, PlusCircle, Edit3, Trash2, Inbox, GripVertical, ArrowLeft } from 'lucide-react';
 import { TheoryViewer } from '../../components/Theory';
 import { MAIN_TOPICS, THEORY_CLASSES } from './constants';
 import { fetchTheory, updateTheory } from './api';
 import { sectionRowKey, sectionsInClass, topicsInClass } from '../../shared/lib/theoryMeta';
+import { useAsyncData } from '../../shared/hooks';
 import { Sheet, IconWell, primaryBtnClass, secondaryBtnClass, formatApiDetail } from '../../shared/ui';
 
 function TopicRow({ topicKey, selected, onSelect }) {
@@ -83,9 +84,6 @@ export default function TheoryBankTab({
   onAddNew,
   onMetaRefresh,
 }) {
-  const [article, setArticle] = useState(null);
-  const [loadingArticle, setLoadingArticle] = useState(false);
-  const [articleError, setArticleError] = useState(null);
   const [savingOrder, setSavingOrder] = useState(false);
 
   const classTopics = useMemo(
@@ -101,13 +99,15 @@ export default function TheoryBankTab({
     [classSections, selectedTopic],
   );
   const sectionSignature = visibleSections.map((row) => `${sectionRowKey(row)}:${row.priority}`).join('|');
-  const [sectionOrder, setSectionOrder] = useState(visibleSections.map(sectionRowKey));
-  const sectionOrderRef = React.useRef(sectionOrder);
-  sectionOrderRef.current = sectionOrder;
-
-  useEffect(() => {
-    setSectionOrder(visibleSections.map(sectionRowKey));
-  }, [sectionSignature]);
+  // Порядок, который тянет пользователь, живёт до смены набора или приоритетов разделов.
+  const [order, setOrder] = useState({ signature: sectionSignature, keys: [] });
+  const sectionOrder = order.signature === sectionSignature ? order.keys : visibleSections.map(sectionRowKey);
+  const setSectionOrder = (keys) => setOrder({ signature: sectionSignature, keys });
+  // Конец перетаскивания приходит в обработчик со старого рендера — порядок берём из ref.
+  const sectionOrderRef = useRef(sectionOrder);
+  useLayoutEffect(() => {
+    sectionOrderRef.current = sectionOrder;
+  });
 
   const sectionsByKey = useMemo(() => {
     const map = new Map();
@@ -119,35 +119,12 @@ export default function TheoryBankTab({
   const theoryId = classSections.find((row) => row.topic === selectedTopic && row.section === selectedSection)?.id
     ?? selectedTopicData?.sections?.[selectedSection];
 
-  useEffect(() => {
-    if (!theoryId) {
-      setArticle(null);
-      setArticleError(null);
-      setLoadingArticle(false);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setLoadingArticle(true);
-    setArticleError(null);
-    fetchTheory(theoryId)
-      .then((data) => {
-        if (!cancelled) setArticle(data);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setArticle(null);
-          setArticleError(formatApiDetail(err?.response?.data?.detail, 'Не удалось загрузить теорию'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingArticle(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [theoryId]);
+  const articleQuery = useAsyncData(theoryId ?? null, () => fetchTheory(theoryId));
+  const article = articleQuery.error ? null : articleQuery.data ?? null;
+  const loadingArticle = articleQuery.loading;
+  const articleError = articleQuery.error
+    ? formatApiDetail(articleQuery.error?.response?.data?.detail, 'Не удалось загрузить теорию')
+    : null;
 
   const persistOrder = async (nextVisibleKeys) => {
     const current = visibleSections.map(sectionRowKey);

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE } from '../../shared/api';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, BookOpen, ChevronRight } from 'lucide-react';
 import { MarkdownRenderer } from '../../shared/ui';
 
@@ -28,6 +28,15 @@ const getDifficultyColor = (lvl) => {
   if (lvl >= 3) return "text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800";
   return "text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800";
 };
+
+// Настройки axios с токеном сессии (раньше сюда по ошибке уходили голые заголовки как config).
+function authConfig() {
+  try {
+    const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
+    const token = session?.access_token || session?.token;
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  } catch { return {}; }
+}
 
 export default function TheoryBank({ 
   tasksMeta, 
@@ -88,7 +97,7 @@ export default function TheoryBank({
           batch.map(({ topicKey, section }) =>
             axios.get(
               `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topicKey)}/section/${encodeURIComponent(section)}`,
-              getAuthHeaders()
+              authConfig()
             )
           )
         );
@@ -124,7 +133,7 @@ export default function TheoryBank({
 
   const sections = useMemo(() => {
     if (!activeTopic || !availableTopics[activeTopic]) return [];
-    return availableTopics[activeTopic].sections.sort();
+    return [...availableTopics[activeTopic].sections].sort();
   }, [activeTopic, availableTopics]);
 
   const filteredSections = useMemo(() => {
@@ -154,21 +163,13 @@ export default function TheoryBank({
     return result;
   }, [sectionTasks, activeTopic, activeSection, taskSearch, examFilter]);
 
-  const getAuthHeaders = () => {
-    try {
-      const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
-      const token = session?.access_token || session?.token;
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    } catch { return {}; }
-  };
-
   const loadSectionTasks = async (topic, section) => {
     setLoadingTasks(true);
     setTaskSearch("");
     try {
       const res = await axios.get(
         `${API_BASE}/teacher/tasks/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
-        getAuthHeaders()
+        authConfig()
       );
       setSectionTasks((prev) => ({ ...prev, [`${topic}/${section}`]: res.data }));
     } catch (e) {

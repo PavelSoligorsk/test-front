@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -54,7 +54,6 @@ import {
   boundsOf,
   clamp,
 } from './geometry';
-import { MAX_ZOOM, MIN_ZOOM } from './camera';
 import { cloneObjects, parseObjects, serializeObjects } from './clipboard';
 import {
   PEN_COLORS,
@@ -79,7 +78,7 @@ import {
   settleSnap,
   snapFigurePoint,
 } from './shapes';
-import { DEFAULT_SURFACE, SURFACE_COLORS, SURFACE_MARK, isHiddenBoardObject, isSurfaceMeta, readSurface } from './meta';
+import { SURFACE_MARK, isHiddenBoardObject, isSurfaceMeta, readSurface } from './meta';
 import { deleteBoard } from './storage';
 import { taskOptions } from './taskBankApi';
 import { LASER_COLOR, LASER_FADE_MS, LASER_WIDTH, MAX_OBJECTS, SEND_MS } from './constants';
@@ -96,7 +95,7 @@ import ShareButton from './ui/ShareButton';
 import StyleTray from './ui/StyleTray';
 import SurfacePanel from './ui/SurfacePanel';
 import { peerColor, peerName } from './ui/peers';
-import { SNAP_PX, followMoved } from './tools/gestures';
+import { followMoved } from './tools/gestures';
 
 
 function selfName() {
@@ -1162,12 +1161,11 @@ export default function BoardEditor({
     scheduleSend();
   }, [title]);
 
-  useLayoutEffect(() => {
-    if (cam.saved) return;
-    cam.fit(boundsOf(canvasList()), 1);
-    // Камера подбирается один раз при открытии доски.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Камера подбирается один раз при открытии доски (если вида из прошлого раза нет).
+  const fitOnOpen = useEffectEvent(() => {
+    if (!cam.saved) cam.fit(boundsOf(canvasList()), 1);
+  });
+  useLayoutEffect(() => fitOnOpen(), []);
 
   function stepHistory(direction) {
     if (readOnlyRef.current) return;

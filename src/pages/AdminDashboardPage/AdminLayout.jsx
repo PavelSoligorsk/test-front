@@ -1,7 +1,8 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { RoleNav, InlineNotice, PageShell, Sheet, primaryBtnClass } from '../../shared/ui';
 import { restoreSession } from '../../shared/lib/session';
-import { AdminWorkspaceProvider, useAdminWorkspace } from './AdminWorkspace';
+import { AdminWorkspaceProvider } from './AdminWorkspace';
+import { useAdminWorkspace } from './adminWorkspaceContext';
 import { ADMIN_PATHS, ADMIN_TABS, adminTabFromPath } from './adminPaths';
 
 function AdminChrome() {

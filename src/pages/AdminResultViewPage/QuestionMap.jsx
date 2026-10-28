@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { MapPin, XCircle } from 'lucide-react';
 
 export const QuestionMap = ({ details, onScroll }) => {

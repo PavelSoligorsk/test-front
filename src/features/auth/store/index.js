@@ -1,4 +1,6 @@
 import { useState, useCallback } from 'react';
+import { clearSession } from '../../../shared/lib/session';
+import { authApi } from '../api';
 
 export function useAuth() {
   const [user, setUser] = useState(() => {
@@ -17,7 +19,6 @@ export function useAuth() {
     setLoading(true);
     setError(null);
     try {
-      const { authApi } = await import('../api');
       const userData = await authApi.login(username, password);
       setUser(userData);
       return userData;
@@ -31,7 +32,6 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
-    const { clearSession } = require('../../../shared/lib/session');
     clearSession();
     setUser(null);
   }, []);

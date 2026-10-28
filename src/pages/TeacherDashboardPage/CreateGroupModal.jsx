@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Users, XCircle, CheckSquare, Square, UserPlus } from 'lucide-react';
 
 export default function CreateGroupModal({
@@ -6,23 +6,14 @@ export default function CreateGroupModal({
   allStudents,
   onClose,
   onSave,
-  navigate,
 }) {
-  const [form, setForm] = useState({ name: '', description: '' });
-  const [selectedIds, setSelectedIds] = useState([]);
+  // Окно открывается заново на каждую группу (key у вызова), так что форма берётся из пропса один раз.
+  const [form, setForm] = useState(() => ({ name: groupForm?.name || '', description: groupForm?.description || '' }));
+  const [selectedIds, setSelectedIds] = useState(() => (groupForm?.students || []).map((s) => s.id));
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
 
   const isEditing = !!groupForm?.id;
-
-  useEffect(() => {
-    if (groupForm) {
-      setForm({ name: groupForm.name || '', description: groupForm.description || '' });
-      if (groupForm.students) {
-        setSelectedIds(groupForm.students.map((s) => s.id));
-      }
-    }
-  }, [groupForm]);
 
   const filteredStudents = allStudents.filter((s) =>
     `${s.first_name} ${s.last_name} ${s.username}`

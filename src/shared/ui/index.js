@@ -15,5 +15,6 @@ export { default as MarkdownWithGeoGebra } from './MarkdownWithGeoGebra';
 export { default as ThemeToggle } from './ThemeToggle';
 export { default as AuthShell } from './AuthShell';
 export { default as RoleNav } from './RoleNav';
-export { default as InlineNotice, formatApiDetail } from './InlineNotice';
+export { default as InlineNotice } from './InlineNotice';
+export { formatApiDetail } from './InlineNotice/formatApiDetail';
 export { Sheet, IconWell, PageShell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from './Sheet';

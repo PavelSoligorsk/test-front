@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 import { Download, Sparkles, RotateCcw } from 'lucide-react';
 import { MarkdownRenderer as MarkdownViewer, ThemeToggle } from '../shared/ui';
 
-export const TestReport = ({ test, userAnswers, drawings, onBack, testId, userId, onRetake }) => {
+export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) => {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 1. Подсчет статистики

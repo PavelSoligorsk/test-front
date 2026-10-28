@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   XCircle,
   PlusCircle,
@@ -51,17 +51,11 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
 
-  const fetchSchedules = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await teacherApi.getSchedules();
-      setSchedules(res.data || []);
-    } catch {
-      setError('Не удалось загрузить расписания');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Спиннер — только при открытии окна; после правок список обновляется на месте.
+  const fetchSchedules = useCallback(() => teacherApi.getSchedules()
+    .then((res) => setSchedules(res.data || []))
+    .catch(() => setError('Не удалось загрузить расписания'))
+    .finally(() => setLoading(false)), []);
 
   useEffect(() => { fetchSchedules(); }, [fetchSchedules]);
 

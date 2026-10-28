@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { PageShell } from '../../shared/ui';
-import { useTeacherWorkspace } from './TeacherWorkspace';
+import { useTeacherWorkspace } from './teacherWorkspaceContext';
 import { TEACHER_PATHS } from './teacherPaths';
 import TestsListTab from './TestsListTab';
 

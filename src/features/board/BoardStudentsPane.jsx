@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, Users } from 'lucide-react';
+import { useAsyncData } from '../../shared/hooks';
 import { MarkdownRenderer } from '../../shared/ui';
 import {
   NO_ANSWER,
@@ -41,19 +42,8 @@ const LOADERS = {
 
 function useRemote(kind, args) {
   const key = kind ? `${kind}:${args.join(',')}` : null;
-  const [state, setState] = useState({ key: null, data: null, error: null });
-  useEffect(() => {
-    if (!key) return undefined;
-    let cancelled = false;
-    LOADERS[kind](args)
-      .then((data) => { if (!cancelled) setState({ key, data, error: null }); })
-      .catch((err) => { if (!cancelled) setState({ key, data: null, error: errorText(err) }); });
-    return () => { cancelled = true; };
-    // args входят в key
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  const ready = state.key === key;
-  return { loading: Boolean(key) && !ready, data: ready ? state.data : null, error: ready ? state.error : null };
+  const { loading, data, error } = useAsyncData(key, () => LOADERS[kind](args));
+  return { loading, data: data ?? null, error: error ? errorText(error) : null };
 }
 
 function Status({ loading, error, empty }) {
@@ -120,19 +110,18 @@ function Attempts({ items, onOpen }) {
 
 function StudentView({ student, onOpenResult }) {
   const { loading, data, error } = useRemote('student', [student.id]);
-  const assignments = data?.assignments || [];
-  const history = data?.history || [];
-  const assignedTitles = new Set(assignments.map((item) => item.test_title));
+  const assignments = useMemo(() => data?.assignments || [], [data]);
+  const history = useMemo(() => data?.history || [], [data]);
+  // Решённые без назначения — самостоятельные попытки, по тесту.
   const selfGroups = useMemo(() => {
+    const assignedTitles = new Set(assignments.map((item) => item.test_title));
     const groups = new Map();
     history.filter((item) => item.result && !assignedTitles.has(item.test_title)).forEach((item) => {
       if (!groups.has(item.test_title)) groups.set(item.test_title, []);
       groups.get(item.test_title).push(item);
     });
     return [...groups.entries()].map(([title, items]) => ({ title, items: sortByDate(items) }));
-    // assignedTitles выводится из data
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [assignments, history]);
 
   const status = <Status loading={loading} error={error} empty={!loading && !error && !assignments.length && !selfGroups.length ? 'Тестов пока нет' : ''} />;
   if (loading || error || (!assignments.length && !selfGroups.length)) return status;
