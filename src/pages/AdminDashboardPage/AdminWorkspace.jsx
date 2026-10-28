@@ -6,7 +6,7 @@ import {
   createTask, updateTask, createTheory, updateTheory, deleteTheory,
   addAllowedEmail, deleteAllowedEmail, rebuildStaticTests,
 } from './api';
-import { formatApiDetail } from '../../shared/ui';
+import { formatApiDetail, useConfirm } from '../../shared/ui';
 import { ADMIN_PATHS } from './adminPaths';
 import { nextArticlePriority } from '../../shared/lib/theoryMeta';
 import { AdminWorkspaceContext } from './adminWorkspaceContext';
@@ -38,6 +38,7 @@ function taskToForm(task) {
 }
 
 export function AdminWorkspaceProvider({ children }) {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [notice, setNotice] = useState(null);
   const [users, setUsers] = useState([]);
@@ -152,7 +153,7 @@ export function AdminWorkspaceProvider({ children }) {
   };
 
   const handleDeleteTheory = async (id) => {
-    if (!confirm('Удалить теоретический материал?')) return;
+    if (!(await confirm('Удалить теоретический материал?', { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await deleteTheory(id);
       const classKey = String(selectedTheoryClass);
@@ -252,7 +253,7 @@ export function AdminWorkspaceProvider({ children }) {
   };
 
   const handleDeleteEmail = async (emailString) => {
-    if (!confirm(`Удалить ${emailString} из списка?`)) return;
+    if (!(await confirm(`Удалить ${emailString} из списка?`, { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await deleteAllowedEmail(emailString);
       setAllowedEmails((prev) => prev.filter((item) => item.email !== emailString));
@@ -262,7 +263,7 @@ export function AdminWorkspaceProvider({ children }) {
   };
 
   const handleGlobalSync = async () => {
-    if (!confirm('Запустить пересборку статики?')) return;
+    if (!(await confirm('Запустить пересборку статики?', { confirmLabel: 'Запустить' }))) return;
     try {
       await rebuildStaticTests();
       showSuccess('Синхронизация завершена');

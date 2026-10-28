@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { fetchStudentMe, updateStudentProfile } from './api';
 import ProfileTab from './ProfileTab';
 import StudentPageLoading from './StudentPageLoading';
+import { useNotify } from '../../shared/ui';
 
 export default function ProfilePage() {
+  const notify = useNotify();
   const [profile, setProfile] = useState(null);
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', telegram: '' });
   const [saving, setSaving] = useState(false);
@@ -35,9 +37,9 @@ export default function ProfilePage() {
         tg_username: editForm.telegram,
       });
       setProfile(prev => ({ ...prev, user: res }));
-      alert('Данные сохранены!');
+      notify('Данные сохранены!', 'success');
     } catch {
-      alert('Ошибка при сохранении');
+      notify('Ошибка при сохранении');
     } finally {
       setSaving(false);
     }

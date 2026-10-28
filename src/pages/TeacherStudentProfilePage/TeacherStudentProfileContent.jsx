@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../shared/api';
-import { InlineNotice, formatApiDetail } from '../../shared/ui';
+import { InlineNotice, formatApiDetail, useConfirm } from '../../shared/ui';
 import {
   ChevronLeft, Phone, MessageSquare, History, ArrowRight, Trophy, Target,
   Calendar, Search, BarChart3, Shield, Clock, CheckCircle2, ListTodo, Trash2,
@@ -15,6 +15,7 @@ function formatDate(iso) {
 }
 
 export default function TeacherStudentProfileContent() {
+  const confirm = useConfirm();
   const { userId } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -67,7 +68,7 @@ export default function TeacherStudentProfileContent() {
   ), [assignments]);
 
   const handleDeleteAssignment = async (assignmentId) => {
-    if (!window.confirm('Отменить назначение теста?')) return;
+    if (!(await confirm('Отменить назначение теста?', { danger: true, confirmLabel: 'Отменить назначение', cancelLabel: 'Оставить' }))) return;
     try {
       await apiClient.delete(`/teacher/assignments/${assignmentId}`);
       const res = await apiClient.get(`/teacher/student/${userId}/assignments`);

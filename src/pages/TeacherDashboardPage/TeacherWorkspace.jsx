@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import apiClient from '../../shared/api';
 import { useNavigate } from 'react-router-dom';
-import { formatApiDetail } from '../../shared/ui';
+import { formatApiDetail, useConfirm } from '../../shared/ui';
 import { TEACHER_PATHS } from './teacherPaths';
 import { TeacherWorkspaceContext } from './teacherWorkspaceContext';
 
@@ -10,6 +10,7 @@ function getTeacher(path) {
 }
 
 export function TeacherWorkspaceProvider({ children }) {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +77,7 @@ export function TeacherWorkspaceProvider({ children }) {
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
-    if (!confirm(`Удалить группу "${groupName || groupId}"? Это действие нельзя отменить.`)) return;
+    if (!(await confirm(`Удалить группу "${groupName || groupId}"? Это действие нельзя отменить.`, { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await apiClient.delete(`/teacher/groups/${groupId}`);
       fetchGroups();
@@ -167,7 +168,7 @@ export function TeacherWorkspaceProvider({ children }) {
   };
 
   const handleDeleteTest = async (testId) => {
-    if (!confirm('Удалить тест? Это действие нельзя отменить.')) return;
+    if (!(await confirm('Удалить тест? Это действие нельзя отменить.', { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await apiClient.delete(`/teacher/tests/${testId}`);
       fetchTests();

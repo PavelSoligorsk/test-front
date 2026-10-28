@@ -5,7 +5,7 @@ import {
   ArrowRight, BookOpen, CheckCircle2, ChevronLeft, Clock,
   FileText, LayoutDashboard, Send, Trash2, Trophy, Users, XCircle,
 } from 'lucide-react';
-import { InlineNotice, ThemeToggle, formatApiDetail } from '../../shared/ui';
+import { InlineNotice, ThemeToggle, formatApiDetail, useConfirm } from '../../shared/ui';
 import AssignTestToGroupModal from '../TeacherDashboardPage/AssignTestToGroupModal';
 import GroupStudentsModal from '../TeacherDashboardPage/GroupStudentsModal';
 
@@ -124,6 +124,7 @@ async function fetchGroupPage(groupId) {
 }
 
 export default function TeacherGroupPageContent() {
+  const confirm = useConfirm();
   const { groupId } = useParams();
   const navigate = useNavigate();
   const [group, setGroup] = useState(null);
@@ -194,7 +195,7 @@ export default function TeacherGroupPageContent() {
   };
 
   const handleUnassign = async (testId) => {
-    if (!window.confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.')) return;
+    if (!(await confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.', { danger: true, confirmLabel: 'Снять' }))) return;
     try {
       await apiClient.delete(`/teacher/groups/${groupId}/assignments/${testId}`);
       await load();

@@ -20,6 +20,7 @@ import {
   GripHorizontal,
   MessageSquare,
 } from 'lucide-react';
+import { useConfirm } from '../shared/ui';
 
 
 // ==================== Компонент сообщения ====================
@@ -129,6 +130,7 @@ const TheoryAIChat = ({
   theoryId,
   className = ""
 }) => {
+  const confirm = useConfirm();
   // Состояния
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -277,8 +279,8 @@ const TheoryAIChat = ({
     }
   };
 
-  const handleClearChat = () => {
-    if (messages.length > 0 && window.confirm('Очистить историю чата?')) {
+  const handleClearChat = async () => {
+    if (messages.length > 0 && (await confirm('Очистить историю чата?', { danger: true, confirmLabel: 'Очистить' }))) {
       setMessages([]);
     }
   };

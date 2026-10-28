@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, BookOpen, ClipboardList } from 'lucide-react';
-import { ThemeToggle } from '../../shared/ui';
+import { ThemeToggle, useConfirm, useNotify } from '../../shared/ui';
 import apiClient from '../../shared/api';
 import { getToken } from '../../shared/lib/session';
 import { API_URL } from '../../shared/config';
@@ -62,6 +62,8 @@ function readAttempt(d, test) {
 }
 
 export default function TestPassingContent() {
+  const confirm = useConfirm();
+  const notify = useNotify();
   const { testId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -266,12 +268,12 @@ export default function TestPassingContent() {
       if (typeof detail === 'string') {
         setSubmitError(detail);
       } else {
-        alert('Не удалось отправить тест. Проверьте интернет-соединение.');
+        notify('Не удалось отправить тест. Проверьте интернет-соединение.');
       }
     } finally {
       setIsSubmitting(false);
     }
-  }, [testId, testDbId, isSubmitting, userAnswers, buildAnswersPayload]);
+  }, [testId, testDbId, isSubmitting, userAnswers, buildAnswersPayload, notify]);
 
   useLayoutEffect(() => {
     submitRef.current = doSubmit;
@@ -346,9 +348,11 @@ export default function TestPassingContent() {
             const alreadyRestored = localStorage.getItem(`test_restored_${testId}`);
             if (!alreadyRestored && hoursSinceSave < 24 && Object.keys(parsed.answers || {}).length > 0) {
               localStorage.setItem(`test_restored_${testId}`, 'true');
-              const shouldRestore = window.confirm(
-                'У вас есть сохранённый прогресс. Хотите продолжить с того места, где остановились?'
+              const shouldRestore = await confirm(
+                'У вас есть сохранённый прогресс. Хотите продолжить с того места, где остановились?',
+                { confirmLabel: 'Продолжить', cancelLabel: 'Начать заново' },
               );
+              if (cancelled) return;
               if (shouldRestore) {
                 setCurrentIdx(parsed.currentIdx || 0);
                 setUserAnswers(parsed.answers || {});
@@ -378,7 +382,7 @@ export default function TestPassingContent() {
     };
     init();
     return () => { cancelled = true; };
-  }, [testId, isAi, startAttempt]);
+  }, [testId, isAi, startAttempt, confirm]);
 
   // ── Current task ──
   const currentTask = test?.tasks?.[currentIdx];
@@ -443,7 +447,7 @@ export default function TestPassingContent() {
       navigate(getHomeRoute(getUserRole()));
     } catch {
       setIsExiting(false);
-      alert('Не удалось сохранить прогресс. Проверьте интернет-соединение.');
+      notify('Не удалось сохранить прогресс. Проверьте интернет-соединение.');
     }
   };
 
@@ -455,7 +459,7 @@ export default function TestPassingContent() {
       navigate(`/test/${effectiveTestId}?retake=1`, { replace: true, state: { startData: retakeData } });
     } catch (err) {
       const detail = err.response?.data?.detail;
-      alert(typeof detail === 'string' ? detail : 'Не удалось начать пересдачу. Проверьте лимит попыток.');
+      notify(typeof detail === 'string' ? detail : 'Не удалось начать пересдачу. Проверьте лимит попыток.');
     }
   };
 

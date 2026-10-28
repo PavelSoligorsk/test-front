@@ -27,6 +27,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import { teacherApi } from '../../features/teacher/api';
 import CreateScheduleModal from './CreateScheduleModal';
+import { useConfirm } from '../../shared/ui';
 
 dayjs.extend(utc);
 
@@ -90,6 +91,7 @@ function Section({ icon: Icon, title, badge, defaultOpen = false, children }) {
 }
 
 export default function LessonModal({ lesson: initialLesson, students, groups, onClose, onUpdated }) {
+  const confirm = useConfirm();
   // Занятие правится тут же после действий; новое от родителя заменяет правки.
   const [lessonSource, setLessonSource] = useState(initialLesson);
   const [lesson, setLesson] = useState(initialLesson);
@@ -270,7 +272,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   };
 
   const handleDeleteLesson = async () => {
-    if (!confirm('Удалить это занятие? Действие необратимо.')) return;
+    if (!(await confirm('Удалить это занятие? Действие необратимо.', { danger: true, confirmLabel: 'Удалить' }))) return;
     setActionLoading('delete'); setError(null);
     try {
       await teacherApi.deleteLesson(lesson.id);
@@ -466,7 +468,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   };
 
   const handleDeletePayment = async (pid) => {
-    if (!confirm('Удалить этот платёж? Действие необратимо.')) return;
+    if (!(await confirm('Удалить этот платёж? Действие необратимо.', { danger: true, confirmLabel: 'Удалить' }))) return;
     setActionLoading(`pay-${pid}`); setError(null);
     try {
       await teacherApi.deletePayment(pid);
@@ -503,7 +505,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   };
 
   const handleDeleteParent = async (parentId) => {
-    if (!confirm('Удалить родителя? Студент останется без привязки.')) return;
+    if (!(await confirm('Удалить родителя? Студент останется без привязки.', { danger: true, confirmLabel: 'Удалить' }))) return;
     setActionLoading('parent'); setError(null);
     try {
       await teacherApi.deleteParent(parentId);

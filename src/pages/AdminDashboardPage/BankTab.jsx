@@ -6,7 +6,7 @@ import { TaskMap } from './TaskMap';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
 import { useAdminWorkspace } from './adminWorkspaceContext';
-import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass, useConfirm } from '../../shared/ui';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
 const NO_TASKS = [];
@@ -56,6 +56,7 @@ const copyJSONToClipboard = async (tasks, setFeedback) => {
 };
 
 export default function BankTab({ tasksMeta, availableClasses, bankClass, setBankClass, bankTopic, setBankTopic, onEditTask, onTasksUpdate }) {
+  const confirm = useConfirm();
   const { showError, showSuccess } = useAdminWorkspace();
   const [feedback, setFeedback] = useState(null);
   const [openSolutions, setOpenSolutions] = useState({});
@@ -131,7 +132,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   }, [classifyResult]);
 
   const handleDelete = async (taskId) => {
-    if (!window.confirm(`Удалить задание #${taskId}?`)) return;
+    if (!(await confirm(`Удалить задание #${taskId}?`, { danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await deleteTask(taskId);
       await refreshCurrentTasks();

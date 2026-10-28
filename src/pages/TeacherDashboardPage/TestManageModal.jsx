@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../../shared/api';
 import { Search, XCircle, CheckCircle2, Clock, Users, CheckSquare, Square, Send, FileText, Trash2, Layers } from 'lucide-react';
 import { useAsyncData } from '../../shared/hooks';
+import { useConfirm } from '../../shared/ui';
 
 const NO_ASSIGNMENTS = [];
 
 export default function TestManageModal({ test, students, groups, onClose, onAssign, onAssignToGroup }) {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [mode, setMode] = useState("view");
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -75,7 +77,7 @@ export default function TestManageModal({ test, students, groups, onClose, onAss
   };
 
   const handleDelete = async (assignmentId) => {
-    if (!confirm('Отменить назначение?')) return;
+    if (!(await confirm('Отменить назначение?', { danger: true, confirmLabel: 'Отменить назначение', cancelLabel: 'Оставить' }))) return;
     try {
       await apiClient.delete(`/teacher/assignments/${assignmentId}`);
       setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));

@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Search, XCircle, UserPlus, UserX } from 'lucide-react';
 import { assignStudentToTeacher, removeStudentFromTeacher, changeUserRole, deleteUser } from './api';
 import { useAdminWorkspace } from './adminWorkspaceContext';
-import { fieldClass } from '../../shared/ui';
+import { fieldClass, useConfirm } from '../../shared/ui';
 
 export default function UserRow({ user, users, navigate, onUsersUpdate }) {
+  const confirm = useConfirm();
   const { showError, showSuccess } = useAdminWorkspace();
   const [showTeacherSelect, setShowTeacherSelect] = useState(false);
   const [teacherSearch, setTeacherSearch] = useState('');
@@ -29,7 +30,7 @@ export default function UserRow({ user, users, navigate, onUsersUpdate }) {
   };
 
   const handleRemoveTeacher = async () => {
-    if (!confirm('Открепить преподавателя?')) return;
+    if (!(await confirm('Открепить преподавателя?', { danger: true, confirmLabel: 'Открепить' }))) return;
     try {
       await removeStudentFromTeacher(user.id);
       setTeacherInfo(null);
@@ -50,7 +51,7 @@ export default function UserRow({ user, users, navigate, onUsersUpdate }) {
   };
 
   const handleDeleteUserClick = async (e) => {
-    if (!confirm('Удалить пользователя навсегда?')) return;
+    if (!(await confirm('Удалить пользователя навсегда?', { danger: true, confirmLabel: 'Удалить' }))) return;
     e.stopPropagation();
     try {
       await deleteUser(user.id);

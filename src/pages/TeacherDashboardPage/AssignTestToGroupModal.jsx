@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import apiClient from '../../shared/api';
 import { Search, XCircle, CheckCircle2, Clock, BookOpen, FileText } from 'lucide-react';
 import { useAsyncData } from '../../shared/hooks';
-import { InlineNotice, formatApiDetail, fieldClass, secondaryBtnClass } from '../../shared/ui';
+import { InlineNotice, formatApiDetail, fieldClass, secondaryBtnClass, useConfirm } from '../../shared/ui';
 
 function studentName(row) {
   if (row.student_name) return row.student_name;
@@ -11,6 +11,7 @@ function studentName(row) {
 }
 
 export default function AssignTestToGroupModal({ group, tests, onClose, onAssign, navigate }) {
+  const confirm = useConfirm();
   const [searchTerm, setSearchTerm] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -48,7 +49,7 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
   };
 
   const handleUnassign = async (testId) => {
-    if (!window.confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.')) return;
+    if (!(await confirm('Снять этот тест со всей группы? Индивидуальные назначения не изменятся.', { danger: true, confirmLabel: 'Снять' }))) return;
     setBusyId(testId);
     setNotice(null);
     try {

@@ -18,3 +18,5 @@ export { default as RoleNav } from './RoleNav';
 export { default as InlineNotice } from './InlineNotice';
 export { formatApiDetail } from './InlineNotice/formatApiDetail';
 export { Sheet, IconWell, PageShell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from './Sheet';
+export { default as DialogProvider } from './Dialogs/DialogProvider';
+export { useConfirm, useNotify } from './Dialogs/dialogsContext';

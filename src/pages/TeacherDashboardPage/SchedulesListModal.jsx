@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import { teacherApi } from '../../features/teacher/api';
 import CreateScheduleModal from './CreateScheduleModal';
+import { useConfirm } from '../../shared/ui';
 
 dayjs.extend(utc);
 
@@ -37,6 +38,7 @@ const DAY_CODES = [
 ];
 
 export default function SchedulesListModal({ students, groups, onClose, onUpdated }) {
+  const confirm = useConfirm();
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -148,7 +150,7 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
 
   // Delete schedule
   const handleDelete = async (scheduleId) => {
-    if (!confirm('Удалить расписание? Занятия останутся без привязки к расписанию.')) return;
+    if (!(await confirm('Удалить расписание? Занятия останутся без привязки к расписанию.', { danger: true, confirmLabel: 'Удалить' }))) return;
     setActionLoading(`delete-${scheduleId}`);
     setError(null);
     try {

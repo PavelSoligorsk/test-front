@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import apiClient from '../shared/api';
 import { Download, Sparkles, RotateCcw } from 'lucide-react';
-import { MarkdownRenderer as MarkdownViewer, ThemeToggle } from '../shared/ui';
+import { MarkdownRenderer as MarkdownViewer, ThemeToggle, useNotify } from '../shared/ui';
 
 export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) => {
+  const notify = useNotify();
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 1. Подсчет статистики
@@ -91,7 +92,7 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
       
     } catch (error) {
       console.error('Ошибка при генерации PDF:', error);
-      alert('Не удалось скачать отчёт');
+      notify('Не удалось скачать отчёт');
     } finally {
       setIsGenerating(false);
     }
