@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ClipboardList, Search } from 'lucide-react';
 import { MarkdownRenderer } from '../../shared/ui';
 import { MAIN_TOPICS } from '../../pages/AdminDashboardPage/constants';
+import CustomTasksTab from './CustomTasksTab';
 import {
   fetchTasksByClass,
   fetchTasksByTopic,
@@ -18,6 +19,7 @@ const MODES = [
   { id: 'tests', label: 'Тесты' },
   { id: 'class', label: 'По классам' },
   { id: 'topic', label: 'По темам' },
+  { id: 'custom', label: 'Свои' },
 ];
 
 function errorText(err, fallback) {
@@ -129,7 +131,9 @@ export default function BoardTasksPane({ onCopy }) {
       class: [classMeta, fetchTasksMetaByClass, setClassMeta],
       topic: [topicMeta, fetchTasksMetaByTopic, setTopicMeta],
     };
-    const [current, load, store] = loaders[mode];
+    const entry = loaders[mode];
+    if (!entry) return undefined;
+    const [current, load, store] = entry;
     if (current != null) return undefined;
     setLoading(true);
     setError(null);
@@ -178,7 +182,9 @@ export default function BoardTasksPane({ onCopy }) {
   const leafTitle = mode === 'tests'
     ? (test?.title || 'Тест')
     : mode === 'class' ? `${taskClass} · ${topicNumber}` : (section || '');
-  const crumbs = mode === 'tests'
+  const crumbs = mode === 'custom'
+    ? 'Свои'
+    : mode === 'tests'
     ? (test ? 'Тест' : 'Тесты')
     : mode === 'class'
       ? (taskClass == null ? 'Классы' : topicNumber == null ? `${taskClass} — выберите подраздел` : 'Задания')
@@ -262,7 +268,7 @@ export default function BoardTasksPane({ onCopy }) {
         )}
       </div>
 
-      {(leaf || (mode === 'tests' && !test)) && (
+      {(leaf || (mode === 'tests' && !test)) && mode !== 'custom' && (
         <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -302,6 +308,8 @@ export default function BoardTasksPane({ onCopy }) {
         </div>
       )}
 
+      <CustomTasksTab hidden={mode !== 'custom'} onPlace={onCopy} />
+      {mode !== 'custom' && (
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {loading && <p className="px-2 py-8 text-center text-sm text-zinc-400">Загрузка…</p>}
         {error && !loading && <p className="px-2 py-8 text-center text-sm text-zinc-500">{error}</p>}
@@ -377,6 +385,7 @@ export default function BoardTasksPane({ onCopy }) {
           ) : <p className="px-2 py-8 text-center text-sm text-zinc-500">{needle ? 'Ничего не найдено' : 'Заданий нет'}</p>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -39,6 +39,7 @@ import {
   listTeacherBoards,
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
+  deleteTeacherBoardImage,
 } from './api';
 import { elementStates, graphStructure, readGeoGebraBase64, readGeoGebraView, readGeoGebraXml, readMenuValue, sameGeoGebraView, stripCamera, theoryAppKind } from './geogebraApi';
 import { connectBoard, setRemoteTitle } from './live';
@@ -72,7 +73,7 @@ import {
   TASK_FONT,
   uid,
 } from './model';
-import { boardImageSrc } from './images';
+import { boardImageSrc, unusedImageIds } from './images';
 import ShapeGlyph from './ShapeGlyph';
 import {
   SHAPE_GROUPS,
@@ -977,6 +978,7 @@ export default function BoardEditor({
         content: task.content || task.statement || '',
         options: task.is_open_answer ? [] : taskOptions(task),
         openAnswer: Boolean(task.is_open_answer),
+        ...(Array.isArray(task.imageIds) && task.imageIds.length ? { imageIds: task.imageIds } : {}),
         ...(Object.keys(teacherOnly).length ? { teacherOnly } : {}),
       };
       const h = estimateTaskHeight(props);
@@ -2218,9 +2220,16 @@ export default function BoardEditor({
     if (readOnlyRef.current) return;
     const set = new Set(selectedList().filter(canEdit).map((obj) => obj.id));
     if (!set.size) return;
-    commit(releaseMissingBinds(objectsRef.current.filter((obj) => !set.has(obj.id))));
+    const before = objectsRef.current;
+    const removed = before.filter((obj) => set.has(obj.id));
+    const next = releaseMissingBinds(before.filter((obj) => !set.has(obj.id)));
+    commit(next);
     selectIds(selectedIdsRef.current.filter((id) => !set.has(id)));
     setEditingId(null);
+    if (audienceRef.current !== 'teacher') return;
+    unusedImageIds(removed, next).forEach((fileId) => {
+      deleteTeacherBoardImage(fileId).catch(() => {});
+    });
   }
 
   function patchSelected(type, patch) {

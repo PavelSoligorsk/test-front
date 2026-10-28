@@ -66,6 +66,10 @@ export function uploadTeacherBoardImage(file) {
   return apiClient.post(ENDPOINTS.TEACHER_BOARD_IMAGES, body).then((response) => response.data);
 }
 
+export function deleteTeacherBoardImage(fileId) {
+  return apiClient.delete(`${ENDPOINTS.TEACHER_BOARD_IMAGES}/${encodeURIComponent(fileId)}`);
+}
+
 export function listGeoGebraTemplates() {
   return apiClient.get(ENDPOINTS.BOARD_GEOGEBRA_TEMPLATES).then((response) => response.data || []);
 }
