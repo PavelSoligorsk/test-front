@@ -29,8 +29,9 @@ function escapeYaml(str) {
     .replace(/\t/g, '\\t');
 }
 
-export default function BatchYamlTextarea({ value, onChange, placeholder, className = '', rows = 6 }) {
-  const textareaRef = useRef(null);
+export default function BatchYamlTextarea({ value, onChange, placeholder, className = '', rows = 6, inputRef }) {
+  const fallbackRef = useRef(null);
+  const textareaRef = inputRef || fallbackRef;
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
 
@@ -153,7 +154,7 @@ export default function BatchYamlTextarea({ value, onChange, placeholder, classN
   };
 
   return (
-    <div className="relative">
+    <div className="relative flex flex-col lg:min-h-0 lg:flex-1">
       <textarea
         ref={textareaRef}
         value={value}

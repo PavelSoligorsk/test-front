@@ -23,7 +23,7 @@ const parseOptions = (options) =>
 const optionsToMarkdown = (options) =>
   parseOptions(options).map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n');
 
-export default function BatchPreview({ mode, parsed, error, hasText }) {
+export default function BatchPreview({ mode, parsed, error, hasText, listRef }) {
   // Для удаления и правки показываем задания из базы, на которые ссылаются id.
   const ids = !hasText || error || !parsed || mode === 'create'
     ? []
@@ -45,8 +45,8 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
   const countLabel = mode === 'delete' ? 'к удалению' : 'заданий';
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-col gap-4 lg:h-full lg:min-h-0 lg:flex-1">
+      <div className="flex shrink-0 items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <IconWell><Eye size={18} strokeWidth={2} /></IconWell>
           <div>
@@ -64,6 +64,7 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
         )}
       </div>
 
+      <div ref={listRef} className="max-h-[70vh] space-y-4 overflow-y-auto overscroll-contain lg:max-h-none lg:min-h-0 lg:flex-1">
       {!hasText && (
         <div className="rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 p-10 flex flex-col items-center justify-center text-center min-h-[300px]">
           <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-400 mb-3">
@@ -86,12 +87,12 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
 
       {hasText && !error && parsed && mode === 'delete' && (
         <div className="space-y-4">
-          {parsed.map((id) => {
+          {parsed.map((id, i) => {
             const task = fetchedTasks[id];
             const isClosed = task?.is_open_answer === false;
 
             return (
-              <div key={id} className="bg-white dark:bg-[#09090b] rounded-3xl border border-red-200 dark:border-red-900/40 shadow-sm p-5 space-y-3">
+              <div key={id} data-batch-index={i} className="bg-white dark:bg-[#09090b] rounded-3xl border border-red-200 dark:border-red-900/40 shadow-sm p-5 space-y-3">
                 <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/60 pb-2">
                   <div className="flex items-center gap-2">
                     <Trash2 size={16} className="text-red-600" />
@@ -145,7 +146,7 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
             const isClosed = task.is_open_answer === false;
 
             return (
-              <div key={i} className={`bg-white dark:bg-[#09090b] rounded-3xl border shadow-sm p-5 space-y-3 ${
+              <div key={i} data-batch-index={i} className={`bg-white dark:bg-[#09090b] rounded-3xl border shadow-sm p-5 space-y-3 ${
                 mode === 'update' ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800/60'
               }`}>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -210,6 +211,7 @@ export default function BatchPreview({ mode, parsed, error, hasText }) {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Layers, Upload, Edit3, Trash2, Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { parse as parseYaml } from 'yaml';
 import { createTasksBatch, updateTasksBatch, deleteTasksBatch } from './api';
 import BatchPromptModal from './BatchPromptModal';
 import BatchPreview from './BatchPreview';
 import BatchYamlTextarea from './BatchYamlTextarea';
+import { caretTaskPosition, readPreviewPosition, readTextareaPosition, scrollPreviewTo, scrollTextareaTo, taskStartLines } from './batchScrollSync';
 import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 
 const EXAMPLE_CREATE = `- task_class: "10"
@@ -83,6 +84,66 @@ export default function BatchTab({ onSuccess }) {
   const [previewData, setPreviewData] = useState(null);
   const [previewError, setPreviewError] = useState(null);
   const [previewMode, setPreviewMode] = useState('create');
+  const yamlRef = useRef(null);
+  const previewScrollRef = useRef(null);
+
+  useEffect(() => {
+    const textarea = yamlRef.current;
+    const preview = previewScrollRef.current;
+    if (!textarea || !preview) return undefined;
+
+    let leader = null;
+    let release = 0;
+    let shownIndex = -1;
+
+    const claim = (source) => {
+      if (leader && leader !== source) return false;
+      leader = source;
+      window.clearTimeout(release);
+      release = window.setTimeout(() => { leader = null; }, 200);
+      return true;
+    };
+
+    const onYamlScroll = () => {
+      if (!claim('yaml')) return;
+      const pos = readTextareaPosition(textarea);
+      if (!pos) return;
+      shownIndex = pos.index;
+      scrollPreviewTo(preview, pos.index, pos.fraction);
+    };
+
+    const onPreviewScroll = () => {
+      if (!claim('preview')) return;
+      const pos = readPreviewPosition(preview);
+      if (!pos) return;
+      scrollTextareaTo(textarea, pos.index, pos.fraction);
+    };
+
+    const onCaret = () => {
+      if (leader === 'preview' || textarea.selectionStart !== textarea.selectionEnd) return;
+      const starts = taskStartLines(textarea.value);
+      const pos = caretTaskPosition(textarea.value, textarea.selectionStart ?? 0, starts);
+      if (!pos || pos.index === shownIndex) return;
+      if (!claim('yaml')) return;
+      shownIndex = pos.index;
+      scrollPreviewTo(preview, pos.index, pos.fraction);
+    };
+
+    const onSelection = () => {
+      if (document.activeElement !== textarea) return;
+      onCaret();
+    };
+
+    textarea.addEventListener('scroll', onYamlScroll, { passive: true });
+    preview.addEventListener('scroll', onPreviewScroll, { passive: true });
+    document.addEventListener('selectionchange', onSelection);
+    return () => {
+      textarea.removeEventListener('scroll', onYamlScroll);
+      preview.removeEventListener('scroll', onPreviewScroll);
+      document.removeEventListener('selectionchange', onSelection);
+      window.clearTimeout(release);
+    };
+  }, []);
 
   const parseAndValidate = (text, currentMode) => {
     if (!text.trim()) throw new Error('Пустой ввод');
@@ -275,9 +336,9 @@ export default function BatchTab({ onSuccess }) {
         </div>
       </Sheet>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <Sheet className="p-6 space-y-4 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:h-[calc(100vh-9rem)]">
+        <Sheet className="p-6 flex flex-col gap-4 min-h-0 lg:h-full lg:overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
                 YAML {mode === 'delete' ? '(список ID)' : '(список заданий)'}
@@ -312,18 +373,19 @@ export default function BatchTab({ onSuccess }) {
           )}
 
           {showExample && (
-            <div className="rounded-xl bg-zinc-900 p-5 font-mono text-xs text-zinc-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
+            <div className="shrink-0 rounded-xl bg-zinc-900 p-5 font-mono text-xs text-zinc-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
               {getExample().trim()}
             </div>
           )}
 
           <BatchYamlTextarea
+            inputRef={yamlRef}
             value={yamlText}
             onChange={handleTextChange}
             placeholder={mode === 'delete'
               ? 'Введите ID заданий, каждый с новой строки:\n- 1\n- 2\n- 3'
               : 'Введите задания через YAML. Ctrl+V / перетащите картинку — вставится как ![имя](url) без кавычек'}
-            className={`${fieldClass} h-[500px] font-mono text-xs resize-y`}
+            className={`${fieldClass} h-[28rem] min-h-0 overscroll-contain font-mono text-xs resize-none lg:h-auto lg:flex-1`}
             rows={20}
           />
 
@@ -331,7 +393,7 @@ export default function BatchTab({ onSuccess }) {
             type="button"
             onClick={handleSubmit}
             disabled={loading || !yamlText.trim()}
-            className={`${primaryBtnClass} w-full ${mode === 'delete' ? 'hover:bg-red-700 dark:hover:bg-red-200' : ''}`}
+            className={`${primaryBtnClass} w-full shrink-0 ${mode === 'delete' ? 'hover:bg-red-700 dark:hover:bg-red-200' : ''}`}
           >
             {loading ? (
               <><Loader2 size={16} className="animate-spin" /> Обработка...</>
@@ -341,8 +403,9 @@ export default function BatchTab({ onSuccess }) {
           </button>
         </Sheet>
 
-        <Sheet className="p-6 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto">
+        <Sheet className="p-6 flex min-h-0 flex-col lg:h-full lg:overflow-hidden">
           <BatchPreview
+            listRef={previewScrollRef}
             mode={previewMode}
             parsed={previewData}
             error={previewError}
