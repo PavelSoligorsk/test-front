@@ -73,9 +73,15 @@ import {
   extendStraight,
   polylineFrame,
   joinArrows,
+  labelPlace,
+  labelVertices,
+  nearestPoint,
+  nearestVertex,
   plantPoint,
   releaseMissingBinds,
+  separateShape,
   setArrowSide,
+  setVertexName,
   settleSnap,
   snapFigurePoint,
 } from './shapes';
@@ -246,6 +252,7 @@ export default function BoardEditor({
   const dragCleanupRef = useRef(null);
   const touchesRef = useRef(new Map());
   const pointerClientRef = useRef(null);
+  const labelArmRef = useRef(null);
   const editOriginRef = useRef(null);
   const editingIdRef = useRef(null);
   const selectedIdsRef = useRef([]);
@@ -1332,7 +1339,7 @@ export default function BoardEditor({
     if (ids.length < 2) return;
     const next = joinArrows(store.get(), ids);
     if (next === store.get()) {
-      notify('Эти отрезки не лежат на одной прямой');
+      notify('Излом слишком большой, это не один отрезок');
       return;
     }
     const kept = ids.find((id) => next.some((obj) => obj.id === id));
@@ -1340,24 +1347,172 @@ export default function BoardEditor({
     if (kept) selectIds([kept]);
   }
 
-  function dropPoint(at) {
+  function separateSelected() {
+    if (readOnlyRef.current) return;
+    const shapes = selectedList().filter((obj) => obj.type === 'shape' && canEdit(obj));
+    if (shapes.length !== 1) return;
+    const next = separateShape(store.get(), shapes[0].id, uid);
+    if (next === store.get()) {
+      notify('Эту фигуру нельзя разделить на точки');
+      return;
+    }
+    const known = new Set(store.get().map((obj) => obj.id));
+    commit(next);
+    selectIds(next.filter((obj) => !known.has(obj.id)).map((obj) => obj.id));
+  }
+
+  function dropPoint(at, letter = '', free = true) {
     const zoom = cameraRef.current.zoom || 1;
     const point = createObject('point', {
       x: at.x,
       y: at.y,
       w: 8,
       h: 8,
-      props: { letter: '', sub: '', cross: null },
+      props: { letter, sub: '', cross: null },
     });
     const next = plantPoint([...store.get(), point], point.id, zoom, uid);
     if (next.length > MAX_OBJECTS) {
       notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
-      return;
+      return null;
     }
     commit(next);
-    const placed = next.find((obj) => obj.id === point.id);
-    if (placed) selectIds([placed.id]);
-    setTool('select');
+    const placed = next.find((obj) => obj.id === point.id) || point;
+    if (free) {
+      selectIds([placed.id]);
+      setTool('select');
+    }
+    return placed;
+  }
+
+  function namePoint(key) {
+    if (readOnlyRef.current) return false;
+    const letter = /^[a-zA-Z]$/.test(key) ? key.toUpperCase() : '';
+    const digit = /^[0-9]$/.test(key) ? key : '';
+    if (!letter && !digit) return false;
+    const objects = store.get();
+    const selectedId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const selected = objects.find((obj) => obj.id === selectedId && obj.type === 'point');
+    const cursorWorld = () => {
+      const client = pointerClientRef.current;
+      if (!client) return null;
+      return cam.clientToWorld(client.x, client.y);
+    };
+    const pointUnderCursor = () => {
+      const world = cursorWorld();
+      if (!world) return null;
+      const hit = nearestPoint(objects, world, cameraRef.current.zoom);
+      if (!hit) return null;
+      const point = objects.find((obj) => obj.id === hit.id);
+      return point ? { ...hit, point } : null;
+    };
+    const cursorVertex = () => {
+      const world = cursorWorld();
+      if (!world) return null;
+      return nearestVertex(objects, world, cameraRef.current.zoom);
+    };
+    if (digit) {
+      const hovered = pointUnderCursor();
+      const named = selected?.props.letter ? selected : (hovered?.point.props.letter ? hovered.point : null);
+      if (named) {
+        const sub = `${named.props.sub || ''}${digit}`.slice(0, 3);
+        labelArmRef.current = { kind: 'point', id: named.id };
+        commit(objects.map((obj) => (obj.id === named.id ? { ...obj, props: { ...obj.props, sub } } : obj)));
+        selectIds([named.id]);
+        return true;
+      }
+      const arm = labelArmRef.current;
+      if (arm?.kind !== 'vertex') return false;
+      const shape = objects.find((obj) => obj.id === arm.id);
+      const current = shape?.props.names?.[arm.index];
+      if (!current?.letter) return false;
+      const sub = `${current.sub || ''}${digit}`.slice(0, 3);
+      commit(objects.map((obj) => (obj.id === shape.id ? setVertexName(obj, arm.index, current.letter, sub) : obj)));
+      return true;
+    }
+    const hovered = pointUnderCursor();
+    const vertex = cursorVertex();
+    if (hovered && (!vertex || hovered.dist <= vertex.dist)) {
+      labelArmRef.current = { kind: 'point', id: hovered.id };
+      commit(objects.map((obj) => (
+        obj.id === hovered.id ? { ...obj, props: { ...obj.props, letter, sub: '' } } : obj
+      )));
+      selectIds([hovered.id]);
+      return true;
+    }
+    if (vertex) {
+      labelArmRef.current = { kind: 'vertex', id: vertex.id, index: vertex.index };
+      commit(objects.map((obj) => (obj.id === vertex.id ? setVertexName(obj, vertex.index, letter, '') : obj)));
+      return true;
+    }
+    if (selected) {
+      labelArmRef.current = { kind: 'point', id: selected.id };
+      commit(objects.map((obj) => (
+        obj.id === selected.id ? { ...obj, props: { ...obj.props, letter, sub: '' } } : obj
+      )));
+      return true;
+    }
+    const client = pointerClientRef.current;
+    if (!client) return false;
+    const world = cam.clientToWorld(client.x, client.y);
+    if (!world) return false;
+    const point = dropPoint(world, letter, false);
+    if (!point) return false;
+    labelArmRef.current = { kind: 'point', id: point.id };
+    selectIds([point.id]);
+    return true;
+  }
+
+  function eraseName() {
+    if (readOnlyRef.current) return false;
+    const client = pointerClientRef.current;
+    if (!client) return false;
+    const world = cam.clientToWorld(client.x, client.y);
+    if (!world) return false;
+    const objects = store.get();
+    const zoom = cameraRef.current.zoom || 1;
+    const vertex = nearestVertex(objects, world, zoom, 36);
+    const shape = vertex && objects.find((obj) => obj.id === vertex.id);
+    const named = shape?.props.names?.[vertex.index]?.letter ? vertex : null;
+    let point = null;
+    let pointDist = Infinity;
+    let letterHit = null;
+    objects.forEach((obj) => {
+      if (obj.type === 'point' && obj.props.letter) {
+        const place = labelPlace(obj.props);
+        const dist = Math.hypot(world.x - (obj.x + place.dx), world.y - (obj.y + place.dy));
+        if (dist <= place.size && (!letterHit || dist < letterHit.dist)) letterHit = { kind: 'point', obj, dist };
+      }
+      (labelVertices(obj) || []).forEach((local, index) => {
+        const item = obj.props.names?.[index];
+        if (!item?.letter) return;
+        const place = labelPlace(item);
+        const x = obj.x + (local[0] / 100) * obj.w + place.dx;
+        const y = obj.y + (local[1] / 100) * obj.h + place.dy;
+        const dist = Math.hypot(world.x - x, world.y - y);
+        if (dist <= place.size && (!letterHit || dist < letterHit.dist)) letterHit = { kind: 'vertex', obj, index, dist };
+      });
+      if (obj.type !== 'point') return;
+      const dist = Math.hypot(world.x - obj.x, world.y - obj.y);
+      if (dist <= 36 / zoom && dist < pointDist) {
+        point = obj;
+        pointDist = dist;
+      }
+    });
+    const vertexDist = named ? named.dist : Infinity;
+    if (letterHit?.kind === 'vertex' && letterHit.dist <= vertexDist && letterHit.dist <= pointDist) {
+      commit(objects.map((obj) => (obj.id === letterHit.obj.id ? setVertexName(obj, letterHit.index, '', '') : obj)));
+      return true;
+    }
+    if (named && vertexDist <= pointDist) {
+      commit(objects.map((obj) => (obj.id === shape.id ? setVertexName(obj, named.index, '', '') : obj)));
+      return true;
+    }
+    const doomed = letterHit?.kind === 'point' && letterHit.dist <= pointDist ? letterHit.obj : point;
+    if (!doomed?.props?.letter) return false;
+    commit(objects.map((obj) => (
+      obj.id === doomed.id ? { ...obj, props: { ...obj.props, letter: '', sub: '' } } : obj
+    )));
+    return true;
   }
 
   function arrowSide(side) {
@@ -1760,6 +1915,7 @@ export default function BoardEditor({
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
+        if (actions.eraseName?.()) return;
         actions.deleteSelected();
         return;
       }
@@ -1780,6 +1936,10 @@ export default function BoardEditor({
         return;
       }
       if (mod || event.altKey) return;
+      if (actions.namePoint?.(event.key)) {
+        event.preventDefault();
+        return;
+      }
       const nextTool = TOOL_CODES[event.code];
       if (!nextTool) return;
       if (event.code === 'KeyO' || event.code === 'KeyR') {
@@ -1935,6 +2095,8 @@ export default function BoardEditor({
       styleKeys,
       arrowSide,
       finishChain,
+      namePoint,
+      eraseName,
       fitAll,
       zoomTo: cam.zoomTo,
       pasteObjects,
@@ -2077,6 +2239,7 @@ export default function BoardEditor({
             onToggleLock={toggleLock}
             onArrowSide={arrowSide}
             onJoin={joinSelected}
+            onSeparate={separateSelected}
             onToggleGeo={toggleGeo}
             onRendered={paintSelectionUi}
           />

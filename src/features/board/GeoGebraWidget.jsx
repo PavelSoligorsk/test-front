@@ -51,6 +51,42 @@ function appletKind(appName) {
   return 'geometry';
 }
 
+function viewCanvas(host) {
+  if (!host) return null;
+  let best = null;
+  let area = 0;
+  host.querySelectorAll('canvas').forEach((canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const next = rect.width * rect.height;
+    if (next > area) {
+      area = next;
+      best = canvas;
+    }
+  });
+  return best;
+}
+
+function pointerOnCanvas(host, event) {
+  const canvas = viewCanvas(host) || host;
+  const rect = canvas.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return null;
+  return {
+    u: (event.clientX - rect.left) / rect.width,
+    v: (event.clientY - rect.top) / rect.height,
+  };
+}
+
+function cursorInFrame(frame, host, u, v) {
+  const canvas = viewCanvas(host) || frame;
+  const rect = canvas.getBoundingClientRect();
+  const frameRect = frame.getBoundingClientRect();
+  const zoom = frame.offsetWidth > 0 ? frameRect.width / frame.offsetWidth : 1;
+  return {
+    x: (rect.left + u * rect.width - frameRect.left) / (zoom || 1),
+    y: (rect.top + v * rect.height - frameRect.top) / (zoom || 1),
+  };
+}
+
 export default function GeoGebraWidget({
   appletId,
   appName,
@@ -298,13 +334,14 @@ export default function GeoGebraWidget({
     const to = camera.to;
     if (!from || !to) return true;
     const nearPole = Math.min(Math.abs(Math.abs(from.xAngle) - 90), Math.abs(Math.abs(to.xAngle) - 90)) < 12;
+    const jump = appName === '3d';
     const next = {
-      xZero: from.xZero + (to.xZero - from.xZero) * blend,
-      yZero: from.yZero + (to.yZero - from.yZero) * blend,
-      zZero: from.zZero + (to.zZero - from.zZero) * blend,
+      xZero: jump ? to.xZero : from.xZero + (to.xZero - from.xZero) * blend,
+      yZero: jump ? to.yZero : from.yZero + (to.yZero - from.yZero) * blend,
+      zZero: jump ? to.zZero : from.zZero + (to.zZero - from.zZero) * blend,
       scale: from.scale * (to.scale / from.scale) ** blend,
-      xAngle: from.xAngle + angleGap(from.xAngle, to.xAngle) * blend,
-      zAngle: nearPole ? from.zAngle : from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
+      xAngle: jump ? to.xAngle : from.xAngle + angleGap(from.xAngle, to.xAngle) * blend,
+      zAngle: jump || nearPole ? to.zAngle : from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
     };
     const arrived = sameCamera(nearPole ? { ...next, zAngle: to.zAngle } : next, to, 0.01);
     const value = arrived ? to : next;
@@ -573,7 +610,7 @@ export default function GeoGebraWidget({
     return { w: box.w * ratio, h: box.h * ratio };
   }
 
-  function publishCamera(api, force = false) {
+  function publishCamera(api, force = false, snap = false) {
     camTimerRef.current = 0;
     if ((!force && !interactiveRef.current) || !api || apiRef.current !== api) return;
     const started = performance.now();
@@ -587,7 +624,11 @@ export default function GeoGebraWidget({
     if (!wire || sameWire(lastWireRef.current, wire)) return;
     lastWireRef.current = wire;
     lastSentRef.current = performance.now();
-    onCameraRef.current?.({ seq: Math.floor(performance.timeOrigin + performance.now()), ...wire });
+    onCameraRef.current?.({
+      seq: Math.floor(performance.timeOrigin + performance.now()),
+      ...(snap ? { snap: true } : {}),
+      ...wire,
+    });
   }
 
   function scheduleCamera(api, force = false) {
@@ -683,6 +724,36 @@ export default function GeoGebraWidget({
     const size = viewSize3d();
     const cam = size && cameraFromWire(message, size);
     if (!cam) return;
+    if (appName === '3d' && message.snap) {
+      stopCamPlayback();
+      const camera = glideRef.current.camera;
+      if (camera.raf) cancelAnimationFrame(camera.raf);
+      camera.raf = 0;
+      camera.to = null;
+      camera.now = cam;
+      camera.live = false;
+      applyLiveCamera(api, cam);
+      return;
+    }
+    if (appName === '3d') {
+      const actual = readGeoGebraCamera(api);
+      const scale = actual?.scale > 0 ? actual.scale : cam.scale;
+      const jumped = { ...cam, scale };
+      applyLiveCamera(api, jumped);
+      const camera = glideRef.current.camera;
+      camera.now = jumped;
+      camera.live = true;
+      camera.tau = 110;
+      stopCamPlayback();
+      if (!(scale > 0) || Math.abs(scale / cam.scale - 1) < 0.005) {
+        camera.to = null;
+        camera.now = cam;
+        return;
+      }
+      camera.to = cam;
+      kickGlide(api);
+      return;
+    }
     pushCamSample(api, cam, Number.isFinite(message.seq) ? message.seq : NaN);
   }
 
@@ -849,20 +920,8 @@ export default function GeoGebraWidget({
       camHeldRef.current = true;
       followRef.current = false;
       window.clearTimeout(camQuietRef.current);
-      // Пока камеру крутят, вид уходит так часто, как позволяет цена чтения XML:
-      // у зрителя кадры между отсчётами дорисовывает буфер воспроизведения.
-      const poll = () => {
-        if (!camHeldRef.current) {
-          camPollRef.current = 0;
-          return;
-        }
-        onPublishCamera(apiRef.current);
-        camPollRef.current = window.setTimeout(poll, Math.max(60, camReadCostRef.current * 3));
-      };
-      camQuietRef.current = window.setTimeout(() => {
-        if (!camHeldRef.current || camPollRef.current) return;
-        poll();
-      }, 60);
+      window.clearTimeout(camPollRef.current);
+      camPollRef.current = 0;
     };
     const up = () => {
       if (!held) return;
@@ -871,7 +930,7 @@ export default function GeoGebraWidget({
       window.clearTimeout(camQuietRef.current);
       window.clearTimeout(camPollRef.current);
       camPollRef.current = 0;
-      window.setTimeout(() => onScheduleCamera(apiRef.current, true), 60);
+      window.setTimeout(() => onPublishCamera(apiRef.current, true, true), 60);
       if (!followRef.current) setFollow(false);
     };
     const wheel = () => {
@@ -900,7 +959,7 @@ export default function GeoGebraWidget({
     return () => onCamBind(boardObjectId, null);
   }, [status, appName, boardObjectId, onCamBind]);
 
-  // Дельты чертящего: свободные точки и числа едут к новым значениям плавно.
+  // Точки и числа уходят как есть, у зрителя доезжают плавно.
   useEffect(() => {
     if (status !== 'ready' || !onMoveBind || !boardObjectId) return undefined;
     onMoveBind(boardObjectId, (message) => {
@@ -918,27 +977,17 @@ export default function GeoGebraWidget({
     return () => onMoveBind(boardObjectId, null);
   }, [status, boardObjectId, onMoveBind]);
 
-  // В планиметрии и графиках зритель видит курсор ведущего, без передачи нажатий.
+  // Курсор ведущего на всех апплетах: доля большого холста, без нажатий и без правки состояния.
   useEffect(() => {
-    if (!interactive || status !== 'ready' || appName === '3d') return undefined;
+    if (!interactive || status !== 'ready') return undefined;
     const host = hostRef.current;
     if (!host) return undefined;
     let timer = 0;
     let pending = null;
-    const place = (event) => {
-      const canvas = host.querySelector('canvas');
-      const rect = (canvas || host).getBoundingClientRect();
-      const span = Math.min(rect.width, rect.height);
-      if (!(span > 0)) return null;
-      return {
-        u: (event.clientX - rect.left - rect.width / 2) / span,
-        v: (event.clientY - rect.top - rect.height / 2) / span,
-      };
-    };
     const tick = () => {
       timer = 0;
       if (!pending) return;
-      const point = place(pending);
+      const point = pointerOnCanvas(host, pending);
       pending = null;
       if (!point) return;
       onInputRef.current?.({ ev: 'hover', b: 0, t: performance.now(), ...point });
@@ -953,31 +1002,24 @@ export default function GeoGebraWidget({
       window.cancelAnimationFrame(timer);
       host.removeEventListener('pointermove', move);
     };
-  }, [interactive, status, appName]);
+  }, [interactive, status]);
 
   useEffect(() => {
     if (status !== 'ready' || !onInputBind || !boardObjectId) return undefined;
     onInputBind(boardObjectId, (message) => {
-      if (interactiveRef.current || appName === '3d') return;
+      if (interactiveRef.current) return;
       if (message?.ev && message.ev !== 'hover') return;
       if (!Number.isFinite(message?.u) || !Number.isFinite(message?.v)) return;
       const frame = frameRef.current;
       const host = hostRef.current;
-      const canvas = host?.querySelector('canvas');
-      const rect = (canvas || frame)?.getBoundingClientRect();
-      const frameRect = frame?.getBoundingClientRect();
-      if (!rect || !frameRect) return;
-      const span = Math.min(rect.width, rect.height);
-      setViewCursor({
-        x: rect.left + rect.width / 2 + message.u * span - frameRect.left,
-        y: rect.top + rect.height / 2 + message.v * span - frameRect.top,
-      });
+      if (!frame) return;
+      setViewCursor(cursorInFrame(frame, host, message.u, message.v));
     });
     return () => {
       onInputBind(boardObjectId, null);
       setViewCursor(null);
     };
-  }, [status, appName, boardObjectId, onInputBind]);
+  }, [status, boardObjectId, onInputBind]);
 
   useEffect(() => {
     onReadyRef.current = onReady;
@@ -1315,7 +1357,7 @@ export default function GeoGebraWidget({
         <div ref={hostRef} className="h-full w-full" />
       </div>
       {!interactive && <div className="absolute inset-0 z-10" style={{ cursor: 'inherit' }} />}
-      {viewCursor && !interactive && appName !== '3d' && (
+      {viewCursor && !interactive && (
         <span
           className="pointer-events-none absolute z-20 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-600 shadow"
           style={{ left: viewCursor.x, top: viewCursor.y }}

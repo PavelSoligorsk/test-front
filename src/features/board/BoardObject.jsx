@@ -188,7 +188,7 @@ function LetterMark({ name, x, y }) {
   const place = labelPlace(name);
   return (
     <span
-      className="pointer-events-none absolute z-40 whitespace-nowrap font-semibold leading-none text-zinc-950"
+      className="pointer-events-none absolute z-40 whitespace-nowrap font-semibold leading-none text-zinc-950 dark:text-zinc-50"
       style={{
         left: x,
         top: y,

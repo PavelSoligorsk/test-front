@@ -11,6 +11,7 @@ import {
   LockOpen,
   SendToBack,
   Trash2,
+  Ungroup,
 } from 'lucide-react';
 import { PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TASK_FONT, TASK_SIZES, TEXT_SIZES } from './model';
 import ShapeGlyph from './ShapeGlyph';
@@ -72,6 +73,7 @@ export default function SelectionToolbar({
   onToggleLock,
   onArrowSide,
   onJoin,
+  onSeparate,
   onToggleGeo,
 }) {
   if (!objects.length) return null;
@@ -79,6 +81,16 @@ export default function SelectionToolbar({
   const locked = objects.some((obj) => obj.props?.locked);
   const types = new Set(objects.map((obj) => obj.type));
   const only = types.size === 1 ? first.type : null;
+  const arrows = objects.filter((obj) => obj.type === 'arrow');
+  const joinButton = arrows.length > 1 ? (
+    <ToolButton
+      label={canJoinArrows(arrows) ? 'Склеить в один отрезок' : 'Излом слишком большой'}
+      onClick={() => onJoin?.()}
+    >
+      <Combine size={15} />
+      <span className="ml-1">Склеить</span>
+    </ToolButton>
+  ) : null;
 
   if (locked) {
     return (
@@ -115,14 +127,6 @@ export default function SelectionToolbar({
     const sides = arrowHeadSides(first);
     specific = (
       <>
-        {objects.length > 1 && (
-          <ToolButton
-            label={canJoinArrows(objects) ? 'Соединить в один отрезок' : 'Отрезки не на одной прямой'}
-            onClick={() => onJoin?.()}
-          >
-            <Combine size={15} />
-          </ToolButton>
-        )}
         {objects.length === 1 && (
           <ToolButton
             label="Поменять начало и конец"
@@ -177,6 +181,11 @@ export default function SelectionToolbar({
     const dashed = Boolean(first.props.dashed);
     specific = (
       <>
+        {objects.length === 1 && (
+          <ToolButton label="Разделить эту фигуру на точки и отрезки" onClick={() => onSeparate?.()}>
+            <Ungroup size={15} />
+          </ToolButton>
+        )}
         <div className="flex max-w-56 gap-0.5 overflow-x-auto">
           {SHAPE_KINDS.filter((kind) => kind.id !== 'point').map((kind) => (
             <ToolButton
@@ -274,8 +283,9 @@ export default function SelectionToolbar({
 
   return (
     <div className="flex max-w-[calc(100vw-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border border-zinc-200 bg-white px-1.5 py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+      {joinButton}
       {specific}
-      {specific && <Divider />}
+      {(specific || joinButton) && <Divider />}
       <ToolButton label="На передний план (PageUp)" onClick={onFront}><BringToFront size={15} /></ToolButton>
       <ToolButton label="На задний план (PageDown)" onClick={onBack}><SendToBack size={15} /></ToolButton>
       <ToolButton label="Дублировать (Ctrl+D)" onClick={onDuplicate}><Copy size={15} /></ToolButton>

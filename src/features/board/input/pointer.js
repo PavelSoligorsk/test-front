@@ -21,6 +21,7 @@ import {
   isRegularShape,
   planeDefaults,
   splitArrowThroughPoints,
+  weaveSegments,
 } from '../shapes';
 import { createThrottle } from '../timers';
 import {
@@ -361,7 +362,7 @@ export function createPointerInput({ refs, store, cam, board }) {
           bind2: bindFromHit(endHit),
         }));
         let list = [...store.get(), arrow];
-        if (!event.altKey) list = splitArrowThroughPoints(list, [arrow.id], uid, zoom);
+        if (!event.altKey) list = weaveSegments(splitArrowThroughPoints(list, [arrow.id], uid, zoom), uid);
         if (list.length > MAX_OBJECTS) {
           notify(`На доске может быть не больше ${MAX_OBJECTS} объектов`);
           return;

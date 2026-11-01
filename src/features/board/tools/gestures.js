@@ -10,11 +10,13 @@ import {
   movePolylineVertex,
   movePyramidBase,
   pruneJoints,
+  railDrag,
   refreshPointHold,
   retargetBound,
   shapeKnobPatch,
   slideSharedPoints,
   splitArrowThroughPoints,
+  weaveSegments,
 } from '../shapes';
 
 // Жесты над объектами доски. На каждое движение указателя жест получает документ,
@@ -109,7 +111,14 @@ const STEPS = {
     let dx = world.x - drag.start.x;
     let dy = world.y - drag.start.y;
     let guides = null;
+    let shiftIds = [];
     const lonePoint = drag.starts.size === 1 && [...drag.starts.values()].every((obj) => obj.type === 'point');
+    if (lonePoint && !env.alt) {
+      const rail = railDrag([...drag.starts.values()][0], objects, dx, dy);
+      dx = rail.dx;
+      dy = rail.dy;
+      shiftIds = rail.shiftIds;
+    }
     if (!env.alt && !lonePoint && drag.others.length && drag.bounds) {
       const snap = snapMove(
         { x: drag.bounds.x + dx, y: drag.bounds.y + dy, w: drag.bounds.w, h: drag.bounds.h },
@@ -125,10 +134,21 @@ const STEPS = {
       const start = drag.starts.get(obj.id);
       if (!start) return obj;
       const moved = { ...start, x: start.x + dx, y: start.y + dy };
-      if (start.type === 'point' && lonePoint) moved.props = { ...start.props, cross: null };
+      if (start.type === 'point' && lonePoint) {
+        moved.props = { ...start.props, cross: null, rail: env.alt ? null : (start.props.rail || null) };
+      }
       changed.push(moved);
       return moved;
     });
+    if (shiftIds.length && (dx || dy)) {
+      const shift = new Set(shiftIds);
+      const shifted = next.map((obj) => (shift.has(obj.id) ? { ...obj, x: obj.x + dx, y: obj.y + dy } : obj));
+      shiftIds.forEach((id) => {
+        const obj = shifted.find((item) => item.id === id);
+        if (obj && !changed.some((item) => item.id === id)) changed.push(obj);
+      });
+      return { ...withFollow(shifted, [...changed.map((obj) => obj.id), ...shiftIds], changed, false), guides };
+    }
     return { ...withFollow(next, changed.map((obj) => obj.id), changed, env.alt && lonePoint), guides };
   },
 
@@ -222,13 +242,14 @@ export function settleGesture(drag, objects, { zoom, alt, makeId }) {
     if (!alt && makeId) {
       const arrowIds = ids.filter((id) => next.some((obj) => obj.id === id && obj.type === 'arrow'));
       if (arrowIds.length) next = splitArrowThroughPoints(next, arrowIds, makeId, zoom, new Set(ids));
+      next = weaveSegments(next, makeId);
     }
     return next;
   }
   if (alt) return objects;
   if (drag.kind === 'arrow-end') {
     const bound = bindArrowEnds(objects, drag.id, zoom);
-    return makeId ? splitArrowThroughPoints(bound, [drag.id], makeId, zoom) : bound;
+    return makeId ? weaveSegments(splitArrowThroughPoints(bound, [drag.id], makeId, zoom), makeId) : bound;
   }
   if (drag.kind === 'poly-point') return bindPolylineVertex(objects, drag.id, drag.index, zoom);
   if (drag.kind === 'base-point') return bindPyramidBase(objects, drag.id, drag.index, zoom);

@@ -24,6 +24,18 @@ export function labelVertices(shape) {
   return shapeVertexLocals(shape);
 }
 
+export function nearestPoint(objects, at, zoom, reach = 18) {
+  const limit = reach / (zoom || 1);
+  let best = null;
+  (objects || []).forEach((obj) => {
+    if (obj.type !== 'point') return;
+    const dist = Math.hypot(at.x - obj.x, at.y - obj.y);
+    if (dist > limit || (best && dist >= best.dist)) return;
+    best = { dist, id: obj.id };
+  });
+  return best;
+}
+
 export function nearestVertex(objects, point, zoom, reach = 18) {
   const limit = reach / (zoom || 1);
   let best = null;
