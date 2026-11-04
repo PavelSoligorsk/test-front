@@ -88,6 +88,7 @@ import {
 import { SURFACE_MARK, isHiddenBoardObject, isSurfaceMeta, readSurface } from './meta';
 import { deleteBoard } from './storage';
 import { taskOptions } from './taskBankApi';
+import { answersMatch } from './studentsApi';
 import { LASER_COLOR, LASER_FADE_MS, LASER_WIDTH, MAX_OBJECTS, SEND_MS } from './constants';
 import BoardSidePanes from './ui/BoardSidePanes';
 import { renderDraft } from './paint/draft';
@@ -419,7 +420,7 @@ export default function BoardEditor({
     store.set(next);
     // Чужой сдвиг и размер доезжают плавно; свой жест над тем же объектом важнее.
     if (prev && !gestureIdsRef.current.has(id)) motion.note(prev, store.getById(id));
-    pruneSelection();
+      pruneSelection();
     // Чертёж взял другой участник (гонка нажатий) — уступаем ему, не трогая его замок.
     const editing = editingIdRef.current && store.getById(editingIdRef.current);
     const holder = editing?.type === 'geogebra' ? geoEditor(editing) : null;
@@ -650,6 +651,72 @@ export default function BoardEditor({
     window.setTimeout(() => {
       if (stackRef.current === stack) stackRef.current = null;
     }, 4000);
+  }
+
+  function practiceWho() {
+    if (clientIdRef.current) return clientIdRef.current;
+    const key = 'board-practice-who';
+    let local = sessionStorage.getItem(key);
+    if (!local) {
+      local = `local-${Math.random().toString(36).slice(2, 8)}`;
+      sessionStorage.setItem(key, local);
+    }
+    return local;
+  }
+
+  function patchTask(id, propsPatch) {
+    const next = store.get().map((obj) => (
+      obj.id === id && obj.type === 'task' ? { ...obj, props: { ...obj.props, ...propsPatch } } : obj
+    ));
+    pushHistory(store.get(), next);
+    store.set(next);
+    if (readOnlyRef.current) {
+      sentRef.current = next;
+      socketRef.current?.send({ type: 'patch', id, set: { props: propsPatch } });
+      return;
+    }
+    scheduleSend();
+  }
+
+  function submitPractice(id, answer) {
+    const obj = store.getById(id);
+    const text = String(answer ?? '').trim();
+    if (!obj || obj.type !== 'task' || !text) return;
+    const correct = obj.props.teacherOnly?.answer;
+    const known = correct != null && String(correct).trim();
+    const options = Array.isArray(obj.props.options) ? obj.props.options : [];
+    const verdict = known ? (answersMatch(text, correct, options) ? 'right' : 'wrong') : '';
+    const who = practiceWho();
+    const name = selfName() || (audienceRef.current === 'teacher' ? 'Учитель' : 'Ученик');
+    const prev = Array.isArray(obj.props.practiceAnswers) ? obj.props.practiceAnswers : [];
+    const entry = { who, name, answer: text, ...(verdict ? { verdict } : {}), at: Date.now() };
+    patchTask(id, {
+      practiceAnswers: [...prev.filter((item) => item.who !== who), entry].slice(-40),
+      practiceShown: true,
+    });
+    return verdict || 'pending';
+  }
+
+  function gradePractice(id) {
+    if (audienceRef.current !== 'teacher') return;
+    const obj = store.getById(id);
+    const correct = obj?.props?.teacherOnly?.answer;
+    if (!obj || correct == null || !String(correct).trim()) return;
+    const list = Array.isArray(obj.props.practiceAnswers) ? obj.props.practiceAnswers : [];
+    if (!list.some((item) => item.verdict !== 'right' && item.verdict !== 'wrong')) return;
+    const options = Array.isArray(obj.props.options) ? obj.props.options : [];
+    patchTask(id, {
+      practiceAnswers: list.map((item) => (
+        item.verdict === 'right' || item.verdict === 'wrong'
+          ? item
+          : { ...item, verdict: answersMatch(item.answer, correct, options) ? 'right' : 'wrong' }
+      )),
+    });
+  }
+
+  function resetPractice(id) {
+    if (audienceRef.current !== 'teacher') return;
+    patchTask(id, { practiceAnswers: [], practiceShown: false });
   }
 
   // Высоту карточки задания, блока теории и markdown знает только DOM (формулы,
@@ -1779,6 +1846,9 @@ export default function BoardEditor({
       if (fn) geoInputInRef.current.set(id, fn);
       else geoInputInRef.current.delete(id);
     },
+    onPractice: (...args) => actionsRef.current.submitPractice?.(...args),
+    onGradePractice: (...args) => actionsRef.current.gradePractice?.(...args),
+    onResetPractice: (...args) => actionsRef.current.resetPractice?.(...args),
     onMeasure: (id, height) => liveRef.current.measureObject?.(id, height),
   }), []);
   function toggleSidePane(pane) {
@@ -2079,6 +2149,9 @@ export default function BoardEditor({
     actionsRef.current = {
       placeTheoryBlock,
       placeTasks,
+      submitPractice,
+      gradePractice,
+      resetPractice,
       changeText,
       toggleGeo,
       changeGeoControls,
@@ -2174,7 +2247,7 @@ export default function BoardEditor({
             viewSize={viewSize}
             selectedIds={selectedIds}
             editingId={editingId}
-            teacher={audience === 'teacher'}
+              teacher={audience === 'teacher'}
             selfId={selfId}
             peers={peers}
             callbacks={objectCallbacks}
@@ -2316,18 +2389,18 @@ export default function BoardEditor({
           )}
           {audience === 'teacher' && (
             <div className="hidden min-[720px]:block">
-              <ShareButton
-                open={shareOpen}
-                access={shareAccess}
-                token={shareTokenState}
-                onToggle={() => setShareOpen((open) => !open)}
-                onClose={() => setShareOpen(false)}
-                onApply={async (access, resetLink) => {
-                  const data = await updateTeacherBoardShare(initialBoard.id, { access, resetLink });
-                  setShareAccess(data.shareAccess || 'off');
-                  setShareTokenState(data.shareToken || null);
-                }}
-              />
+            <ShareButton
+              open={shareOpen}
+              access={shareAccess}
+              token={shareTokenState}
+              onToggle={() => setShareOpen((open) => !open)}
+              onClose={() => setShareOpen(false)}
+              onApply={async (access, resetLink) => {
+                const data = await updateTeacherBoardShare(initialBoard.id, { access, resetLink });
+                setShareAccess(data.shareAccess || 'off');
+                setShareTokenState(data.shareToken || null);
+              }}
+            />
             </div>
           )}
           {!readOnly && (

@@ -240,7 +240,11 @@ function BoardObject({
   onGeoInput,
   onGeoInputBind,
   onMeasure,
+  onPractice,
+  onGradePractice,
+  onResetPractice,
   teacher,
+  selfId,
   incoming,
   lockedBy,
 }) {
@@ -279,7 +283,15 @@ function BoardObject({
       )}
 
       {obj.type === 'task' && (
-        <TaskCard obj={obj} teacher={teacher} onMeasure={(height) => onMeasure?.(obj.id, height)} />
+        <TaskCard
+          obj={obj}
+          teacher={teacher}
+          selfId={selfId}
+          onPractice={onPractice}
+          onGradePractice={onGradePractice}
+          onResetPractice={onResetPractice}
+          onMeasure={(height) => onMeasure?.(obj.id, height)}
+        />
       )}
 
       {obj.type === 'shape' && (

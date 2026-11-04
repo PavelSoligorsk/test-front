@@ -39,6 +39,7 @@ const StoreObject = memo(function StoreObject({ store, motion, id, selfId, peerI
       incoming={incoming}
       incomingKey={jointsKey(incoming)}
       lockedBy={lockLabel(obj, selfId, peerIds)}
+      selfId={selfId}
       {...rest}
     />
   );
