@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchStudentHistory, retakeTest } from './api';
 import HistoryTab from './HistoryTab';
 import StudentPageLoading from './StudentPageLoading';
+import { PageShell } from '../../shared/ui/Sheet';
 import { useNotify } from '../../shared/ui';
 
 export default function HistoryPage() {
@@ -32,8 +33,8 @@ export default function HistoryPage() {
   if (loading) return <StudentPageLoading variant="history" />;
 
   return (
-    <main className="max-w-7xl mx-auto p-4 md:p-8">
+    <PageShell>
       <HistoryTab filteredHistory={filteredHistory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onRetake={handleRetake} />
-    </main>
+    </PageShell>
   );
 }

@@ -11,6 +11,7 @@ import { deleteBoard, saveBoard } from '../../features/board/storage';
 import BoardGallery from '../../features/board/BoardGallery';
 import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
 import { PageShell } from '../../shared/ui';
+import SearchField from '../../shared/ui/SearchField';
 import { useTeacherWorkspace } from './teacherWorkspaceContext';
 
 function personName(person) {
@@ -42,6 +43,15 @@ export default function TeacherBoardListPage() {
   const [creating, setCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return series;
+    return series.filter((board) => {
+      const label = audienceLabel(board, students, groups);
+      return label.toLowerCase().includes(needle) || (board.title || '').toLowerCase().includes(needle);
+    });
+  }, [series, query, students, groups]);
 
   useEffect(() => {
     listTeacherBoards()
@@ -90,7 +100,7 @@ export default function TeacherBoardListPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Мои доски</h1>
-          <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(series.length) : 'Загрузка'}</p>
+          <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(visible.length) : 'Загрузка'}</p>
         </div>
         <button
           type="button"
@@ -111,10 +121,22 @@ export default function TeacherBoardListPage() {
         </p>
       )}
 
+      {boards && boards.length > 0 && (
+        <div className="mb-5">
+          <SearchField
+            className="w-full sm:max-w-xs"
+            value={query}
+            onChange={setQuery}
+            onClear={() => setQuery('')}
+            placeholder="Поиск по слову..."
+          />
+        </div>
+      )}
+
       {boards == null ? (
-        <div className="grid gap-3">
-          {[0, 1, 2].map((key) => (
-            <div key={key} className="h-20 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-5">
+          {[0, 1, 2, 3].map((key) => (
+            <div key={key} className="h-28 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
           ))}
         </div>
       ) : boards.length === 0 ? (
@@ -124,9 +146,14 @@ export default function TeacherBoardListPage() {
             Новая доска может быть только вашей, для учеников или для одной группы.
           </p>
         </div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
+          <p className="text-base font-medium text-zinc-900 dark:text-zinc-100">Ничего не найдено</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">Попробуйте другое слово</p>
+        </div>
       ) : (
         <BoardGallery
-          boards={series}
+          boards={visible}
           titleOf={(board) => audienceLabel(board, students, groups)}
           onOpen={(board) => navigate(`/teacher/board/${board.id}`)}
           renderMenu={(board) => (

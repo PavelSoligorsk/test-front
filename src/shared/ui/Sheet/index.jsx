@@ -1,6 +1,6 @@
 export function Sheet({ children, className = '' }) {
   return (
-    <div className={`bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm ${className}`}>
+    <div className={`bg-white dark:bg-[#09090b] rounded-xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm ${className}`}>
       {children}
     </div>
   );

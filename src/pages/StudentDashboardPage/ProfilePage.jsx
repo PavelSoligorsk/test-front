@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchStudentMe, updateStudentProfile } from './api';
 import ProfileTab from './ProfileTab';
 import StudentPageLoading from './StudentPageLoading';
+import { PageShell } from '../../shared/ui/Sheet';
 import { useNotify } from '../../shared/ui';
 
 export default function ProfilePage() {
@@ -48,7 +49,7 @@ export default function ProfilePage() {
   if (loading || !profile) return <StudentPageLoading variant="profile" />;
 
   return (
-    <main className="max-w-7xl mx-auto p-4 md:p-8">
+    <PageShell>
       <ProfileTab
         profile={profile}
         editForm={editForm}
@@ -56,6 +57,6 @@ export default function ProfilePage() {
         handleUpdateProfile={handleUpdateProfile}
         saving={saving}
       />
-    </main>
+    </PageShell>
   );
 }

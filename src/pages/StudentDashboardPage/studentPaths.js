@@ -11,13 +11,40 @@ export function boardPath(id) {
   return `/student/board/${id}`;
 }
 
-export function studentTabFromPath(pathname) {
+const TAB_KEY = 'student_tab';
+
+function tabOnPath(pathname) {
   if (pathname.startsWith('/student/theory')) return 'theory';
   if (pathname.startsWith('/student/board')) return 'board';
   if (pathname.startsWith('/student/history')) return 'history';
   if (pathname.startsWith('/student/stats')) return 'stats';
   if (pathname.startsWith('/student/profile')) return 'profile';
-  return 'tests';
+  if (pathname.startsWith('/student/tests')) return 'tests';
+  return null;
+}
+
+export function studentTabFromPath(pathname) {
+  return tabOnPath(pathname) || 'tests';
+}
+
+export function rememberStudentTab(pathname) {
+  const tab = tabOnPath(pathname);
+  if (!tab) return;
+  try {
+    window.localStorage.setItem(TAB_KEY, tab);
+  } catch {
+    /* storage may be unavailable */
+  }
+}
+
+export function rememberedStudentPath() {
+  try {
+    const tab = window.localStorage.getItem(TAB_KEY);
+    if (tab && STUDENT_PATHS[tab]) return STUDENT_PATHS[tab];
+  } catch {
+    /* storage may be unavailable */
+  }
+  return STUDENT_PATHS.tests;
 }
 
 export function theoryTopicPath(topic, opts = {}) {

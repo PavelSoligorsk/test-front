@@ -25,8 +25,6 @@ export const ENDPOINTS = {
   STUDENT_RETAKE: (resultId) => `/student/retake/${resultId}`,
   STUDENT_RESULT: (resultId) => `/student/results/${resultId}`,
   STUDENT_THEORY_META: '/student/theory/meta',
-  STUDENT_THEORY_TOPICS: '/student/theory/topics',
-  STUDENT_THEORY_SECTIONS: (topic) => `/student/theory/sections/${topic}`,
   STUDENT_THEORY_BY_TOPIC_SECTION: (topic, section) => `/student/theory/by-topic/${topic}/section/${section}`,
   STUDENT_THEORY_ASK_AI: '/student/theory/ask-ai',
   STUDENT_BOARDS: '/student/boards',

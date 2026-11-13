@@ -1,12 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAsyncData } from '../../shared/hooks';
-import { Search, ChevronRight, Edit3, Trash2, Send, Shield, GraduationCap, Sparkles, AlertTriangle, X, Zap, Clock, Loader2, Copy, FolderTree, Inbox } from 'lucide-react';
-import { MarkdownPreview } from './MarkdownPreview';
+import { ChevronRight, Shield, GraduationCap, Sparkles, AlertTriangle, X, Clock, Loader2, Copy, FolderTree, Inbox } from 'lucide-react';
 import { TaskMap } from './TaskMap';
+import BankTaskCard from './BankTaskCard';
 import { deleteTask, sendTaskToTelegram, updateTask, classifyTasks, fetchTasksByClassTopic, fetchTasksByTopicSection } from './api';
-import { MAIN_TOPICS, SECTIONS_BY_TOPIC } from './constants';
 import { useAdminWorkspace } from './adminWorkspaceContext';
-import { Sheet, IconWell, InlineNotice, fieldClass, primaryBtnClass, secondaryBtnClass, useConfirm } from '../../shared/ui';
+import { Sheet, IconWell, InlineNotice, NavTile, SearchField, EmptyState, primaryBtnClass, secondaryBtnClass, useConfirm } from '../../shared/ui';
 
 const EXAM_KEYWORDS = ['ЦТ', 'ЦЭ', 'РЦЭ', 'ДРТ', 'РТ'];
 const NO_TASKS = [];
@@ -14,12 +13,6 @@ const NO_TASKS = [];
 const hasExamKeyword = (text) => {
   if (!text) return false;
   return EXAM_KEYWORDS.some((kw) => text.includes(kw));
-};
-
-const getDifficultyColor = (lvl) => {
-  if (lvl >= 4) return 'text-red-600 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/40';
-  if (lvl >= 3) return 'text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800';
-  return 'text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800';
 };
 
 const copyJSONToClipboard = async (tasks, setFeedback) => {
@@ -252,8 +245,6 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
   const isShowingTasks = (navMode === 'class' && bankClass && bankTopic) ||
                           (navMode === 'topic' && selectedNavTopic && selectedNavSection);
 
-  const navTileClass = 'w-full bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors p-5 text-left';
-
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       <Sheet className="p-5 md:p-6">
@@ -332,31 +323,18 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         <>
           {!bankClass && (
             <div className="space-y-4">
-              <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input type="text" placeholder="Поиск раздела..." value={classSearch}
-                  onChange={e => setClassSearch(e.target.value)}
-                  className={`${fieldClass} pl-10`} />
-              </div>
+              <SearchField value={classSearch} onChange={setClassSearch} placeholder="Поиск раздела..." />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredClasses.map(cls => {
                   const topicsCount = Object.keys(tasksMeta[cls] || {}).length;
                   const totalTasks = Object.values(tasksMeta[cls] || {}).reduce((sum, count) => sum + count, 0);
                   return (
-                    <button key={cls} type="button" onClick={() => { setBankClass(cls); setBankTopic(null); }}
-                      className={navTileClass}>
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{cls} раздел</h3>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-zinc-500">{topicsCount} подразделов</span>
-                            <span className="text-xs text-zinc-300">•</span>
-                            <span className="text-xs text-zinc-500 tabular-nums">{totalTasks} заданий</span>
-                          </div>
-                        </div>
-                        <ChevronRight size={18} className="text-zinc-300 shrink-0" />
-                      </div>
-                    </button>
+                    <NavTile
+                      key={cls}
+                      title={`${cls} раздел`}
+                      meta={`${topicsCount} подразделов · ${totalTasks} заданий`}
+                      onClick={() => { setBankClass(cls); setBankTopic(null); }}
+                    />
                   );
                 })}
               </div>
@@ -365,27 +343,18 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
 
           {bankClass && !bankTopic && (
             <div className="space-y-4">
-              <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input type="text" placeholder="Поиск подраздела..." value={topicSearch}
-                  onChange={e => setTopicSearch(e.target.value)}
-                  className={`${fieldClass} pl-10`} />
-              </div>
+              <SearchField value={topicSearch} onChange={setTopicSearch} placeholder="Поиск подраздела..." />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {filteredTopics.map((topic, index) => {
                   const count = tasksCountByTopic(bankClass, topic);
                   return (
-                    <button key={topic} type="button" onClick={() => setBankTopic(topic)}
-                      className={`${navTileClass} p-4`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-center text-zinc-700 dark:text-zinc-300 font-semibold text-sm shrink-0 tabular-nums">{index + 1}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200 leading-tight truncate">{topic}</p>
-                          <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">{count} заданий</p>
-                        </div>
-                        <ChevronRight size={16} className="text-zinc-300 shrink-0" />
-                      </div>
-                    </button>
+                    <NavTile
+                      key={topic}
+                      index={index + 1}
+                      title={topic}
+                      meta={`${count} заданий`}
+                      onClick={() => setBankTopic(topic)}
+                    />
                   );
                 })}
               </div>
@@ -398,12 +367,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         <>
           {!selectedNavTopic && (
             <div className="space-y-4">
-              <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input type="text" placeholder="Поиск темы..." value={topicSearch}
-                  onChange={e => setTopicSearch(e.target.value)}
-                  className={`${fieldClass} pl-10`} />
-              </div>
+              <SearchField value={topicSearch} onChange={setTopicSearch} placeholder="Поиск темы..." />
               {!topicSectionMeta && (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 size={24} className="animate-spin text-zinc-400" />
@@ -415,30 +379,17 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                   const sectionCount = Object.keys(sections).length;
                   const totalTasks = Object.values(sections).reduce((s, c) => s + c, 0);
                   return (
-                    <button key={topic} type="button" onClick={() => { setSelectedNavTopic(topic); setSelectedNavSection(null); }}
-                      className={navTileClass}>
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{topic}</h3>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-zinc-500">{sectionCount} разделов</span>
-                            <span className="text-xs text-zinc-300">•</span>
-                            <span className="text-xs text-zinc-500 tabular-nums">{totalTasks} заданий</span>
-                          </div>
-                        </div>
-                        <ChevronRight size={18} className="text-zinc-300 shrink-0" />
-                      </div>
-                    </button>
+                    <NavTile
+                      key={topic}
+                      title={topic}
+                      meta={`${sectionCount} разделов · ${totalTasks} заданий`}
+                      onClick={() => { setSelectedNavTopic(topic); setSelectedNavSection(null); }}
+                    />
                   );
                 })}
               </div>
               {!loadingTasks && filteredNavTopics.length === 0 && topicSectionMeta && (
-                <div className="flex flex-col items-center gap-3 py-12 text-zinc-400">
-                  <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-                    <Inbox size={20} />
-                  </div>
-                  <p className="text-sm font-medium text-zinc-500">Нет тем</p>
-                </div>
+                <EmptyState framed={false} className="py-12" icon={<Inbox size={20} />} title="Нет тем" />
               )}
             </div>
           )}
@@ -449,17 +400,13 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
                 {sectionsForNavTopic.map((section, index) => {
                   const count = topicSectionMeta?.[selectedNavTopic]?.[section] || 0;
                   return (
-                    <button key={section} type="button" onClick={() => setSelectedNavSection(section)}
-                      className={`${navTileClass} p-4`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-center text-zinc-700 dark:text-zinc-300 font-semibold text-sm shrink-0 tabular-nums">{index + 1}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-zinc-800 dark:text-zinc-200 leading-tight truncate">{section}</p>
-                          <p className="text-xs text-zinc-500 mt-0.5 tabular-nums">{count} заданий</p>
-                        </div>
-                        <ChevronRight size={16} className="text-zinc-300 shrink-0" />
-                      </div>
-                    </button>
+                    <NavTile
+                      key={section}
+                      index={index + 1}
+                      title={section}
+                      meta={`${count} заданий`}
+                      onClick={() => setSelectedNavSection(section)}
+                    />
                   );
                 })}
               </div>
@@ -476,12 +423,7 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
         ) : (
           <div className="space-y-4">
             <div className="flex gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input type="text" placeholder="Поиск по тексту задания..." value={taskSearch}
-                  onChange={e => setTaskSearch(e.target.value)}
-                  className={`${fieldClass} pl-10`} />
-              </div>
+              <SearchField className="flex-1 min-w-[200px]" value={taskSearch} onChange={setTaskSearch} placeholder="Поиск по тексту задания..." />
               {loadedTasks.length > 0 && (
                 <button type="button" onClick={handleExportJSON} className={secondaryBtnClass}>
                   <Copy size={14} /> JSON
@@ -550,99 +492,27 @@ export default function BankTab({ tasksMeta, availableClasses, bankClass, setBan
               </div>
             </div>
             <div className="space-y-4">
-              {currentTasks.map((t, index) => (
-                <div
-                  key={t.id}
-                  data-task-id={t.id}
-                  className={`bg-white dark:bg-[#09090b] rounded-3xl border shadow-sm overflow-hidden transition-colors ${
-                    failedTaskIds.has(t.id)
-                      ? 'border-red-300 dark:border-red-900/50 ring-1 ring-red-100 dark:ring-red-900/30'
-                      : (!t.topic || !t.section)
-                        ? 'border-zinc-300 dark:border-zinc-700'
-                        : 'border-zinc-200 dark:border-zinc-800/60'
-                  }`}
-                >
-                  <div className="p-6 space-y-5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">
-                        Задание №{index + 1}
-                      </h4>
-                      <div className="flex items-center gap-1.5 ml-auto flex-wrap">
-                        {failedTaskIds.has(t.id) && (
-                          <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 rounded-lg" title="Ошибка классификации">
-                            <AlertTriangle size={10} /> Ошибка
-                          </span>
-                        )}
-                        {(!t.topic || !t.section) && !failedTaskIds.has(t.id) && (
-                          <span className="flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-lg" title="Не классифицировано">
-                            <Zap size={10} /> Без темы
-                          </span>
-                        )}
-                        <span className="text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-lg tabular-nums">ID: {t.id}</span>
-                        <div className={`px-2 py-0.5 rounded-lg border text-xs font-semibold tabular-nums ${getDifficultyColor(t.difficulty)}`}>LVL {t.difficulty || '?'}</div>
-                        <span className="text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-lg">{t.is_open_answer ? 'Открытый' : 'Тест'}</span>
-                      </div>
-                    </div>
-
-                    <MarkdownPreview text={t.content} title="Условие задания" type="default" />
-                    {!t.is_open_answer && t.options && (
-                      <MarkdownPreview type="default"
-                        text={(Array.isArray(t.options) ? t.options : t.options.split(';')).map(opt => opt.trim()).filter(opt => opt !== '').map((opt, i) => `**${i + 1}.** ${opt}`).join('\n\n')} />
-                    )}
-
-                    <div className="flex flex-wrap gap-2 items-center">
-                      <span className="text-sm font-medium text-zinc-500">Ответ:</span>
-                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">{t.answer}</span>
-                      {t.hint && <button type="button" onClick={() => setOpenHints(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className={secondaryBtnClass + ' !py-1.5 text-xs'}>Подсказка</button>}
-                      {t.solution && <button type="button" onClick={() => setOpenSolutions(prev => ({ ...prev, [t.id]: !prev[t.id] }))} className={secondaryBtnClass + ' !py-1.5 text-xs'}>Решение</button>}
-                    </div>
-
-                    {openHints[t.id] && <MarkdownPreview text={t.hint} title="Подсказка" type="hint" />}
-                    {openSolutions[t.id] && <MarkdownPreview text={t.solution} title="Полное решение" type="solution" />}
-
-                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-                      <select value={t.topic || ''} onChange={e => handleTopicChange(t.id, t, e.target.value)}
-                        className="text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900 px-2 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 cursor-pointer outline-none">
-                        <option value="">Без темы</option>
-                        {Object.entries(MAIN_TOPICS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
-                      </select>
-                      <select value={t.section || ''} onChange={e => handleSectionChange(t.id, t, e.target.value)} disabled={!t.topic}
-                        className="text-xs font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 truncate max-w-[180px] cursor-pointer outline-none disabled:opacity-50">
-                        <option value="">Без раздела</option>
-                        {t.topic && SECTIONS_BY_TOPIC[t.topic]?.map(section => (<option key={section} value={section}>{section}</option>))}
-                      </select>
-                      <div className={`flex items-center gap-2 px-2 py-1 rounded-xl border ${getDifficultyColor(t.difficulty)}`}>
-                        <span className="text-xs font-medium">LVL</span>
-                        <select value={t.difficulty || 1} onChange={e => handleDifficultyChange(t.id, t, e.target.value)}
-                          className="text-sm font-semibold leading-none bg-transparent border-none outline-none cursor-pointer tabular-nums">
-                          {[1, 2, 3, 4, 5].map(n => (<option key={n} value={n}>{n}</option>))}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-1 ml-auto">
-                        <button type="button" onClick={() => handleSendTg(t.id)} className={`${primaryBtnClass} !py-1.5 !px-3 text-xs`}>
-                          <Send size={12} /> ТГ
-                        </button>
-                        <button type="button" onClick={() => onEditTask(t)}
-                          className="p-2 bg-white dark:bg-zinc-950 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-colors">
-                          <Edit3 size={14} />
-                        </button>
-                        <button type="button" onClick={() => handleDelete(t.id)}
-                          className="p-2 bg-white dark:bg-zinc-950 text-zinc-400 hover:text-red-600 rounded-xl border border-zinc-200 dark:border-zinc-800 transition-colors">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              {currentTasks.map((task, index) => (
+                <BankTaskCard
+                  key={task.id}
+                  task={task}
+                  index={index}
+                  failed={failedTaskIds.has(task.id)}
+                  hintOpen={!!openHints[task.id]}
+                  solutionOpen={!!openSolutions[task.id]}
+                  onToggleHint={() => setOpenHints((prev) => ({ ...prev, [task.id]: !prev[task.id] }))}
+                  onToggleSolution={() => setOpenSolutions((prev) => ({ ...prev, [task.id]: !prev[task.id] }))}
+                  onTopicChange={(value) => handleTopicChange(task.id, task, value)}
+                  onSectionChange={(value) => handleSectionChange(task.id, task, value)}
+                  onDifficultyChange={(value) => handleDifficultyChange(task.id, task, value)}
+                  onSend={() => handleSendTg(task.id)}
+                  onEdit={() => onEditTask(task)}
+                  onDelete={() => handleDelete(task.id)}
+                />
               ))}
             </div>
             {!currentTasks.length && (
-              <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">
-                <div className="w-12 h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-                  <Inbox size={20} />
-                </div>
-                <p className="text-sm font-medium text-zinc-500">Нет заданий</p>
-              </div>
+              <EmptyState framed={false} className="py-16" icon={<Inbox size={20} />} title="Нет заданий" />
             )}
           </div>
         )

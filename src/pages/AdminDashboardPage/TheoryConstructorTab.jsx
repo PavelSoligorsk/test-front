@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Sparkles, Copy, Check, X, Eye } from 'lucide-react';
 import ImageAwareTextarea from './ImageAwareTextarea';
-import { TheoryViewer } from '../../components/Theory';
+import { TheoryViewer } from '../../shared/ui/TheoryViewer';
 import { MAIN_TOPICS, SECTIONS_BY_TOPIC, THEORY_CLASSES } from './constants';
 import { Sheet, IconWell, fieldClass, labelClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 import { parallelScrollClass, useParallelScroll } from '../../shared/lib/parallelScroll';

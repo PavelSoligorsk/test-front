@@ -34,7 +34,7 @@ function Preview() {
 
 export default function BoardGallery({ boards, onOpen, renderMenu, titleOf }) {
   return (
-    <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-2 gap-x-3 gap-y-5 lg:grid-cols-3 lg:gap-x-6 lg:gap-y-8">
       {boards.map((board) => {
         const title = titleOf ? titleOf(board) : (board.title || 'Доска');
         return (
@@ -50,7 +50,7 @@ export default function BoardGallery({ boards, onOpen, renderMenu, titleOf }) {
             <button type="button" onClick={() => onOpen(board)} className="mt-3 block max-w-full text-left">
               <p className="truncate text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">{title}</p>
               <p className="mt-0.5 text-sm text-zinc-500">
-                {board.pageCount > 1 ? `${pageCountLabel(board.pageCount)} · ` : ''}
+                {board.pageCount > 1 ? <span className="block">{pageCountLabel(board.pageCount)}</span> : null}
                 {relativeUpdated(board.updatedAt)}
               </p>
             </button>

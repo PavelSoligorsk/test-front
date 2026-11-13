@@ -1,4 +1,12 @@
-import { Sparkles, X, AlertCircle, Zap, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui/Sheet';
+
+const DIFFICULTIES = [
+  { value: 'easy', label: 'Лёгкий' },
+  { value: 'medium', label: 'Средний' },
+  { value: 'hard', label: 'Сложный' },
+  { value: 'none', label: 'Любая' },
+];
 
 export default function AiModal({
   showAiModal, setShowAiModal,
@@ -11,117 +19,136 @@ export default function AiModal({
 }) {
   if (!showAiModal) return null;
 
+  const close = () => setShowAiModal(false);
+
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm max-w-lg w-full overflow-hidden">
-        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800/60 flex justify-between items-start gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm">
-              <Sparkles size={18} strokeWidth={2} />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">AI-тест</h3>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Соберите уникальный набор заданий</p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ai-test-title"
+        className="flex max-h-[min(40rem,100dvh)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b] sm:rounded-xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-5 py-5 dark:border-zinc-800/60 sm:px-6">
+          <div className="min-w-0">
+            <h3 id="ai-test-title" className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              AI-тест
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Набор заданий по вашей теме
+            </p>
           </div>
           <button
             type="button"
-            onClick={() => setShowAiModal(false)}
-            className="p-2 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            onClick={close}
+            className="rounded-xl px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:focus-visible:ring-white"
           >
-            <X size={18} />
+            Закрыть
           </button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2 block">Тема теста</label>
+
+        <div className="space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Тема</span>
             <textarea
               value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              placeholder="Например: квадратные уравнения для 8 класса, задачи на движение, тригонометрия..."
-              className="w-full p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl font-medium text-sm h-32 text-zinc-900 dark:text-zinc-100 resize-none outline-none focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50 focus:border-zinc-300 dark:focus:border-zinc-700 placeholder:text-zinc-400"
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="Квадратные уравнения, задачи на движение, тригонометрия"
+              className={`${fieldClass} h-28 resize-none`}
             />
-          </div>
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2 block">Задач (1–50)</label>
+            <label className="space-y-1.5">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Задач</span>
               <input
                 type="number"
                 min="1"
                 max="50"
                 value={aiTaskCount}
-                onChange={e => {
+                onChange={(e) => {
                   const val = e.target.value;
                   if (val === '') { setAiTaskCount(''); return; }
                   const num = Number(val);
-                  if (isNaN(num)) return;
+                  if (Number.isNaN(num)) return;
                   if (num < 1) setAiTaskCount(1);
                   else if (num > 50) setAiTaskCount(50);
                   else setAiTaskCount(num);
                 }}
-                onBlur={() => { if (aiTaskCount === '' || isNaN(aiTaskCount) || aiTaskCount < 1) setAiTaskCount(10); }}
-                className="w-full p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl font-medium text-sm outline-none text-zinc-900 dark:text-zinc-100 focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50"
+                onBlur={() => { if (aiTaskCount === '' || Number.isNaN(aiTaskCount) || aiTaskCount < 1) setAiTaskCount(10); }}
+                className={fieldClass}
               />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2 block">Сложность</label>
-              <select
-                value={aiDifficulty}
-                onChange={e => setAiDifficulty(e.target.value)}
-                className="w-full p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl font-medium text-sm outline-none text-zinc-900 dark:text-zinc-100"
-              >
-                <option value="easy">Лёгкий</option>
-                <option value="medium">Средний</option>
-                <option value="hard">Сложный</option>
-                <option value="none">Любая</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2 block">Исключить за недели</label>
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Исключить, недели</span>
               <input
                 type="number"
                 min="0"
                 max="12"
                 step="0.5"
                 value={aiExcludeWeeks}
-                onChange={e => setAiExcludeWeeks(e.target.value)}
-                className="w-full p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl font-medium text-sm outline-none text-zinc-900 dark:text-zinc-100 focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50"
+                onChange={(e) => setAiExcludeWeeks(e.target.value)}
+                className={fieldClass}
               />
-            </div>
-            <div className="flex items-end pb-0.5">
-              <label className="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors w-full">
-                <input
-                  type="checkbox"
-                  checked={aiUseStats}
-                  onChange={e => setAiUseStats(e.target.checked)}
-                  className="w-4 h-4 accent-zinc-900 dark:accent-white cursor-pointer"
-                />
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Учитывать статистику</span>
-              </label>
+            </label>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Сложность</span>
+            <div className="grid grid-cols-4 gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800/80 dark:bg-zinc-900/50">
+              {DIFFICULTIES.map((item) => {
+                const active = aiDifficulty === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setAiDifficulty(item.value)}
+                    className={`rounded-lg px-1 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white ${
+                      active
+                        ? 'border border-zinc-200/80 bg-white text-zinc-900 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-800 dark:text-zinc-100'
+                        : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 p-4 rounded-xl flex items-start gap-3">
-            <AlertCircle size={16} className="text-zinc-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">ИИ может ошибаться. Проверяйте сгенерированные задания.</p>
-          </div>
+
+          <label className="flex cursor-pointer items-center gap-3 py-1">
+            <input
+              type="checkbox"
+              checked={aiUseStats}
+              onChange={(e) => setAiUseStats(e.target.checked)}
+              className="h-4 w-4 cursor-pointer accent-zinc-900 dark:accent-white"
+            />
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Учитывать статистику</span>
+          </label>
+
+          <p className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+            ИИ может ошибаться. Проверьте задания перед решением.
+          </p>
         </div>
-        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/60 flex gap-3">
-          <button
-            type="button"
-            onClick={() => setShowAiModal(false)}
-            className="flex-1 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-          >
+
+        <div className="flex gap-3 border-t border-zinc-100 px-5 py-4 dark:border-zinc-800/60 sm:px-6">
+          <button type="button" onClick={close} className={`${secondaryBtnClass} flex-1`}>
             Отмена
           </button>
           <button
             type="button"
             onClick={handleGenerateAiTest}
             disabled={!aiPrompt.trim() || aiGenerating}
-            className="flex-1 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            className={`${primaryBtnClass} flex-1`}
           >
-            {aiGenerating ? (<><RefreshCw size={16} className="animate-spin" />Генерация...</>) : (<><Zap size={16} />Создать тест</>)}
+            {aiGenerating ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                Генерация...
+              </>
+            ) : (
+              'Создать тест'
+            )}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Search, LayoutDashboard, Users, Send, Edit3, Trash2, PlusCircle } from 'lucide-react';
-import { Sheet, IconWell, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { LayoutDashboard, Users, Send, Edit3, Trash2, PlusCircle } from 'lucide-react';
+import { Sheet, EmptyState, SearchField, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { HeadingBlock } from '../../shared/ui/HeadingBlock';
 
 export default function GroupsTab({ groups, onOpenCreate, onEdit, onDelete, onManageStudents, onAssignTest, onDetail }) {
   const [groupSearch, setGroupSearch] = useState('');
@@ -11,45 +12,25 @@ export default function GroupsTab({ groups, onOpenCreate, onEdit, onDelete, onMa
     <div className="space-y-6 animate-in fade-in duration-500">
       <Sheet className="p-5 md:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <IconWell>
-              <LayoutDashboard size={18} strokeWidth={2} />
-            </IconWell>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                Мои группы
-              </h3>
-              <p className="text-sm text-zinc-500 mt-0.5">
-                {groups.length} {groups.length === 1 ? 'группа' : 'групп'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <button type="button" onClick={onOpenCreate} className={primaryBtnClass}>
-              <PlusCircle size={14} />
-              Создать
-            </button>
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input
-                type="text"
-                placeholder="Поиск..."
-                value={groupSearch}
-                onChange={(e) => setGroupSearch(e.target.value)}
-                className={`${fieldClass} pl-9 w-40 sm:w-48`}
-              />
-            </div>
-          </div>
+          <HeadingBlock
+            icon={<LayoutDashboard size={18} strokeWidth={2} />}
+            title="Мои группы"
+            titleAs="h3"
+            hint={`${groups.length} ${groups.length === 1 ? 'группа' : 'групп'}`}
+            extra={(
+              <div className="flex items-center gap-3 flex-wrap">
+                <button type="button" onClick={onOpenCreate} className={primaryBtnClass}>
+                  <PlusCircle size={14} />
+                  Создать
+                </button>
+                <SearchField className="w-40 sm:w-48" value={groupSearch} onChange={setGroupSearch} placeholder="Поиск..." />
+              </div>
+            )}
+          />
         </div>
 
         {groups.length === 0 ? (
-          <div className="py-16 flex flex-col items-center text-center gap-3">
-            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-              <LayoutDashboard size={20} />
-            </div>
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Нет групп</p>
-            <p className="text-sm text-zinc-500">Создайте группу выше</p>
-          </div>
+          <EmptyState framed={false} className="py-16" icon={<LayoutDashboard size={20} />} title="Нет групп" hint="Создайте группу выше" />
         ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50 -mx-5 md:-mx-8">
             {filtered.map((group) => (

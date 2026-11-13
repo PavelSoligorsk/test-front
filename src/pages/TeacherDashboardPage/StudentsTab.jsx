@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Search, ArrowRight, Users } from 'lucide-react';
-import { Sheet, IconWell, fieldClass } from '../../shared/ui';
+import { ArrowRight, Users } from 'lucide-react';
+import { Sheet, EmptyState, SearchField } from '../../shared/ui';
+import { HeadingBlock } from '../../shared/ui/HeadingBlock';
 
 export default function StudentsTab({ students, navigate }) {
   const [studentSearch, setStudentSearch] = useState('');
@@ -11,31 +12,12 @@ export default function StudentsTab({ students, navigate }) {
   return (
     <Sheet className="overflow-hidden animate-in fade-in duration-500">
       <div className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800/60">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <IconWell>
-              <Users size={18} strokeWidth={2} />
-            </IconWell>
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                Мои ученики
-              </h2>
-              <p className="text-sm text-zinc-500 mt-0.5">
-                {filteredStudents.length} {filteredStudents.length === 1 ? 'ученик' : 'учеников'}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="relative mt-5">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-          <input
-            type="text"
-            placeholder="Поиск по имени..."
-            className={`${fieldClass} pl-10`}
-            value={studentSearch}
-            onChange={(e) => setStudentSearch(e.target.value)}
-          />
-        </div>
+        <HeadingBlock
+          icon={<Users size={18} strokeWidth={2} />}
+          title="Мои ученики"
+          hint={`${filteredStudents.length} ${filteredStudents.length === 1 ? 'ученик' : 'учеников'}`}
+        />
+        <SearchField className="mt-5" value={studentSearch} onChange={setStudentSearch} placeholder="Поиск по имени..." />
       </div>
 
       <div className="overflow-x-auto">
@@ -82,13 +64,7 @@ export default function StudentsTab({ students, navigate }) {
           </tbody>
         </table>
         {filteredStudents.length === 0 && (
-          <div className="py-16 px-6 flex flex-col items-center text-center gap-3">
-            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-              <Users size={20} />
-            </div>
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Нет учеников</p>
-            <p className="text-sm text-zinc-500">Измените поисковый запрос</p>
-          </div>
+          <EmptyState framed={false} className="py-16 px-6" icon={<Users size={20} />} title="Нет учеников" hint="Измените поисковый запрос" />
         )}
       </div>
     </Sheet>

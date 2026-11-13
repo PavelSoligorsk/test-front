@@ -2,12 +2,13 @@ import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useSta
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, BookOpen, ClipboardList } from 'lucide-react';
 import { ThemeToggle, useConfirm, useNotify } from '../../shared/ui';
+import AttemptGate from './AttemptGate';
 import apiClient from '../../shared/api';
 import { getToken } from '../../shared/lib/session';
 import { API_URL } from '../../shared/config';
 import { retakeTest } from '../StudentDashboardPage/api';
 import { ENDPOINTS } from '../../shared/api/endpoints';
-import { getHomeRoute, getUserRole } from '../../features/auth';
+import { rememberedStudentPath } from '../StudentDashboardPage/studentPaths';
 import DrawingPad from '../../components/DrawingPad';
 import TestProgressBar from './TestProgressBar';
 import TestQuestionCard from './TestQuestionCard';
@@ -257,10 +258,15 @@ export default function TestPassingContent() {
         payload = buildAnswersPayload(answers);
       }
 
-      await apiClient.post(`/student/tests/${effectiveTestId}/submit`, payload);
+      const submitted = await apiClient.post(`/student/tests/${effectiveTestId}/submit`, payload);
       localStorage.removeItem(`test_progress_${testId}`);
       localStorage.removeItem(`test_restored_${testId}`);
       finishedRef.current = true;
+      const submittedId = submitted.data?.result_id ?? submitted.data?.id ?? resultId;
+      if (submittedId) {
+        navigate(`/result/${submittedId}`, { replace: true });
+        return;
+      }
       setFinished(true);
     } catch (err) {
       submittedRef.current = false;
@@ -273,7 +279,7 @@ export default function TestPassingContent() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [testId, testDbId, isSubmitting, userAnswers, buildAnswersPayload, notify]);
+  }, [testId, testDbId, isSubmitting, userAnswers, buildAnswersPayload, notify, navigate, resultId]);
 
   useLayoutEffect(() => {
     submitRef.current = doSubmit;
@@ -444,7 +450,7 @@ export default function TestPassingContent() {
       await saveProgressToServer();
       localStorage.removeItem(`test_progress_${testId}`);
       localStorage.removeItem(`test_restored_${testId}`);
-      navigate(getHomeRoute(getUserRole()));
+      navigate(rememberedStudentPath());
     } catch {
       setIsExiting(false);
       notify('Не удалось сохранить прогресс. Проверьте интернет-соединение.');
@@ -474,29 +480,14 @@ export default function TestPassingContent() {
     const isNoTasks = /не содержит заданий/i.test(blockError);
 
     return (
-      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center p-4">
-        <div className="absolute top-4 right-4"><ThemeToggle /></div>
-        <div className="max-w-md w-full bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm p-8 text-center space-y-5">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300">
-            {isExamNotStarted ? <CalendarIcon size={22} /> :
-             isExamEnded || isTimeUp ? <Clock size={22} /> :
-             isAttemptsExhausted ? <RotateCcw size={22} /> :
-             <AlertTriangle size={22} />}
-          </div>
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-            {isExamNotStarted ? 'Экзамен ещё не начался' :
-             isExamEnded ? 'Экзамен завершён' :
-             isAttemptsExhausted ? 'Лимит попыток исчерпан' :
-             isTimeUp ? 'Время вышло' :
-             isDeactivated ? 'Тест отключён' :
-             isPastDue ? 'Срок выполнения истёк' :
-             isNoTasks ? 'В тесте нет заданий' :
-             'Тест недоступен'}
-          </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{blockError}</p>
-          <div className="flex gap-3 justify-center pt-2">
+      <AttemptGate
+        icon={isExamNotStarted ? <CalendarIcon size={22} /> : isExamEnded || isTimeUp ? <Clock size={22} /> : isAttemptsExhausted ? <RotateCcw size={22} /> : <AlertTriangle size={22} />}
+        title={isExamNotStarted ? 'Экзамен ещё не начался' : isExamEnded ? 'Экзамен завершён' : isAttemptsExhausted ? 'Лимит попыток исчерпан' : isTimeUp ? 'Время вышло' : isDeactivated ? 'Тест отключён' : isPastDue ? 'Срок выполнения истёк' : isNoTasks ? 'В тесте нет заданий' : 'Тест недоступен'}
+        message={blockError}
+        actions={(
+          <>
             <button
-              onClick={() => navigate(getHomeRoute(getUserRole()))}
+              onClick={() => navigate('/student/tests')}
               className="px-5 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
             >
               К тестам
@@ -509,9 +500,9 @@ export default function TestPassingContent() {
                 К результатам
               </button>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+      />
     );
   }
 
@@ -528,7 +519,7 @@ export default function TestPassingContent() {
         test={test}
         userAnswers={userAnswers}
         drawings={drawings}
-        onBack={() => navigate(getHomeRoute(getUserRole()))}
+        onBack={() => navigate(rememberedStudentPath())}
         onRetake={handleRetakeInReport}
       />
     );
@@ -537,17 +528,15 @@ export default function TestPassingContent() {
   if (submitError) {
     const isRetryable = submitError && !/Экзамен|исчерпали|Время вышло|деактивирован|Срок/i.test(submitError);
     return (
-      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center p-4">
-        <div className="absolute top-4 right-4"><ThemeToggle /></div>
-        <div className="max-w-md w-full bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm p-8 text-center space-y-5">
-          <div className="w-12 h-12 bg-red-50 dark:bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto">
-            <XCircle size={22} className="text-red-500" />
-          </div>
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Ошибка отправки</h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{submitError}</p>
-          <div className="flex gap-3 justify-center pt-2">
+      <AttemptGate
+        icon={<XCircle size={22} className="text-red-500" />}
+        iconClassName="bg-red-50 dark:bg-red-500/10"
+        title="Ошибка отправки"
+        message={submitError}
+        actions={(
+          <>
             <button
-              onClick={() => navigate(getHomeRoute(getUserRole()))}
+              onClick={() => navigate('/student/tests')}
               className="px-5 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
             >
               К тестам
@@ -560,9 +549,9 @@ export default function TestPassingContent() {
                 Повторить
               </button>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+      />
     );
   }
 

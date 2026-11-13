@@ -242,6 +242,19 @@ function safely(fn) {
   try { fn(); } catch { /* команда не применилась */ }
 }
 
+// Text() в этом апплете рождается с alpha 0: подпись после Slider есть в чертеже,
+// но не видна, пока заливку не выставить в 1. Точки и отрезки от этого не зависят.
+function revealTexts(api) {
+  let names = [];
+  try { names = api.getAllObjectNames() || []; } catch { return; }
+  names.forEach((name) => {
+    let type = '';
+    try { type = String(api.getObjectType(name) || '').toLowerCase(); } catch { return; }
+    if (type !== 'text') return;
+    safely(() => api.setFilling(name, 1));
+  });
+}
+
 /**
  * Строит чертёж по setup. Возвращает функцию отмены отложенного оформления.
  * material — чертёж из материала geogebra.org: оси и сетку по умолчанию не трогаем.
@@ -260,6 +273,7 @@ export function runSetup(api, setup, { material = false } = {}) {
       if (!applyApiCommand(api, cmd)) api.evalCommand(cmd);
     });
   });
+  revealTexts(api);
   if (!plan.styles.length) return () => {};
   const timer = setTimeout(() => {
     plan.styles.forEach((cmd) => safely(() => applyStyle(api, cmd)));
@@ -273,4 +287,5 @@ export function runCommands(api, commands) {
     const line = String(cmd || '').trim();
     if (line) safely(() => api.evalCommand(line));
   });
+  if (api) revealTexts(api);
 }

@@ -2,6 +2,22 @@ import { useState } from 'react';
 import apiClient from '../shared/api';
 import { Download, Sparkles, RotateCcw } from 'lucide-react';
 import { MarkdownRenderer as MarkdownViewer, ThemeToggle, useNotify } from '../shared/ui';
+import { answersMatch, optionList } from '../features/board/studentsApi';
+
+function closedMatch(task, userAnswer) {
+  const user = Array.isArray(userAnswer) ? userAnswer.join(',') : userAnswer;
+  const correct = Array.isArray(task.answer) ? task.answer.join(',') : task.answer;
+  return answersMatch(user, correct, optionList(task.options));
+}
+
+function ReportFigure({ value, caption }) {
+  return (
+    <div className="px-5 py-5">
+      <p className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{value}</p>
+      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{caption}</p>
+    </div>
+  );
+}
 
 export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) => {
   const notify = useNotify();
@@ -17,13 +33,9 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
       return acc;
     }
 
-    if (task.is_open_answer) {
-      isCorrect = String(userAnswer).trim().toLowerCase() === String(task.answer || '').trim().toLowerCase();
-    } else {
-      const uAns = Array.isArray(userAnswer) ? userAnswer.sort().join(',') : String(userAnswer);
-      const cAns = Array.isArray(task.answer) ? task.answer.sort().join(',') : String(task.answer);
-      isCorrect = uAns === cAns;
-    }
+    isCorrect = task.is_open_answer
+      ? String(userAnswer).trim().toLowerCase() === String(task.answer || '').trim().toLowerCase()
+      : closedMatch(task, userAnswer);
 
     if (isCorrect) acc.correct++;
     else acc.incorrect++;
@@ -103,7 +115,7 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
     if (task.is_open_answer) {
       return targetAnswer || (isCorrectAnswer ? '*Нет данных*' : '*Ответ не дан*');
     }
-    const exactAnswers = targetAnswer ? String(targetAnswer).split(',').map(s => s.trim()).filter(Boolean) : [];
+    const exactAnswers = targetAnswer ? String(targetAnswer).split(/[;,]/).map(s => s.trim()).filter(Boolean) : [];
     if (exactAnswers.length === 0) return isCorrectAnswer ? '*Нет данных*' : '*Ответ не дан*';
 
     return exactAnswers
@@ -114,7 +126,7 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
   return (
     <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-[#09090b] p-5 sm:p-6 rounded-xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm">
           <div>
             <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{test?.title || 'Результаты тестирования'}</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Проверено автоматически</p>
@@ -145,23 +157,11 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{scorePercentage}%</span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Результат</span>
-          </div>
-          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{stats?.correct}</span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Верно</span>
-          </div>
-          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{stats?.incorrect}</span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Ошибок</span>
-          </div>
-          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">{stats?.unanswered}</span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Пропущено</span>
-          </div>
+        <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm divide-x divide-y divide-zinc-100 dark:divide-zinc-800/60 dark:border-zinc-800/60 dark:bg-[#09090b] sm:grid-cols-4 sm:divide-y-0">
+          <ReportFigure value={`${scorePercentage}%`} caption="Результат" />
+          <ReportFigure value={stats?.correct} caption="Верно" />
+          <ReportFigure value={stats?.incorrect} caption="Ошибок" />
+          <ReportFigure value={stats?.unanswered} caption="Пропущено" />
         </div>
 
         <div className="space-y-6">
@@ -171,13 +171,16 @@ export const TestReport = ({ test, userAnswers, drawings, onBack, onRetake }) =>
             const isUnanswered = !answer || (Array.isArray(answer) && answer.length === 0);
             const isCorrect = !isUnanswered && (task.is_open_answer
               ? String(answer).trim().toLowerCase() === String(task.answer || '').trim().toLowerCase()
-              : (Array.isArray(answer) ? answer.sort().join(',') : String(answer)) === (Array.isArray(task.answer) ? task.answer.sort().join(',') : String(task.answer))
+              : closedMatch(task, answer)
             );
 
             return (
-             <div key={task.id} className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/60 rounded-3xl overflow-hidden shadow-sm text-zinc-900 dark:text-zinc-100">
-  <div className={`p-4 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between ${isUnanswered ? 'bg-zinc-50 dark:bg-zinc-900/40' : isCorrect ? 'bg-emerald-50/60 dark:bg-emerald-500/10' : 'bg-red-50/60 dark:bg-red-500/10'}`}>
+             <div key={task.id} className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b] dark:text-zinc-100">
+  <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800/60">
     <span className="text-sm font-medium">Задание {idx + 1}</span>
+    <span className={`text-sm font-medium ${isUnanswered ? 'text-zinc-400' : isCorrect ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+      {isUnanswered ? 'Пропуск' : isCorrect ? 'Верно' : 'Ошибка'}
+    </span>
   </div>
   <div className="p-6 space-y-4">
     <MarkdownViewer>{task.content || '*Условие не указано*'}</MarkdownViewer>

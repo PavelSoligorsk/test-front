@@ -1,6 +1,7 @@
-import { Search, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
 import UserRow from './UserRow';
-import { Sheet, IconWell, fieldClass } from '../../shared/ui';
+import { Sheet, SearchField } from '../../shared/ui';
+import { HeadingBlock } from '../../shared/ui/HeadingBlock';
 
 const ROLE_LABELS = { all: 'Все', admin: 'Admin', teacher: 'Teacher', student: 'Student' };
 
@@ -9,22 +10,14 @@ export default function UsersTab({ users, filteredUsers, userSearch, setUserSear
     <Sheet className="overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800/60 space-y-6">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <IconWell><Users size={18} strokeWidth={2} /></IconWell>
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Студенты и состав</h2>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {filteredUsers.length} найдено
-              </p>
-            </div>
-          </div>
+          <HeadingBlock
+            icon={<Users size={18} strokeWidth={2} />}
+            title="Студенты и состав"
+            hint={`${filteredUsers.length} найдено`}
+          />
         </div>
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-            <input type="text" placeholder="Поиск..." className={`${fieldClass} pl-10`}
-              value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-          </div>
+          <SearchField className="flex-1" value={userSearch} onChange={setUserSearch} placeholder="Поиск..." />
           <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl">
             {['all', 'admin', 'teacher', 'student'].map(role => (
               <button key={role} type="button" onClick={() => setUserRoleFilter(role)}

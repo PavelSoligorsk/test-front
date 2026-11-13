@@ -1,54 +1,6 @@
-export function Donut({ percent, label, sub, size = 156 }) {
-  const stroke = 12;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const p = Math.min(100, Math.max(0, Number(percent) || 0));
-  const text = Number.isInteger(p) ? String(p) : p.toFixed(1);
-
-  return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="-rotate-90"
-        role="img"
-        aria-label={`${label || 'Результат'}: ${text}%`}
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={stroke}
-          className="stroke-zinc-100 dark:stroke-zinc-800"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c - (p / 100) * c}
-          className="stroke-zinc-900 dark:stroke-zinc-100 transition-[stroke-dashoffset] duration-700"
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-        <span className="text-3xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-100">
-          {text}%
-        </span>
-        {label ? <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-tight">{label}</span> : null}
-        {sub ? <span className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 tabular-nums">{sub}</span> : null}
-      </div>
-    </div>
-  );
-}
-
-export function Histogram({ items, ariaLabel, compact = false }) {
+export function Histogram({ items, ariaLabel, compact = false, height }) {
   const w = compact ? 360 : 440;
-  const h = compact ? 148 : 224;
+  const h = height || (compact ? 148 : 224);
   const pad = compact ? { t: 18, r: 4, b: 36, l: 22 } : { t: 24, r: 6, b: 44, l: 30 };
   const innerW = w - pad.l - pad.r;
   const innerH = h - pad.t - pad.b;

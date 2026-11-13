@@ -31,9 +31,9 @@ export function optionList(raw) {
 export function answerText(raw, options) {
   const text = String(raw ?? '').trim();
   if (!text || text === NO_ANSWER) return '';
-  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
-  if (options.length && parts.every((part) => /^\d+$/.test(part) && Number(part) >= 1 && Number(part) <= options.length)) {
-    return parts.map((part) => `${part}. ${options[Number(part) - 1]}`).join('; ');
+  const parts = answerParts(text);
+  if (options.length && parts.every((part) => isIndex(part, options.length))) {
+    return parts.map((part) => `${Number(part)}. ${options[Number(part) - 1]}`).join('; ');
   }
   return text;
 }
@@ -42,20 +42,43 @@ function normAnswer(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+function isIndex(part, count) {
+  return /^\d+$/.test(part) && Number(part) >= 1 && Number(part) <= count;
+}
+
+function answerParts(text) {
+  if (/[;,]/.test(text)) return text.split(/[;,]/).map((part) => part.trim()).filter(Boolean);
+  return [text];
+}
+
+function sortedIndices(items) {
+  return [...new Set(items)].sort((a, b) => Number(a) - Number(b)).join(',');
+}
+
+// Номера вариантов: «1,3», «3; 1» и «1 3» — один и тот же набор.
+// Если номер не входит в список, это текст варианта, как в ответе «0» при вариантах 0, 1, 2.
 function indexKey(raw, options) {
   const text = String(raw ?? '').trim();
   if (!text || text === NO_ANSWER) return '';
-  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
+  const list = Array.isArray(options) ? options : [];
+  if (!list.length) return '';
+  const parts = answerParts(text);
   if (!parts.length) return '';
-  if (options.length && parts.every((part) => /^\d+$/.test(part) && Number(part) >= 1 && Number(part) <= options.length)) {
-    return parts.map((part) => String(Number(part))).sort().join(',');
+  if (parts.every((part) => isIndex(part, list.length))) {
+    return sortedIndices(parts.map((part) => String(Number(part))));
   }
-  if (options.length) {
-    const found = parts.map((part) => {
-      const index = options.findIndex((option) => normAnswer(option) === normAnswer(part));
-      return index >= 0 ? String(index + 1) : '';
-    });
-    if (found.every(Boolean)) return found.sort().join(',');
+  const byText = parts.map((part) => {
+    const index = list.findIndex((option) => normAnswer(option) === normAnswer(part));
+    return index >= 0 ? String(index + 1) : '';
+  });
+  if (byText.every(Boolean)) return sortedIndices(byText);
+  const whole = list.findIndex((option) => normAnswer(option) === normAnswer(text));
+  if (whole >= 0) return String(whole + 1);
+  if (!/[;,]/.test(text)) {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length > 1 && words.every((part) => isIndex(part, list.length))) {
+      return sortedIndices(words.map((part) => String(Number(part))));
+    }
   }
   return '';
 }

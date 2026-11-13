@@ -4,7 +4,7 @@ import { Sparkles } from 'lucide-react';
 import StudentNav from './StudentNav';
 import AiModal from './AiModal';
 import { fetchStudentMe, generateAiTest } from './api';
-import { STUDENT_PATHS, studentTabFromPath } from './studentPaths';
+import { STUDENT_PATHS, rememberStudentTab, studentTabFromPath } from './studentPaths';
 import { useNotify } from '../../shared/ui';
 
 export default function StudentLayout() {
@@ -21,6 +21,10 @@ export default function StudentLayout() {
   const [aiUseStats, setAiUseStats] = useState(false);
 
   const activeKey = studentTabFromPath(location.pathname);
+
+  useEffect(() => {
+    rememberStudentTab(location.pathname);
+  }, [location.pathname]);
   const isTheory = location.pathname.startsWith('/student/theory');
   const isBoard = location.pathname.startsWith('/student/board');
   const isBoardCanvas = /^\/student\/board\/[^/]+/.test(location.pathname);
@@ -55,7 +59,7 @@ export default function StudentLayout() {
         />
       )}
 
-      <div className={isBoardCanvas ? 'h-full' : undefined}>
+      <div className={isBoardCanvas ? 'h-full' : 'md:-mt-4'}>
         <Outlet />
       </div>
 

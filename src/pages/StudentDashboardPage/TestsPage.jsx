@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchStudentTestsMeta, fetchMyAssignmentsMeta, fetchAiTests } from './api';
 import TestsTab from './TestsTab';
 import StudentPageLoading from './StudentPageLoading';
+import { PageShell } from '../../shared/ui/Sheet';
 
 export default function TestsPage() {
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ export default function TestsPage() {
   if (loading) return <StudentPageLoading variant="tests" />;
 
   return (
-    <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+    <PageShell className="space-y-8">
       <TestsTab
         allTests={allTests}
         publicStaticTests={publicStaticTests}
@@ -94,6 +95,6 @@ export default function TestsPage() {
         examFilter={examFilter}
         setExamFilter={setExamFilter}
       />
-    </main>
+    </PageShell>
   );
 }

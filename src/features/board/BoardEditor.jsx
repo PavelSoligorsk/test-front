@@ -89,6 +89,7 @@ import { SURFACE_MARK, isHiddenBoardObject, isSurfaceMeta, readSurface } from '.
 import { deleteBoard } from './storage';
 import { taskOptions } from './taskBankApi';
 import { answersMatch } from './studentsApi';
+import { clearPracticePatch, isPracticeKey, practiceKey } from './practiceAnswers';
 import { LASER_COLOR, LASER_FADE_MS, LASER_WIDTH, MAX_OBJECTS, SEND_MS } from './constants';
 import BoardSidePanes from './ui/BoardSidePanes';
 import { renderDraft } from './paint/draft';
@@ -653,22 +654,10 @@ export default function BoardEditor({
     }, 4000);
   }
 
-  function practiceWho() {
-    if (clientIdRef.current) return clientIdRef.current;
-    const key = 'board-practice-who';
-    let local = sessionStorage.getItem(key);
-    if (!local) {
-      local = `local-${Math.random().toString(36).slice(2, 8)}`;
-      sessionStorage.setItem(key, local);
-    }
-    return local;
-  }
-
   function patchTask(id, propsPatch) {
     const next = store.get().map((obj) => (
       obj.id === id && obj.type === 'task' ? { ...obj, props: { ...obj.props, ...propsPatch } } : obj
     ));
-    pushHistory(store.get(), next);
     store.set(next);
     if (readOnlyRef.current) {
       sentRef.current = next;
@@ -678,23 +667,46 @@ export default function BoardEditor({
     scheduleSend();
   }
 
-  function submitPractice(id, answer) {
+  function publishPractice(id, answer, checked) {
     const obj = store.getById(id);
+    const who = clientIdRef.current;
     const text = String(answer ?? '').trim();
-    if (!obj || obj.type !== 'task' || !text) return;
+    if (!obj || obj.type !== 'task' || !who) return;
+    const key = practiceKey(who);
+    if (!text) {
+      if (obj.props?.[key]) patchTask(id, { [key]: null });
+      return;
+    }
     const correct = obj.props.teacherOnly?.answer;
     const known = correct != null && String(correct).trim();
     const options = Array.isArray(obj.props.options) ? obj.props.options : [];
     const verdict = known ? (answersMatch(text, correct, options) ? 'right' : 'wrong') : '';
-    const who = practiceWho();
+    const prev = obj.props?.[key];
+    const same = prev
+      && prev.answer === text
+      && (prev.verdict || '') === verdict
+      && Boolean(prev.checked) === Boolean(checked);
+    if (same) return verdict || 'pending';
     const name = selfName() || (audienceRef.current === 'teacher' ? 'Учитель' : 'Ученик');
-    const prev = Array.isArray(obj.props.practiceAnswers) ? obj.props.practiceAnswers : [];
-    const entry = { who, name, answer: text, ...(verdict ? { verdict } : {}), at: Date.now() };
     patchTask(id, {
-      practiceAnswers: [...prev.filter((item) => item.who !== who), entry].slice(-40),
-      practiceShown: true,
+      [key]: {
+        who,
+        name,
+        answer: text,
+        ...(verdict ? { verdict } : {}),
+        at: Date.now(),
+        ...(checked ? { checked: true } : {}),
+      },
     });
     return verdict || 'pending';
+  }
+
+  function submitPractice(id, answer) {
+    return publishPractice(id, answer, true);
+  }
+
+  function draftPractice(id, answer) {
+    publishPractice(id, answer, false);
   }
 
   function gradePractice(id) {
@@ -702,21 +714,31 @@ export default function BoardEditor({
     const obj = store.getById(id);
     const correct = obj?.props?.teacherOnly?.answer;
     if (!obj || correct == null || !String(correct).trim()) return;
-    const list = Array.isArray(obj.props.practiceAnswers) ? obj.props.practiceAnswers : [];
-    if (!list.some((item) => item.verdict !== 'right' && item.verdict !== 'wrong')) return;
     const options = Array.isArray(obj.props.options) ? obj.props.options : [];
-    patchTask(id, {
-      practiceAnswers: list.map((item) => (
-        item.verdict === 'right' || item.verdict === 'wrong'
-          ? item
-          : { ...item, verdict: answersMatch(item.answer, correct, options) ? 'right' : 'wrong' }
-      )),
+    const patch = {};
+    const grade = (item) => (
+      item?.verdict === 'right' || item?.verdict === 'wrong'
+        ? item
+        : { ...item, verdict: answersMatch(item.answer, correct, options) ? 'right' : 'wrong' }
+    );
+    Object.keys(obj.props || {}).forEach((key) => {
+      if (!isPracticeKey(key)) return;
+      const item = obj.props[key];
+      if (!item?.answer || item.verdict === 'right' || item.verdict === 'wrong') return;
+      patch[key] = grade(item);
     });
+    const list = Array.isArray(obj.props.practiceAnswers) ? obj.props.practiceAnswers : [];
+    if (list.some((item) => item?.answer && item.verdict !== 'right' && item.verdict !== 'wrong')) {
+      patch.practiceAnswers = list.map((item) => (item?.answer ? grade(item) : item));
+    }
+    if (Object.keys(patch).length) patchTask(id, patch);
   }
 
   function resetPractice(id) {
     if (audienceRef.current !== 'teacher') return;
-    patchTask(id, { practiceAnswers: [], practiceShown: false });
+    const obj = store.getById(id);
+    if (!obj) return;
+    patchTask(id, clearPracticePatch(obj.props));
   }
 
   // Высоту карточки задания, блока теории и markdown знает только DOM (формулы,
@@ -1847,6 +1869,7 @@ export default function BoardEditor({
       else geoInputInRef.current.delete(id);
     },
     onPractice: (...args) => actionsRef.current.submitPractice?.(...args),
+    onPracticeDraft: (...args) => actionsRef.current.draftPractice?.(...args),
     onGradePractice: (...args) => actionsRef.current.gradePractice?.(...args),
     onResetPractice: (...args) => actionsRef.current.resetPractice?.(...args),
     onMeasure: (id, height) => liveRef.current.measureObject?.(id, height),
@@ -2150,6 +2173,7 @@ export default function BoardEditor({
       placeTheoryBlock,
       placeTasks,
       submitPractice,
+      draftPractice,
       gradePractice,
       resetPractice,
       changeText,

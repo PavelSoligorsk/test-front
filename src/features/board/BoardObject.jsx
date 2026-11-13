@@ -2,7 +2,7 @@ import { memo, useLayoutEffect, useRef } from 'react';
 import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
 import MarkdownBody from './MarkdownBody';
-import { TheoryBoardBlock } from '../../components/Theory';
+import { TheoryBoardBlock } from '../../shared/ui/TheoryViewer';
 import TaskCard from './TaskCard';
 import { smoothPath, strokeOutline } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
@@ -241,6 +241,7 @@ function BoardObject({
   onGeoInputBind,
   onMeasure,
   onPractice,
+  onPracticeDraft,
   onGradePractice,
   onResetPractice,
   teacher,
@@ -288,6 +289,7 @@ function BoardObject({
           teacher={teacher}
           selfId={selfId}
           onPractice={onPractice}
+          onPracticeDraft={onPracticeDraft}
           onGradePractice={onGradePractice}
           onResetPractice={onResetPractice}
           onMeasure={(height) => onMeasure?.(obj.id, height)}

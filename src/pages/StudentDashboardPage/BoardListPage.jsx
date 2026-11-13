@@ -4,12 +4,22 @@ import { boardErrorMessage, listStudentBoards } from '../../features/board/api';
 import BoardGallery from '../../features/board/BoardGallery';
 import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
 import { boardPath } from './studentPaths';
+import { PageShell } from '../../shared/ui/Sheet';
+import EmptyState from '../../shared/ui/EmptyState';
+import { Inbox, SearchX } from 'lucide-react';
+import SearchField from '../../shared/ui/SearchField';
 
 export default function BoardListPage() {
   const navigate = useNavigate();
   const [boards, setBoards] = useState(null);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const series = useMemo(() => groupBoardSeries(boards || []), [boards]);
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return series;
+    return series.filter((board) => (board.title || 'Доска').toLowerCase().includes(needle));
+  }, [series, query]);
 
   useEffect(() => {
     listStudentBoards()
@@ -21,10 +31,21 @@ export default function BoardListPage() {
   }, []);
 
   return (
-    <main className="mx-auto max-w-7xl p-4 md:p-8">
-      <div className="mb-6">
-        <h1 className="text-[28px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Мои доски</h1>
-        <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(series.length) : 'Загрузка'}</p>
+    <PageShell>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold tracking-[-0.02em] text-zinc-900 dark:text-zinc-100">Мои доски</h1>
+          <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(visible.length) : 'Загрузка'}</p>
+        </div>
+        {boards && boards.length > 0 && (
+          <SearchField
+            className="w-full sm:w-72"
+            value={query}
+            onChange={setQuery}
+            onClear={() => setQuery('')}
+            placeholder="Поиск по слову..."
+          />
+        )}
       </div>
 
       {error && (
@@ -34,21 +55,26 @@ export default function BoardListPage() {
       )}
 
       {boards == null ? (
-        <div className="grid gap-3">
-          {[0, 1, 2].map((key) => (
-            <div key={key} className="h-20 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+          {[0, 1, 2, 3].map((key) => (
+            <div key={key} className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
           ))}
         </div>
       ) : boards.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
-          <p className="text-base font-medium text-zinc-900 dark:text-zinc-100">Пока нет досок</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
-            Учитель создаёт доску и назначает вас или вашу группу.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Inbox size={24} strokeWidth={1.5} />}
+          title="Пока нет досок"
+          hint="Учитель создаёт доску и назначает вас или вашу группу."
+        />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={<SearchX size={24} strokeWidth={1.5} />}
+          title="Ничего не найдено"
+          hint="Попробуйте другое слово"
+        />
       ) : (
-        <BoardGallery boards={series} onOpen={(board) => navigate(boardPath(board.id))} />
+        <BoardGallery boards={visible} onOpen={(board) => navigate(boardPath(board.id))} />
       )}
-    </main>
+    </PageShell>
   );
 }

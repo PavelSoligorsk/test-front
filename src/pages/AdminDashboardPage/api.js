@@ -103,31 +103,13 @@ export const deleteAllowedEmail = async (emailString) => {
   await apiClient.delete(`/admin/allowed-emails/${emailString}`);
 };
 
-// Theory
-export const fetchTheoryMeta = async () => {
-  const res = await apiClient.get(`/admin/theory-meta`);
-  return res.data || {};
-};
-
-export const fetchTheory = async (id) => {
-  const res = await apiClient.get(`/admin/theory/${id}`);
-  return res.data;
-};
-
-export const createTheory = async (data) => {
-  const res = await apiClient.post(`/admin/theory`, data);
-  return res.data;
-};
-
-export const updateTheory = async (id, data) => {
-  const res = await apiClient.put(`/admin/theory/${id}`, data);
-  return res.data;
-};
-
-export const deleteTheory = async (id) => {
-  const res = await apiClient.delete(`/admin/theory/${id}`);
-  return res.data;
-};
+export {
+  fetchAdminTheoryMeta as fetchTheoryMeta,
+  fetchAdminTheory as fetchTheory,
+  createTheory,
+  updateTheory,
+  deleteTheory,
+} from '../../features/theory/api';
 
 // Classify
 export const classifyTasks = async (payload = {}) => {

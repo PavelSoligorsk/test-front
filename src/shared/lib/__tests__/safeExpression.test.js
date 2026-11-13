@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { compileLambda } from '../safeExpression';
 import { evalTextExpr, renderControlText } from '../controlText';
+import { parseBlocks } from '../theoryMarkup';
 
 describe('compileLambda', () => {
   it('считает лямбды из примеров теории', () => {
@@ -56,6 +57,44 @@ describe('compileLambda', () => {
   it('видит только собственные поля значений', () => {
     expect(compileLambda('(s) => s.toString')({ a: 1 })).toBeUndefined();
     expect(compileLambda('(s) => s.hasOwnProperty')({ a: 1 })).toBeUndefined();
+  });
+
+  it('считает блок с const, if и вложенными лямбдами', () => {
+    const source = `({a, b, c}) => {
+      const fmt = (v) => { const n = Math.round(v * 100) / 100; return Object.is(n, -0) ? "0" : String(n); };
+      const M = (s) => "$$" + s + "$$";
+      const aS = Math.abs(a) < 0.001 ? 0.001 : a;
+      const D = b * b - 4 * aS * c;
+      const xv = -b / (2 * aS);
+      const yv = -D / (4 * aS);
+      const parts = [M("D = " + fmt(D))];
+      if (D > 0) {
+        const r1 = (-b - Math.sqrt(D)) / (2 * aS), r2 = (-b + Math.sqrt(D)) / (2 * aS);
+        parts.push(M("x_1 = " + fmt(Math.min(r1, r2))));
+      } else if (Math.abs(D) < 1e-9) {
+        parts.push(M("x = " + fmt(xv)));
+      } else {
+        parts.push(M("none"));
+      }
+      return parts.join("\\n");
+    }`;
+    const out = compileLambda(source)({ a: 1, b: -4, c: 3 });
+    expect(out).toContain('D = 4');
+    expect(out).toContain('x_1 = 1');
+    const markup = `<GeoGebra height="440" setup="a = 1">
+      <Slider name="a" min="-3" max="3" step="0.1" value="1" label="$a$" />
+      <Text>
+      {({a}) => {
+        const fmt = (v) => String(Math.round(v * 100) / 100);
+        if (a > 0) { return "вверх " + fmt(a); }
+        return "вниз";
+      }}
+      </Text>
+    </GeoGebra>`;
+    const [block] = parseBlocks(markup);
+    expect(block.type).toBe('geogebra');
+    expect(block.texts).toHaveLength(1);
+    expect(evalTextExpr(block.texts[0].parts[0].source, { a: 1 })).toBe('вверх 1');
   });
 
   it('отвергает неподдерживаемый синтаксис', () => {

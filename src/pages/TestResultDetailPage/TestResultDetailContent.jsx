@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import apiClient from '../../shared/api';
 import { QuestionMap, ThemeToggle } from '../../shared/ui';
-import { getHomeRoute, getUserRole } from '../../features/auth';
+import { rememberedStudentPath } from '../StudentDashboardPage/studentPaths';
 import DifficultyStats from './DifficultyStats';
 import ResultTaskCard from './ResultTaskCard';
 
@@ -109,28 +109,35 @@ export default function TestResultDetailContent() {
 
   return (
     <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
-      <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-6">
+      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-3">
         <div className="flex items-center justify-between">
-          <button type="button" onClick={() => navigate(getHomeRoute(getUserRole()))} className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+          <button type="button" onClick={() => navigate(rememberedStudentPath())} className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
             <ArrowLeft size={14} /> Назад в кабинет
           </button>
           <ThemeToggle />
         </div>
 
-        <header className="bg-white dark:bg-[#09090b] p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div>
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">{data.test_title}</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Результат прохождения</p>
+        <header className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
+          <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-5 py-5 dark:border-zinc-800/60 sm:px-6">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{data.test_title}</h1>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Результат прохождения</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">
+                {data.max_points > 0 ? Math.round((data.total_points / data.max_points) * 100) : 0}%
+              </p>
+              <p className="mt-1 text-sm tabular-nums text-zinc-500 dark:text-zinc-400">
+                {data.total_points} / {data.max_points}
+              </p>
+            </div>
           </div>
-          <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 px-6 py-4 rounded-2xl text-center">
-            <div className="text-2xl font-semibold tabular-nums tracking-tight">{data.total_points} / {data.max_points}</div>
-            <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">баллов</div>
+          <div className="px-2 py-3 sm:px-4">
+            <DifficultyStats difficultyStats={data.difficulty_stats} />
           </div>
         </header>
 
-        <DifficultyStats difficultyStats={data.difficulty_stats} />
-
-        <div className="space-y-6">
+        <div className="space-y-3">
           {sortedDetails.map((item, idx) => (
             <ResultTaskCard
               key={item.task_id}

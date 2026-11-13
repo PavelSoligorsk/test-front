@@ -47,31 +47,6 @@ export const fetchUserDetailedStats = async (userId, period = 'all', role = 'adm
   return res.data;
 };
 
-// Theory
-export const fetchTheoryMeta = async () => {
-  const res = await apiClient.get(`/student/theory/meta`);
-  return res.data || {};
-};
-
-export const fetchTheoryTopics = async () => {
-  const res = await apiClient.get(`/student/theory/topics`);
-  return res.data;
-};
-
-export const fetchTheorySections = async (topic) => {
-  const res = await apiClient.get(`/student/theory/sections/${topic}`);
-  return res.data;
-};
-
-export const fetchTheoryByTopicSection = async (topic, section, theoryClass) => {
-  const res = await apiClient.get(`/student/theory/by-topic/${encodeURIComponent(topic)}/section/${encodeURIComponent(section)}`,
-    {
-      params: theoryClass != null && theoryClass !== '' ? { theory_class: theoryClass } : {},
-    },
-  );
-  return res.data;
-};
-
 // AI generate
 export const generateAiTest = async (prompt, taskCount, difficulty, targetClass, excludeWeeks, useStats) => {
   const res = await apiClient.post(`/student/generate-test`,

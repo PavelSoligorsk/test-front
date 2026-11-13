@@ -2,9 +2,10 @@
 // (теория, ИИ, объекты доски от любого участника). Поэтому они не идут в eval или
 // new Function: свой разбор подмножества JS и вычисление по дереву. Доступны только
 // параметры лямбды, Math и короткий список методов чисел, строк и массивов.
+// Тело может быть выражением или блоком из const, if и return, с вложенными лямбдами.
 
 const PUNCTUATORS = ['===', '!==', '...', '**', '=>', '==', '!=', '<=', '>=', '&&', '||', '??', '?.',
-  '+', '-', '*', '/', '%', '<', '>', '!', '?', ':', '(', ')', '[', ']', '{', '}', ',', '.', '='];
+  '+', '-', '*', '/', '%', '<', '>', '!', '?', ':', '(', ')', '[', ']', '{', '}', ',', '.', '=', ';'];
 
 const LITERALS = { true: true, false: false, null: null, undefined, NaN, Infinity };
 
@@ -172,14 +173,31 @@ class Parser {
   }
 
   parseLambda() {
+    const node = this.parseLambdaNode();
+    if (this.peek().type !== 'eof') fail('Лишние символы после выражения');
+    return node;
+  }
+
+  looksLikeLambda() {
+    if (!this.isPunct('(')) return false;
+    let depth = 0;
+    for (let i = 0; i < 80; i += 1) {
+      const token = this.peek(i);
+      if (!token || token.type === 'eof') return false;
+      if (token.type === 'punct' && token.value === '(') depth += 1;
+      else if (token.type === 'punct' && token.value === ')') {
+        depth -= 1;
+        if (depth === 0) return this.isPunct('=>', i + 1);
+      }
+    }
+    return false;
+  }
+
+  parseLambdaNode() {
     this.expect('(');
     const params = [];
     if (!this.isPunct(')')) {
-      if (params.length === 0 && this.isPunct('{')) {
-        params.push(this.parsePattern());
-      } else {
-        params.push(this.parseIdentifierParam());
-      }
+      params.push(this.isPunct('{') ? this.parsePattern() : this.parseIdentifierParam());
       while (this.isPunct(',')) {
         this.next();
         params.push(this.isPunct('{') ? this.parsePattern() : this.parseIdentifierParam());
@@ -187,10 +205,55 @@ class Parser {
     }
     this.expect(')');
     this.expect('=>');
-    if (this.isPunct('{')) fail('Тело лямбды должно быть выражением');
-    const body = this.parseExpression();
-    if (this.peek().type !== 'eof') fail('Лишние символы после выражения');
-    return { params, body };
+    const body = this.isPunct('{') ? this.parseBlock() : this.parseExpression();
+    return { type: 'lambda', params, body };
+  }
+
+  parseBlock() {
+    this.expect('{');
+    const body = [];
+    while (!this.isPunct('}') && this.peek().type !== 'eof') body.push(this.parseStatement());
+    this.expect('}');
+    return { type: 'block', body };
+  }
+
+  parseStatement() {
+    const token = this.peek();
+    if (token.type === 'ident' && (token.value === 'const' || token.value === 'let')) {
+      this.next();
+      const decls = [];
+      for (;;) {
+        const name = this.parseIdentifierParam();
+        this.expect('=');
+        decls.push({ name: name.name, init: this.parseExpression() });
+        if (!this.isPunct(',')) break;
+        this.next();
+      }
+      if (this.isPunct(';')) this.next();
+      return { type: 'decl', decls };
+    }
+    if (token.type === 'ident' && token.value === 'if') {
+      this.next();
+      this.expect('(');
+      const test = this.parseExpression();
+      this.expect(')');
+      const consequent = this.isPunct('{') ? this.parseBlock() : this.parseStatement();
+      let alternate = null;
+      if (this.peek().type === 'ident' && this.peek().value === 'else') {
+        this.next();
+        alternate = this.isPunct('{') ? this.parseBlock() : this.parseStatement();
+      }
+      return { type: 'if', test, consequent, alternate };
+    }
+    if (token.type === 'ident' && token.value === 'return') {
+      this.next();
+      const value = (this.isPunct(';') || this.isPunct('}')) ? { type: 'lit', value: undefined } : this.parseExpression();
+      if (this.isPunct(';')) this.next();
+      return { type: 'return', value };
+    }
+    const expr = this.parseExpression();
+    if (this.isPunct(';')) this.next();
+    return { type: 'expr', expr };
   }
 
   parseIdentifierParam() {
@@ -353,6 +416,9 @@ class Parser {
       return { type: 'id', name: token.value };
     }
     if (token.type === 'punct' && token.value === '(') {
+      this.pos -= 1;
+      if (this.looksLikeLambda()) return this.parseLambdaNode();
+      this.next();
       this.enter();
       const expr = this.parseExpression();
       this.leave();
@@ -369,7 +435,7 @@ class Parser {
       this.expect(']');
       return { type: 'array', items };
     }
-    return fail('Неожиданный конец выражения');
+    return fail(`Неожиданный конец выражения (${token.type}${token.value == null ? '' : ` ${token.value}`})`);
   }
 }
 
@@ -392,8 +458,13 @@ function limitString(value) {
   return value.length > MAX_STRING ? value.slice(0, MAX_STRING) : value;
 }
 
+const SAFE_OBJECT = Object.freeze({
+  is: (_object, left, right) => Object.is(left, right),
+});
+
 const SAFE_GLOBALS = Object.freeze({
   Math: SAFE_MATH,
+  Object: SAFE_OBJECT,
   Number: (value) => Number(value),
   String: (value) => limitString(String(value)),
   Boolean: (value) => Boolean(value),
@@ -433,6 +504,10 @@ const STRING_METHODS = {
 
 const ARRAY_METHODS = {
   join: (value, separator) => limitString(value.join(separator == null ? ',' : String(separator))),
+  push: (value, ...items) => {
+    items.forEach((item) => value.push(item));
+    return value.length;
+  },
   includes: (value, item) => value.includes(item),
   indexOf: (value, item) => value.indexOf(item),
   slice: (value, start, end) => value.slice(start, end),
@@ -453,6 +528,9 @@ function readMember(object, key) {
   if (typeof name === 'string' && BLOCKED_KEYS.has(name)) fail(`Свойство ${name} недоступно`);
   if (object === SAFE_MATH) {
     return Object.prototype.hasOwnProperty.call(SAFE_MATH, name) ? SAFE_MATH[name] : undefined;
+  }
+  if (object === SAFE_OBJECT) {
+    return Object.prototype.hasOwnProperty.call(SAFE_OBJECT, name) ? boundMethod(object, SAFE_OBJECT[name]) : undefined;
   }
   if (typeof object === 'number') {
     return Object.prototype.hasOwnProperty.call(NUMBER_METHODS, name) ? boundMethod(object, NUMBER_METHODS[name]) : undefined;
@@ -504,6 +582,36 @@ function evaluate(node, env) {
     }
     case 'array':
       return node.items.map((item) => evaluate(item, env));
+    case 'lambda':
+      return {
+        userLambda: true,
+        call: (...args) => {
+          const local = Object.assign(Object.create(null), env, bindParams(node.params, args));
+          return finish(evaluate(node.body, local));
+        },
+      };
+    case 'block': {
+      const local = Object.assign(Object.create(null), env);
+      for (let index = 0; index < node.body.length; index += 1) {
+        const step = evaluate(node.body[index], local);
+        if (step && step.returned) return step;
+      }
+      return undefined;
+    }
+    case 'decl':
+      node.decls.forEach((decl) => {
+        if (BLOCKED_KEYS.has(decl.name)) fail(`Имя ${decl.name} недоступно`);
+        env[decl.name] = evaluate(decl.init, env);
+      });
+      return undefined;
+    case 'return':
+      return { returned: true, value: evaluate(node.value, env) };
+    case 'if': {
+      const branch = evaluate(node.test, env) ? node.consequent : node.alternate;
+      return branch ? evaluate(branch, env) : undefined;
+    }
+    case 'expr':
+      return evaluate(node.expr, env);
     case 'unary': {
       const value = evaluate(node.argument, env);
       if (node.op === '!') return !value;
@@ -525,6 +633,7 @@ function evaluate(node, env) {
       const callee = evaluate(node.callee, env);
       if (callee == null && node.optional) return undefined;
       const args = node.args.map((arg) => evaluate(arg, env));
+      if (callee && callee.userLambda) return callee.call(...args);
       if (callee && callee.boundMethod) return callee.boundMethod(callee.receiver, ...args);
       if (typeof callee === 'function' && SAFE_CALLABLES.has(callee)) return callee(...args);
       return fail('Вызов недоступной функции');
@@ -595,8 +704,13 @@ export function compileLambda(source) {
   }
   return (...args) => {
     const env = bindParams(program.params, args);
-    const result = evaluate(program.body, env);
-    return result && result.boundMethod ? undefined : result;
+    return finish(evaluate(program.body, env));
   };
+}
+
+function finish(result) {
+  if (result && result.returned) return result.value;
+  if (result && (result.boundMethod || result.userLambda)) return undefined;
+  return result;
 }
 

@@ -1,16 +1,10 @@
 import { API_URL } from '../../shared/config';
+import { THEORY_CLASSES as THEORY_CLASS_LIST } from '../../shared/lib/theoryMeta';
+import { MAIN_TOPICS as TOPIC_LABELS } from '../../features/theory/topics';
+
 export const API_BASE = API_URL;
-export const THEORY_CLASSES = [5, 6, 7, 8, 9, 10, 11];
-export const MAIN_TOPICS = {
-  numbers: 'Числа и вычисления',
-  expressions: 'Выражения и их преобразования',
-  equations: 'Уравнения',
-  inequalities: 'Неравенства',
-  functions: 'Координаты и функции',
-  text: 'Текстовые задачи',
-  planim: 'Планиметрия',
-  stereo: 'Стереометрия',
-};
+export const THEORY_CLASSES = THEORY_CLASS_LIST;
+export const MAIN_TOPICS = TOPIC_LABELS;
 
 export const SECTIONS_BY_TOPIC = {
   numbers: [

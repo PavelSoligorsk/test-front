@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../../shared/api';
 import { ChevronLeft, FileText, Users } from 'lucide-react';
 import { InlineNotice, MarkdownRenderer, QuestionMap, ThemeToggle, formatApiDetail } from '../../shared/ui';
+import { TaskOptions } from '../../shared/ui/TaskView';
 
 function displayName(row) {
   if (row.student_name) return row.student_name;
@@ -41,15 +42,15 @@ function isClosedTask(task, options) {
 
 function correctKeys(task) {
   const raw = task?.correct_answer ?? task?.answer ?? '';
-  return String(raw).split(',').map((part) => part.trim()).filter(Boolean);
+  return String(raw).split(/[;,]/).map((part) => part.trim()).filter(Boolean);
 }
 
 function sameAnswer(left, right) {
   const norm = (value) => String(value ?? '')
-    .split(',')
+    .split(/[;,]/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .sort()
+    .sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, 'ru'))
     .join(',');
   return norm(left) !== '' && norm(left) === norm(right);
 }
@@ -60,7 +61,7 @@ function optionIsCorrect(opt, index, keys) {
 
 function answerLabel(answer, options) {
   if (!options.length) return answer || '—';
-  const parts = String(answer ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+  const parts = String(answer ?? '').split(/[;,]/).map((part) => part.trim()).filter(Boolean);
   if (!parts.length) return '—';
   return parts.map((part) => {
     const n = Number(part);
@@ -109,27 +110,11 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
         </div>
 
         {closed && options.length > 0 ? (
-          <div>
-            <p className="text-xs font-medium text-zinc-400 mb-3">Варианты</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {options.map((opt, i) => {
-                const correct = optionIsCorrect(opt, i, keys);
-                return (
-                  <div
-                    key={`${id}-opt-${i}`}
-                    className={`p-4 rounded-2xl border text-sm font-medium flex gap-3 ${
-                      correct
-                        ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                        : 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-zinc-600 dark:text-zinc-400'
-                    }`}
-                  >
-                    <span className="opacity-40 tabular-nums">{i + 1}.</span>
-                    <div className="flex-1"><MarkdownRenderer>{opt}</MarkdownRenderer></div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <TaskOptions
+            options={options}
+            label="Варианты"
+            stateFor={(opt, i) => (optionIsCorrect(opt, i, keys) ? 'correct' : 'idle')}
+          />
         ) : null}
 
         {correctText ? (

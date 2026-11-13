@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { PlusCircle, Search, BookOpen, Filter, ChevronRight, Edit3, Users, Trash2 } from 'lucide-react';
-import { Sheet, IconWell, fieldClass, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { PlusCircle, BookOpen, Filter, ChevronRight, Edit3, Users, Trash2 } from 'lucide-react';
+import { Sheet, EmptyState, SearchField, primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
+import { PageHeading } from '../../shared/ui/HeadingBlock';
 
 export default function TestsListTab({ tests, onEdit, onDelete, onManage, onCreateClick }) {
   const [selectedTestClass, setSelectedTestClass] = useState(null);
@@ -29,24 +30,17 @@ export default function TestsListTab({ tests, onEdit, onDelete, onManage, onCrea
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4 md:space-y-6 max-w-7xl mx-auto">
-      <Sheet className="p-5 md:p-6">
-        <div className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <IconWell>
-              <BookOpen size={18} strokeWidth={2} />
-            </IconWell>
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                Мои тесты
-              </h2>
-              <p className="text-sm text-zinc-500 mt-0.5">{tests.length} тестов создано</p>
-            </div>
-          </div>
+      <PageHeading
+        icon={<BookOpen size={18} strokeWidth={2} />}
+        title="Мои тесты"
+        titleAs="h2"
+        hint={`${tests.length} тестов создано`}
+        extra={(
           <button type="button" onClick={onCreateClick} className={primaryBtnClass}>
             <PlusCircle size={16} /> <span>Создать тест</span>
           </button>
-        </div>
-      </Sheet>
+        )}
+      />
 
       <Sheet className="overflow-hidden flex flex-col md:flex-row min-h-[450px] md:min-h-[550px]">
         <aside
@@ -57,16 +51,7 @@ export default function TestsListTab({ tests, onEdit, onDelete, onManage, onCrea
           <h3 className="text-xs font-medium text-zinc-500 flex items-center gap-2">
             <Filter size={14} /> Разделы
           </h3>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Поиск раздела..."
-              value={testClassSearch}
-              onChange={(e) => setTestClassSearch(e.target.value)}
-              className={`${fieldClass} pl-9 text-xs py-2.5`}
-            />
-          </div>
+          <SearchField value={testClassSearch} onChange={setTestClassSearch} placeholder="Поиск раздела..." />
           <button
             type="button"
             onClick={() => {
@@ -126,21 +111,9 @@ export default function TestsListTab({ tests, onEdit, onDelete, onManage, onCrea
           }`}
         >
           {!selectedTestClass && tests.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center gap-3 py-12">
-              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-                <BookOpen size={20} />
-              </div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Нет тестов</p>
-              <p className="text-sm text-zinc-500 max-w-xs">Создайте первый тест в конструкторе</p>
-            </div>
+            <EmptyState framed={false} className="h-full py-12" icon={<BookOpen size={20} />} title="Нет тестов" hint="Создайте первый тест в конструкторе" />
           ) : !selectedTestClass ? (
-            <div className="h-full flex flex-col items-center justify-center text-center gap-3 py-12">
-              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-                <BookOpen size={20} />
-              </div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Выберите раздел</p>
-              <p className="text-sm text-zinc-500 max-w-xs">В левой панели находятся разделы с созданными тестами</p>
-            </div>
+            <EmptyState framed={false} className="h-full py-12" icon={<BookOpen size={20} />} title="Выберите раздел" hint="В левой панели находятся разделы с созданными тестами" />
           ) : (
             <div className="space-y-4 md:space-y-6 animate-in fade-in duration-300">
               <div className="flex flex-col gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800/60">
@@ -159,16 +132,7 @@ export default function TestsListTab({ tests, onEdit, onDelete, onManage, onCrea
                     {selectedTestClass}
                   </span>
                 </div>
-                <div className="relative w-full">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    placeholder="Поиск теста..."
-                    value={testSearchTerm}
-                    onChange={(e) => setTestSearchTerm(e.target.value)}
-                    className={`${fieldClass} pl-9 text-xs`}
-                  />
-                </div>
+                <SearchField value={testSearchTerm} onChange={setTestSearchTerm} placeholder="Поиск теста..." />
               </div>
               {topics.length > 0 && (
                 <div className="flex gap-1.5 overflow-x-auto pb-1">

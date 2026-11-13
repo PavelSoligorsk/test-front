@@ -1,13 +1,10 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { restoreSession } from '../../shared/lib/session';
 
 export default function HomePage() {
-  const location = useLocation();
-  console.log('[HomePage] location:', location.pathname);
   const savedUser = restoreSession();
 
   if (!savedUser) {
-    console.log('[HomePage] no user, redirecting to /login');
     return <Navigate to="/login" replace />;
   }
 

@@ -1,18 +1,3 @@
-/**
- * Проверка, авторизован ли пользователь
- */
-export function isAuthenticated() {
-  try {
-    const session = localStorage.getItem('edu_session') || sessionStorage.getItem('edu_session');
-    return !!session;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Получение роли текущего пользователя
- */
 export function getUserRole() {
   try {
     const session = JSON.parse(localStorage.getItem('edu_session') || '{}');
@@ -22,9 +7,6 @@ export function getUserRole() {
   }
 }
 
-/**
- * Редирект в зависимости от роли
- */
 export function getHomeRoute(role) {
   switch (role) {
     case 'admin': return '/admin';

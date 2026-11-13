@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { BookOpen, PlusCircle, Edit3, Trash2, Inbox, GripVertical, ArrowLeft } from 'lucide-react';
-import { TheoryViewer } from '../../components/Theory';
+import { TheoryViewer } from '../../shared/ui/TheoryViewer';
 import { MAIN_TOPICS, THEORY_CLASSES } from './constants';
 import { fetchTheory, updateTheory } from './api';
 import { sectionRowKey, sectionsInClass, topicsInClass } from '../../shared/lib/theoryMeta';

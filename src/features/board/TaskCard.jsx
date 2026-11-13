@@ -7,6 +7,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { continueOrderedListNumbers, normalizeDisplayMath } from '../../components/theoryMath';
 import { playPracticeSalute } from './practiceSalute';
+import { practiceEntries } from './practiceAnswers';
 
 const markdownParts = {
   img: ({ src, alt }) => (
@@ -35,7 +36,7 @@ const MARK = {
   wrong: { label: 'Ошибка', className: 'text-rose-700 dark:text-rose-300' },
 };
 
-export default function TaskCard({ obj, teacher, selfId, onPractice, onGradePractice, onResetPractice, onMeasure }) {
+export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeDraft, onGradePractice, onResetPractice, onMeasure }) {
   const cardRef = useMeasuredHeight(onMeasure);
   const [solutionOpen, setSolutionOpen] = useState(false);
   const [picks, setPicks] = useState(() => new Set());
@@ -46,32 +47,41 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onGradePrac
   const options = Array.isArray(props.options) ? props.options : [];
   const secret = props.teacherOnly || null;
   const hasKey = Boolean(String(secret?.answer ?? '').trim());
-  const practiceAnswers = Array.isArray(props.practiceAnswers) ? props.practiceAnswers : [];
+  const practiceAnswers = practiceEntries(props);
   const mine = practiceAnswers.find((item) => item.who === selfId);
   const hostRef = useRef(null);
   const played = useRef(new Set());
   const ready = useRef(false);
+  const touched = useRef(false);
+  const hydrated = useRef(false);
+  const draftTimer = useRef(0);
+  const audibleKey = practiceAnswers
+    .filter((item) => item.checked && (item.verdict === 'right' || item.verdict === 'wrong') && (teacher || item.who === selfId))
+    .map((item) => `${item.who}:${item.at}:${item.verdict}`)
+    .join('|');
+  const pendingKey = practiceAnswers
+    .filter((item) => item.answer && item.verdict !== 'right' && item.verdict !== 'wrong')
+    .map((item) => item.who)
+    .join('|');
   useEffect(() => {
-    const fresh = practiceAnswers.filter((item) => item.verdict === 'right' || item.verdict === 'wrong');
+    const fresh = audibleKey ? audibleKey.split('|') : [];
     if (!ready.current) {
-      fresh.forEach((item) => played.current.add(`${item.who}:${item.at}`));
+      fresh.forEach((key) => played.current.add(key));
       ready.current = true;
       return;
     }
-    fresh.forEach((item) => {
-      const key = `${item.who}:${item.at}`;
+    fresh.forEach((key) => {
       if (played.current.has(key)) return;
       played.current.add(key);
-      playPracticeSalute(item.verdict, hostRef.current);
+      playPracticeSalute(key.endsWith(':right') ? 'right' : 'wrong', hostRef.current);
     });
-  }, [practiceAnswers]);
+  }, [audibleKey]);
   useEffect(() => {
-    if (!teacher || !hasKey) return;
-    if (practiceAnswers.some((item) => item.answer && item.verdict !== 'right' && item.verdict !== 'wrong')) {
-      onGradePractice?.(obj.id);
-    }
-  }, [teacher, hasKey, practiceAnswers, obj.id, onGradePractice]);
-  const shown = !teacher && Boolean(mine);
+    if (!teacher || !hasKey || !pendingKey) return;
+    onGradePractice?.(obj.id);
+  }, [teacher, hasKey, pendingKey, obj.id, onGradePractice]);
+  const revealed = Boolean(mine?.checked);
+  const shown = !teacher && revealed;
   const answer = (teacher || shown) && secret ? answerLabel(secret.answer, options) : '';
   const solution = teacher && secret ? String(secret.solution || '').trim() : '';
   const fontSize = props.fontSize || 20;
@@ -80,7 +90,32 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onGradePrac
     : [...picks].sort((a, b) => a - b).join(',');
   const stop = (event) => event.stopPropagation();
 
+  useEffect(() => {
+    if (hydrated.current || touched.current || !mine?.answer) return;
+    hydrated.current = true;
+    if (props.openAnswer) {
+      setTyped(String(mine.answer));
+      return;
+    }
+    const nums = String(mine.answer).split(/[;,]/).map((part) => Number(part.trim())).filter((n) => Number.isInteger(n) && n >= 1);
+    setPicks(new Set(nums));
+  }, [mine?.answer, props.openAnswer]);
+
+  useEffect(() => {
+    if (!selfId) return undefined;
+    if (!touched.current && (!mine?.answer || !draft || mine.answer === draft)) return undefined;
+    window.clearTimeout(draftTimer.current);
+    draftTimer.current = window.setTimeout(() => onPracticeDraft?.(obj.id, draft), props.openAnswer ? 280 : 40);
+    return () => window.clearTimeout(draftTimer.current);
+  }, [draft, selfId, mine?.answer, props.openAnswer, obj.id, onPracticeDraft]);
+
+  const markTouched = () => {
+    touched.current = true;
+  };
+
   const check = () => {
+    window.clearTimeout(draftTimer.current);
+    markTouched();
     if (!draft) {
       setNeedPick(true);
       return;
@@ -97,9 +132,9 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onGradePrac
       <div
         ref={cardRef}
         className={`rounded-[1.2em] border bg-white p-[1.2em] text-zinc-800 shadow-sm dark:bg-[#09090b] dark:text-zinc-200 ${
-          flash === 'right' || mine?.verdict === 'right'
+          flash === 'right' || (revealed && mine?.verdict === 'right')
             ? 'border-emerald-400 dark:border-emerald-700'
-            : flash === 'wrong' || mine?.verdict === 'wrong'
+            : flash === 'wrong' || (revealed && mine?.verdict === 'wrong')
               ? 'border-amber-700 dark:border-amber-600'
               : 'border-zinc-200 dark:border-zinc-800/60'
         }`}
@@ -128,12 +163,15 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onGradePrac
                   key={index}
                   type="button"
                   data-chrome="true"
-                  onClick={() => setPicks((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(number)) next.delete(number);
-                    else next.add(number);
-                    return next;
-                  })}
+                  onClick={() => {
+                    markTouched();
+                    setPicks((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(number)) next.delete(number);
+                      else next.add(number);
+                      return next;
+                    });
+                  }}
                   className={`pointer-events-auto relative z-10 flex items-center gap-[0.7em] rounded-[1em] border px-[0.9em] py-[0.7em] text-left leading-snug [&_p]:my-0 ${
                     on
                       ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-950'
@@ -151,7 +189,10 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onGradePrac
           <input
             data-chrome="true"
             value={typed}
-            onChange={(event) => setTyped(event.target.value)}
+            onChange={(event) => {
+              markTouched();
+              setTyped(event.target.value);
+            }}
             onPointerDown={stop}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
