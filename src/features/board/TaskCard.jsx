@@ -42,6 +42,7 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
   const [picks, setPicks] = useState(() => new Set());
   const [typed, setTyped] = useState('');
   const [flash, setFlash] = useState('');
+  const [ownFlash, setOwnFlash] = useState('');
   const [needPick, setNeedPick] = useState(false);
   const props = obj.props || {};
   const options = Array.isArray(props.options) ? props.options : [];
@@ -80,14 +81,18 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
     if (!teacher || !hasKey || !pendingKey) return;
     onGradePractice?.(obj.id);
   }, [teacher, hasKey, pendingKey, obj.id, onGradePractice]);
-  const revealed = Boolean(mine?.checked);
-  const shown = !teacher && revealed;
-  const answer = (teacher || shown) && secret ? answerLabel(secret.answer, options) : '';
-  const solution = teacher && secret ? String(secret.solution || '').trim() : '';
-  const fontSize = props.fontSize || 20;
   const draft = props.openAnswer
     ? typed.trim()
     : [...picks].sort((a, b) => a - b).join(',');
+  const revealed = Boolean(mine?.checked);
+  const shown = !teacher && revealed;
+  const stale = Boolean(mine?.answer) && draft !== String(mine.answer);
+  const storedVerdict = !stale && revealed && (mine?.verdict === 'right' || mine?.verdict === 'wrong') ? mine.verdict : '';
+  const ownVerdict = storedVerdict || (!stale && (ownFlash === 'right' || ownFlash === 'wrong') ? ownFlash : '');
+  const ownMark = !teacher ? MARK[ownVerdict] : null;
+  const answer = (teacher || shown) && secret ? answerLabel(secret.answer, options) : '';
+  const solution = teacher && secret ? String(secret.solution || '').trim() : '';
+  const fontSize = props.fontSize || 20;
   const stop = (event) => event.stopPropagation();
 
   useEffect(() => {
@@ -100,6 +105,10 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
     const nums = String(mine.answer).split(/[;,]/).map((part) => Number(part.trim())).filter((n) => Number.isInteger(n) && n >= 1);
     setPicks(new Set(nums));
   }, [mine?.answer, props.openAnswer]);
+
+  useEffect(() => {
+    if (touched.current && mine?.answer && draft !== mine.answer) setOwnFlash('');
+  }, [draft, mine?.answer]);
 
   useEffect(() => {
     if (!selfId) return undefined;
@@ -123,6 +132,7 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
     setNeedPick(false);
     const verdict = onPractice?.(obj.id, draft);
     if (!verdict) return;
+    if (verdict === 'right' || verdict === 'wrong') setOwnFlash(verdict);
     setFlash(verdict);
     window.setTimeout(() => setFlash(''), 700);
   };
@@ -206,7 +216,7 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
         )}
         {(options.length > 0 || props.openAnswer) && (
           <div data-chrome="true" className="pointer-events-auto relative z-10 mt-[0.8em] flex flex-col items-start gap-[0.4em]" onPointerDown={stop}>
-            <div className="flex gap-[0.5em]">
+            <div className="flex items-center gap-[0.5em]">
               <button
                 type="button"
                 data-chrome="true"
@@ -227,6 +237,7 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
                   Сбросить ответы
                 </button>
               )}
+              {ownMark && <span className={`text-[0.75em] font-semibold ${ownMark.className}`}>{ownMark.label}</span>}
             </div>
             {needPick && <span className="text-[0.65em] font-medium text-rose-600">Сначала выберите вариант</span>}
           </div>
