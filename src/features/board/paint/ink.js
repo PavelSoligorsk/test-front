@@ -1,65 +1,101 @@
-// Чужой готовый штрих появляется не сразу, а прорисовывается со скоростью руки.
+// Дорисовка чужого штриха по времени жеста (props.ms / points[i].t), а не по длине линии.
+//
+// Протокол:
+//   1. BoardEditor: ink.start(id) — до применения op к стору, только для нового штриха.
+//   2. BoardObject: в useLayoutEffect, когда <path> уже в DOM, но кадр ещё не показан,
+//      вызывает ink.attach(id, path, props). Анимация создаётся синхронно.
+//   3. BoardObject при размонтировании вызывает ink.cancel(id).
 
-const INK_SPEED = 720;
+const MIN_MS = 200;
+const MAX_MS = 2500;
+const FALLBACK_SPEED = 600;
+const PENDING_TTL_MS = 5000;
 
-function paint(ink, viewport, now) {
-  let alive = false;
-  ink.items.forEach((item, id) => {
-    const path = viewport?.querySelector(`[data-object="${CSS.escape(id)}"] path`);
-    if (!path) {
-      // Штрих ещё не отрисован или ушёл за экран: ждём недолго и бросаем анимацию.
-      item.missing = (item.missing || 0) + 1;
-      if (item.missing > 120) ink.items.delete(id);
-      else alive = true;
-      return;
-    }
-    const length = path.getTotalLength();
-    if (!length) {
-      alive = true;
-      return;
-    }
-    if (!item.duration) item.duration = Math.min(4000, Math.max(280, (length / INK_SPEED) * 1000));
-    if (!item.at) item.at = now;
-    const progress = Math.min(1, (now - item.at) / item.duration);
-    path.style.strokeDasharray = String(length);
-    path.style.strokeDashoffset = String(length * (1 - progress));
-    if (progress < 1) alive = true;
-    else {
-      path.style.strokeDasharray = '';
-      path.style.strokeDashoffset = '';
-      ink.items.delete(id);
-    }
-  });
-  return alive;
+const pending = new Map();
+const running = new Map();
+
+const clamp = (value, lo, hi) => Math.min(hi, Math.max(lo, value));
+
+function reducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 }
 
-/** Анимация «чужой штрих рисуется» по stroke-dashoffset. attach() — корень холста. */
-export function createInk() {
-  let viewport = null;
-  const getViewport = () => viewport;
-  const ink = { items: new Map(), raf: 0, last: 0 };
-  return {
-    attach(element) {
-      viewport = element;
-    },
-    start(id) {
-      if (!id) return;
-      ink.items.set(id, { at: 0 });
-      if (ink.raf) return;
-      const tick = (now) => {
-        ink.last = now;
-        ink.raf = paint(ink, getViewport(), now) ? requestAnimationFrame(tick) : 0;
-      };
-      ink.raf = requestAnimationFrame(tick);
-    },
-    /** Перерисовать текущий кадр (после рендера React узлы путей могли смениться). */
-    repaint() {
-      if (ink.last) paint(ink, getViewport(), ink.last);
-    },
-    stop() {
-      cancelAnimationFrame(ink.raf);
-      ink.raf = 0;
-      ink.items.clear();
-    },
-  };
+function cumulativeLength(points) {
+  const cum = [0];
+  for (let i = 1; i < points.length; i += 1) {
+    cum.push(cum[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  }
+  return cum;
 }
+
+function buildPlan(props) {
+  const points = Array.isArray(props?.points) ? props.points : [];
+  if (points.length < 2) return null;
+  const cum = cumulativeLength(points);
+  const total = cum[cum.length - 1];
+  if (!(total > 0)) return null;
+
+  const timed = points.every((point) => Number.isFinite(point.t));
+  const span = timed ? points[points.length - 1].t - points[0].t : 0;
+  const useTimes = timed && span > 0;
+
+  const declared = useTimes ? span : Number(props.ms);
+  const ms = Number.isFinite(declared) && declared > 0 ? declared : (total / FALLBACK_SPEED) * 1000;
+  const duration = clamp(ms, MIN_MS, MAX_MS);
+
+  const frames = [];
+  if (useTimes) {
+    let last = 0;
+    points.forEach((point, i) => {
+      last = Math.min(1, Math.max(last, (point.t - points[0].t) / span));
+      frames.push({ offset: last, strokeDashoffset: String(1 - cum[i] / total) });
+    });
+  } else {
+    frames.push({ offset: 0, strokeDashoffset: '1' }, { offset: 1, strokeDashoffset: '0' });
+  }
+  return { duration, frames };
+}
+
+function release({ anim, path }) {
+  anim.onfinish = null;
+  anim.cancel();
+  path.style.removeProperty('stroke-dasharray');
+  path.removeAttribute('pathLength');
+}
+
+export const ink = {
+  start(id) {
+    pending.set(id, { until: performance.now() + PENDING_TTL_MS });
+  },
+
+  attach(id, path, props) {
+    const job = pending.get(id);
+    if (!job) return;
+    pending.delete(id);
+    if (performance.now() > job.until) return;
+    if (!path || typeof path.animate !== 'function' || reducedMotion()) return;
+    const plan = buildPlan(props);
+    if (!plan) return;
+
+    path.setAttribute('pathLength', '1');
+    path.style.strokeDasharray = '1 2';
+    const anim = path.animate(plan.frames, { duration: plan.duration, easing: 'linear', fill: 'both' });
+    const run = { anim, path, job };
+    running.set(id, run);
+    anim.onfinish = () => {
+      if (running.get(id) !== run) return;
+      running.delete(id);
+      release(run);
+    };
+  },
+
+  cancel(id) {
+    pending.delete(id);
+    const run = running.get(id);
+    if (!run) return;
+    running.delete(id);
+    const unfinished = run.anim.playState !== 'finished';
+    release(run);
+    if (unfinished) pending.set(id, run.job);
+  },
+};

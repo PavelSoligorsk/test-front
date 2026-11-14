@@ -9,7 +9,7 @@ import {
   strokeBounds,
 } from '../geometry';
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
-import { LASER_COLOR, LASER_MAX_POINTS, LASER_WIDTH, MAX_OBJECTS, SEND_MS } from '../constants';
+import { LASER_COLOR, LASER_MAX_POINTS, MAX_OBJECTS, SEND_MS } from '../constants';
 import { createObject, geogebraApp, uid } from '../model';
 import { strokeDuration } from '../ops';
 import { setPenActive } from '../penLock';
@@ -40,7 +40,11 @@ import {
 // вызывают свежие функции редактора.
 
 function roundPoint(point) {
-  return { x: Math.round(point.x * 10) / 10, y: Math.round(point.y * 10) / 10 };
+  return {
+    x: Math.round(point.x * 10) / 10,
+    y: Math.round(point.y * 10) / 10,
+    ...(Number.isFinite(point.t) ? { t: point.t } : {}),
+  };
 }
 
 /** Верхний объект под точкой; точки выбираются раньше остальных. */
@@ -173,7 +177,7 @@ export function createPointerInput({ refs, store, cam, board }) {
     if (drag.points.length < 2) return;
     const points = drag.points.map(roundPoint);
     const color = styleRef.current.laserColor || LASER_COLOR;
-    const width = styleRef.current.laserWidth || LASER_WIDTH;
+    const width = styleRef.current.penWidth || 2;
     const ms = strokeDuration(performance.now() - (drag.t0 || performance.now())) || 1;
     sendLaser(points, color, width, ms);
     paintDraft(null);
@@ -202,12 +206,8 @@ export function createPointerInput({ refs, store, cam, board }) {
         ms: strokeDuration(performance.now() - (drag.t0 || performance.now())) || 1,
       },
     };
-    if (draftRef.current?.kind === 'pen') draftRef.current = { ...draftRef.current, strokeId: stroke.id };
     addStroke(stroke);
-    // Черновик линии уходит, когда настоящий штрих уже нарисован: без мигания.
-    requestAnimationFrame(() => {
-      if (draftRef.current?.strokeId === stroke.id) paintDraft(null);
-    });
+    paintDraft(null);
   }
 
   function startPinch() {
@@ -421,7 +421,7 @@ export function createPointerInput({ refs, store, cam, board }) {
         const point = toWorld(sample);
         const last = drag.points[drag.points.length - 1];
         if (last && Math.hypot(point.x - last.x, point.y - last.y) < min) return;
-        drag.points.push(point);
+        drag.points.push({ ...point, t: Math.round(performance.now() - (drag.t0 || performance.now())) });
         added = true;
       });
       if (!added) return;
@@ -430,7 +430,7 @@ export function createPointerInput({ refs, store, cam, board }) {
         points: drag.points,
         origin: drag.origin,
         color: drag.laser ? (styleRef.current.laserColor || LASER_COLOR) : currentStyle.pen,
-        width: drag.laser ? (styleRef.current.laserWidth || LASER_WIDTH) : currentStyle.penWidth,
+        width: currentStyle.penWidth,
       });
       return;
     }
@@ -647,11 +647,11 @@ export function createPointerInput({ refs, store, cam, board }) {
         kind: 'pen',
         laser,
         pointerId: event.pointerId,
-        points: [world],
+        points: [{ ...world, t: 0 }],
         origin: world,
         t0: performance.now(),
         color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
-        width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
+        width: styleRef.current.penWidth,
       };
       setPenActive(true);
       if (hintRef.current) hintRef.current.style.display = 'none';
@@ -660,7 +660,7 @@ export function createPointerInput({ refs, store, cam, board }) {
         points: [world],
         origin: world,
         color: laser ? (styleRef.current.laserColor || LASER_COLOR) : styleRef.current.pen,
-        width: laser ? (styleRef.current.laserWidth || LASER_WIDTH) : styleRef.current.penWidth,
+        width: styleRef.current.penWidth,
       });
       trackPointer(event);
       return;

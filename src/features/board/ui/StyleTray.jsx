@@ -1,7 +1,7 @@
 import { GEOGEBRA_APPS, PEN_COLORS, PEN_WIDTHS, SHAPE_FILLS, STICKY_COLORS, TEXT_SIZES } from '../model';
 import { SHAPE_GROUPS } from '../shapes';
 import ShapeGlyph from '../ShapeGlyph';
-import { LASER_COLORS, LASER_WIDTHS } from '../constants';
+import { LASER_COLORS } from '../constants';
 
 export default function StyleTray({ context, style, onStyle }) {
   if (context === 'sticky') {
@@ -56,12 +56,12 @@ export default function StyleTray({ context, style, onStyle }) {
           ))}
         </div>
         <div className="mt-2 flex gap-1">
-          {LASER_WIDTHS.map((width) => (
+          {PEN_WIDTHS.map((width) => (
             <button
               key={width}
               type="button"
-              onClick={() => onStyle((prev) => ({ ...prev, laserWidth: width }))}
-              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.laserWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              onClick={() => onStyle((prev) => ({ ...prev, penWidth: width }))}
+              className={`h-7 min-w-7 rounded-lg px-1.5 text-[11px] font-semibold ${style.penWidth === width ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}
             >
               {width}
             </button>

@@ -63,7 +63,11 @@ export function strokeBounds(points, width) {
     y: top,
     w: round1(maxX - minX + pad * 2),
     h: round1(maxY - minY + pad * 2),
-    points: points.map((p) => ({ x: round1(p.x - left), y: round1(p.y - top) })),
+    points: points.map((p) => ({
+      x: round1(p.x - left),
+      y: round1(p.y - top),
+      ...(Number.isFinite(p.t) ? { t: p.t } : {}),
+    })),
   };
 }
 

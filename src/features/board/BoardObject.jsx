@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useRef } from 'react';
+import { ink } from './paint/ink';
 import { ImageIcon, Lock } from 'lucide-react';
 import GeoGebraWidget from './GeoGebraWidget';
 import MarkdownBody from './MarkdownBody';
@@ -220,6 +221,27 @@ function StrokeOutline({ obj }) {
   );
 }
 
+function DrawStroke({ obj }) {
+  const pathRef = useRef(null);
+  useLayoutEffect(() => {
+    ink.attach(obj.id, pathRef.current, obj.props);
+    return () => ink.cancel(obj.id);
+  }, [obj.id]);
+  return (
+    <svg width={obj.w} height={obj.h} className="block overflow-visible">
+      <path
+        ref={pathRef}
+        d={smoothPath(obj.props.points || [])}
+        fill="none"
+        stroke={obj.props.color || '#18181b'}
+        strokeWidth={obj.props.width || 2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function BoardObject({
   obj,
   zoom,
@@ -384,18 +406,7 @@ function BoardObject({
         />
       ))}
 
-      {obj.type === 'draw' && (
-        <svg width={obj.w} height={obj.h} className="block overflow-visible">
-          <path
-            d={smoothPath(obj.props.points || [])}
-            fill="none"
-            stroke={obj.props.color || '#18181b'}
-            strokeWidth={obj.props.width || 2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )}
+      {obj.type === 'draw' && <DrawStroke obj={obj} />}
 
       {obj.type === 'image' && (
         <div className="relative h-full w-full overflow-hidden rounded-sm bg-zinc-50 dark:bg-zinc-900">

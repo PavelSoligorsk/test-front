@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -94,7 +95,7 @@ import { LASER_COLOR, LASER_FADE_MS, LASER_WIDTH, MAX_OBJECTS, SEND_MS } from '.
 import BoardSidePanes from './ui/BoardSidePanes';
 import { renderDraft } from './paint/draft';
 import { paintGuides as renderGuides } from './paint/guides';
-import { createInk } from './paint/ink';
+import { ink } from './paint/ink';
 import { playLaser } from './paint/laser';
 import IconButton from './ui/IconButton';
 import LinkStatus from './ui/LinkStatus';
@@ -218,7 +219,7 @@ export default function BoardEditor({
   const worldRef = useRef(null);
   const draftHostRef = useRef(null);
   const laserHostRef = useRef(null);
-  const [ink] = useState(createInk);
+  const ownLaserRef = useRef({ at: 0, key: '' });
   const guideHostRef = useRef(null);
   const groupBoxRef = useRef(null);
   const barRef = useRef(null);
@@ -473,8 +474,20 @@ export default function BoardEditor({
     }
   }
 
+  function laserKey(points) {
+    const list = Array.isArray(points) ? points : [];
+    const n = list.length;
+    if (!n) return '';
+    const a = list[0];
+    const b = list[n - 1];
+    return `${n}:${a?.x}:${a?.y}:${b?.x}:${b?.y}`;
+  }
+
   function showLaser(message) {
     if (message?.clientId && message.clientId === clientIdRef.current) return;
+    const key = laserKey(message?.points);
+    const own = ownLaserRef.current;
+    if (!message?.local && key && key === own.key && performance.now() - own.at < 4000) return;
     playLaser(laserHostRef.current, message);
   }
 
@@ -534,12 +547,13 @@ export default function BoardEditor({
     const next = applyOp(store.get(), upsert);
     sentRef.current = applyOp(sentRef.current, upsert);
     pushHistory(store.get(), next);
-    store.set(next);
+    flushSync(() => store.set(next));
   }
 
   function sendLaser(points, color, width, ms) {
+    ownLaserRef.current = { at: performance.now(), key: laserKey(points) };
     socketRef.current?.laser(points, color, width, ms);
-    showLaser({ points, color, width, fadeMs: LASER_FADE_MS });
+    showLaser({ points, color, width, ms, fadeMs: LASER_FADE_MS, local: true });
   }
 
   function canvasList() {
@@ -1239,18 +1253,16 @@ export default function BoardEditor({
 
   useEffect(() => {
     mountedRef.current = true;
-    ink.attach(viewportRef.current);
     return () => {
       mountedRef.current = false;
       window.clearTimeout(noticeTimerRef.current);
       window.clearTimeout(geoTimerRef.current);
       geoXmlTimer.cancel();
       setPenActive(false);
-      ink.stop();
       motion.dispose();
       store.dispose();
     };
-  }, [geoXmlTimer, ink, motion, store]);
+  }, [geoXmlTimer, motion, store]);
 
   // Любая правка документа (своя или после отмены) уходит в сеть через общий diff.
   useEffect(() => store.subscribe(() => liveRef.current.scheduleSend?.()), [store]);
@@ -1299,14 +1311,11 @@ export default function BoardEditor({
       return;
     }
     if (op.type === 'camera') return;
-    applyIncoming(op);
-    // Пока человек рисует, курсор он не шлёт: стрелка встаёт на конец готового штриха.
     if (op.type === 'upsert' && op.object?.type === 'draw') {
       movePeerToStroke(message?.clientId, op.object.id);
-      const current = store.get().find((item) => item.id === op.object.id);
-      const incoming = op.object.props?.points?.length || 0;
-      if (current && (current.props?.points?.length || 0) === incoming) ink.start(op.object.id);
+      if (!store.get().some((item) => item.id === op.object.id)) ink.start(op.object.id);
     }
+    applyIncoming(op);
   }
 
   function deleteSelected() {
@@ -1881,14 +1890,10 @@ export default function BoardEditor({
 
   useLayoutEffect(() => {
     toolRef.current = tool;
-    if (dragRef.current?.kind === 'pen') {
-      ink.repaint();
-      return;
-    }
+    if (dragRef.current?.kind === 'pen') return;
     cam.paintNow();
     paintCursor();
     if (draftRef.current && draftRef.current.kind !== 'pen' && dragRef.current?.kind !== 'pen') paintDraft(draftRef.current);
-    ink.repaint();
   });
 
   // Указатель живёт в своём модуле и создаётся один раз; JSX получает стабильные прокладки.
