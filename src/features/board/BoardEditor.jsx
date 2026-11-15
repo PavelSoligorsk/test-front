@@ -1271,9 +1271,23 @@ export default function BoardEditor({
     scheduleSend();
   }, [title]);
 
-  // Камера подбирается один раз при открытии доски (если вида из прошлого раза нет).
+  // Первый кадр всегда на 100%. Если своего вида ещё не было, содержимое ставится в центр.
   const fitOnOpen = useEffectEvent(() => {
-    if (!cam.saved) cam.fit(boundsOf(canvasList()), 1);
+    if (cam.saved) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const bounds = boundsOf(canvasList());
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+    const next = bounds
+      ? {
+          zoom: 1,
+          x: width / 2 - (bounds.x + bounds.w / 2),
+          y: height / 2 - (bounds.y + bounds.h / 2),
+        }
+      : { x: Math.round(width / 2) || 64, y: Math.round(height / 2) || 72, zoom: 1 };
+    cam.paint(next);
+    cam.scheduleCommit();
   });
   useLayoutEffect(() => fitOnOpen(), []);
 

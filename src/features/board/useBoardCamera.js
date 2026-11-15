@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { MAX_ZOOM, MIN_ZOOM, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
+import { MAX_ZOOM, MIN_ZOOM, cameraAtZoom1, fitCamera, loadLocalCamera, saveLocalCamera } from './camera';
 import { cullingRect } from './culling';
 import { clamp } from './geometry';
 import { DEFAULT_SURFACE } from './meta';
@@ -13,7 +13,13 @@ const COMMIT_MS = 120;
  * жеста — или раньше, если экран уехал за отрисованную полосу отсечения.
  */
 export function useBoardCamera({ boardId, viewportRef, worldRef, zoomLabelRef, surfaceRef, isDragging, onPaint }) {
-  const [saved] = useState(() => loadLocalCamera(boardId));
+  const [saved] = useState(() => {
+    const loaded = loadLocalCamera(boardId);
+    if (!loaded) return null;
+    const next = cameraAtZoom1(loaded);
+    if (loaded.zoom !== 1) saveLocalCamera(boardId, next);
+    return next;
+  });
   const cameraRef = useRef(saved || DEFAULT_CAMERA);
   const [camera, setCamera] = useState(saved || DEFAULT_CAMERA);
   const [viewSize, setViewSize] = useState({ w: 0, h: 0 });

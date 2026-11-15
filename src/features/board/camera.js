@@ -23,6 +23,20 @@ export function loadLocalCamera(boardId) {
   }
 }
 
+// Масштаб входа на доску. Точка в центре экрана остаётся на месте.
+export function cameraAtZoom1(cam) {
+  if (!validCamera(cam)) return null;
+  if (cam.zoom === 1) return { x: cam.x, y: cam.y, zoom: 1 };
+  const zoom = cam.zoom;
+  const w = typeof window === 'undefined' ? 0 : window.innerWidth;
+  const h = typeof window === 'undefined' ? 0 : window.innerHeight;
+  return {
+    zoom: 1,
+    x: w > 0 ? w / 2 - (w / 2 - cam.x) / zoom : cam.x / zoom,
+    y: h > 0 ? h / 2 - (h / 2 - cam.y) / zoom : cam.y / zoom,
+  };
+}
+
 export function saveLocalCamera(boardId, cam) {
   if (!boardId || !validCamera(cam)) return;
   try {

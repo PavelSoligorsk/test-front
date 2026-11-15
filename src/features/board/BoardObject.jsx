@@ -8,7 +8,6 @@ import TaskCard from './TaskCard';
 import { smoothPath, strokeOutline } from './geometry';
 import { SELECTION_COLOR, geogebraApp } from './model';
 import { boardImageSrc } from './images';
-import { geoPixelScale } from './geogebraApi';
 import { arrowHeadState, figureReactProps, figureTag, isSolid, jointLocal, labelPlace, labelVertices, planeNodes, shapeFigures, shapeHandle, shapeKnobs, solidAnchors } from './shapes';
 
 const HANDLE_POS = {
@@ -620,5 +619,4 @@ export default memo(BoardObject, (prev, next) => (
   && prev.editing === next.editing
   && prev.incomingKey === next.incomingKey
   && prev.lockedBy === next.lockedBy
-  && (next.obj.type !== 'geogebra' || geoPixelScale(prev.zoom) === geoPixelScale(next.zoom))
 ));
