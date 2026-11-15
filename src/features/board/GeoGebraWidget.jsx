@@ -34,6 +34,10 @@ import { appletParams, removeApplet } from '../../shared/geogebra/params';
 import { runSetup, theoryPerspectiveCode } from '../../shared/geogebra/setup';
 import { penActive } from './penLock';
 
+// Длительность плавного зума 3D у зрителя, мс.
+const ZOOM_MS = 240;
+const easeOutCubic = (p) => 1 - (1 - p) ** 3;
+
 function lerpCamera(from, to, k) {
   const mix = (a, b) => a + (b - a) * k;
   return {
@@ -102,7 +106,6 @@ export default function GeoGebraWidget({
   materialId = '',
   controls = [],
   texts = [],
-  zoom = 1,
   interactive,
   onReady,
   onConstructionChange,
@@ -154,12 +157,9 @@ export default function GeoGebraWidget({
     },
   });
   const fitTimerRef = useRef(0);
-  const zoomTimerRef = useRef(0);
   const wrapRef = useRef(null);
   const sharpRef = useRef(null);
   const appletObjRef = useRef(null);
-  const zoomRef = useRef(zoom || 1);
-  zoomRef.current = zoom || 1;
   const interactiveRef = useRef(interactive);
   const wasInteractiveRef = useRef(interactive);
   const quietUntilRef = useRef(0);
@@ -207,7 +207,7 @@ export default function GeoGebraWidget({
   // Своя обёртка: апплет рисуется в пикселях экрана и уменьшается в рамку.
   // Внутренний scaler GeoGebra не трогаем.
   function sharpRatio(box) {
-    return geoPixelScale(zoomRef.current || 1, box, appName === '3d' ? 1.25 : 0);
+    return geoPixelScale(1, box);
   }
 
   function applyWrap(box, ratio) {
@@ -278,6 +278,25 @@ export default function GeoGebraWidget({
     });
   }
 
+  function canvasBox() {
+    const canvas = viewCanvas(hostRef.current);
+    return canvas ? { w: canvas.offsetWidth, h: canvas.offsetHeight } : null;
+  }
+
+  // После операции, которая могла принести чужой размер холста.
+  // Ничего не пересчитывает, пока размер реально не сместился.
+  function checkSize(api, before) {
+    window.setTimeout(() => {
+      if (apiRef.current !== api || interactiveRef.current) return;
+      const after = canvasBox();
+      if (!before || !after) return;
+      if (Math.abs(after.w - before.w) > 1 || Math.abs(after.h - before.h) > 1) {
+        sharpRef.current = null;
+        fitToFrame(api);
+      }
+    }, 120);
+  }
+
   function playback() {
     if (!playRef.current) {
       playRef.current = {
@@ -323,25 +342,81 @@ export default function GeoGebraWidget({
     const camera = glideRef.current.camera;
     if (camera.fit > 0) return camera.fit;
     const box = frameBox() || sharpRef.current || { w: width, h: height };
-    const ratio = sharpRef.current?.scale || geoPixelScale(zoomRef.current || 1);
+    const ratio = sharpRef.current?.scale || geoPixelScale(1);
     const canvas = Math.min(box.w, box.h) * ratio;
     return Math.max(40, canvas) / 3.1;
   }
 
+  // 3D у зрителя: поворот и центр применяются сразу, масштаб доезжает по времени.
+  // Стартовый масштаб берём из последнего показанного кадра, а не из XML: GeoGebra
+  // применяет камеру со следующей перерисовкой, и чтение сразу после записи вернуло
+  // бы старое значение, из-за чего зум дёргался бы на каждом пакете.
+  function followCamera3d(api, cam) {
+    const camera = glideRef.current.camera;
+    window.clearTimeout(camera.check);
+    if (camera.raf) cancelAnimationFrame(camera.raf);
+    camera.raf = 0;
+    stopCamPlayback();
+    let from = camera.shown?.scale;
+    if (!(from > 0)) from = readGeoGebraCamera(api)?.scale;
+    if (!(from > 0)) from = cam.scale;
+    camera.live = true;
+
+    if (Math.abs(from / cam.scale - 1) < 2e-3) {
+      camera.to = null;
+      camera.now = cam;
+      applyLiveCamera(api, cam);
+      settleCamera(api, cam);
+      return;
+    }
+
+    const start = { ...cam, scale: from };
+    applyLiveCamera(api, start);
+    camera.now = start;
+    if (!camera.to || Math.abs(camera.to.scale / cam.scale - 1) > 1e-3) {
+      camera.from = from;
+      camera.t0 = performance.now();
+      camera.dur = ZOOM_MS;
+    }
+    camera.to = cam;
+    kickGlide(api);
+  }
+
+  function stepZoom3d(api) {
+    const camera = glideRef.current.camera;
+    const to = camera.to;
+    if (!to) return true;
+    if (!(camera.from > 0) || !(to.scale > 0)) {
+      camera.to = null;
+      return true;
+    }
+    const p = camera.dur > 0
+      ? Math.min(1, Math.max(0, (performance.now() - camera.t0) / camera.dur))
+      : 1;
+    const scale = p >= 1 ? to.scale : camera.from * (to.scale / camera.from) ** easeOutCubic(p);
+    const value = { ...to, scale };
+    applyLiveCamera(api, value);
+    camera.now = value;
+    if (p < 1) return false;
+    camera.to = null;
+    settleCamera(api, to);
+    return true;
+  }
+
   function stepCamera(api, blend) {
+    if (appName === '3d') return stepZoom3d(api);
     const camera = glideRef.current.camera;
     const from = camera.now;
     const to = camera.to;
     if (!from || !to) return true;
     const nearPole = Math.min(Math.abs(Math.abs(from.xAngle) - 90), Math.abs(Math.abs(to.xAngle) - 90)) < 12;
-    const jump = appName === '3d';
     const next = {
-      xZero: jump ? to.xZero : from.xZero + (to.xZero - from.xZero) * blend,
-      yZero: jump ? to.yZero : from.yZero + (to.yZero - from.yZero) * blend,
-      zZero: jump ? to.zZero : from.zZero + (to.zZero - from.zZero) * blend,
+      xZero: from.xZero + (to.xZero - from.xZero) * blend,
+      yZero: from.yZero + (to.yZero - from.yZero) * blend,
+      zZero: from.zZero + (to.zZero - from.zZero) * blend,
       scale: from.scale * (to.scale / from.scale) ** blend,
-      xAngle: jump ? to.xAngle : from.xAngle + angleGap(from.xAngle, to.xAngle) * blend,
-      zAngle: jump || nearPole ? to.zAngle : from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
+      xAngle: from.xAngle + angleGap(from.xAngle, to.xAngle) * blend,
+      zAngle: nearPole ? to.zAngle : from.zAngle + angleGap(from.zAngle, to.zAngle) * blend,
     };
     const arrived = sameCamera(nearPole ? { ...next, zAngle: to.zAngle } : next, to, 0.01);
     const value = arrived ? to : next;
@@ -682,7 +757,7 @@ export default function GeoGebraWidget({
     const camera = glideRef.current.camera;
     window.clearTimeout(camera.check);
     camera.check = window.setTimeout(() => {
-      if (apiRef.current !== api || interactiveRef.current) return;
+      if (camera.to || apiRef.current !== api || interactiveRef.current) return;
       const actual = readGeoGebraCamera(api);
       if (!actual || !(camera.half > 0)) return;
       if (Math.abs(actual.scale / expected.scale - 1) <= 0.005) return;
@@ -724,34 +799,8 @@ export default function GeoGebraWidget({
     const size = viewSize3d();
     const cam = size && cameraFromWire(message, size);
     if (!cam) return;
-    if (appName === '3d' && message.snap) {
-      stopCamPlayback();
-      const camera = glideRef.current.camera;
-      if (camera.raf) cancelAnimationFrame(camera.raf);
-      camera.raf = 0;
-      camera.to = null;
-      camera.now = cam;
-      camera.live = false;
-      applyLiveCamera(api, cam);
-      return;
-    }
     if (appName === '3d') {
-      const actual = readGeoGebraCamera(api);
-      const scale = actual?.scale > 0 ? actual.scale : cam.scale;
-      const jumped = { ...cam, scale };
-      applyLiveCamera(api, jumped);
-      const camera = glideRef.current.camera;
-      camera.now = jumped;
-      camera.live = true;
-      camera.tau = 110;
-      stopCamPlayback();
-      if (!(scale > 0) || Math.abs(scale / cam.scale - 1) < 0.005) {
-        camera.to = null;
-        camera.now = cam;
-        return;
-      }
-      camera.to = cam;
-      kickGlide(api);
+      followCamera3d(api, cam);
       return;
     }
     pushCamSample(api, cam, Number.isFinite(message.seq) ? message.seq : NaN);
@@ -857,6 +906,7 @@ export default function GeoGebraWidget({
       }
       const keptCamera = appName === '3d' ? readGeoGebraCamera(api) : null;
       const keptView = appName === '3d' ? readGeoGebraView(api) : null;
+      const sizeBefore = canvasBox();
       stopGlide();
       const painted = appName === '3d'
         ? withCamera(xmlWithoutViewSize(xml), keptCamera)
@@ -871,6 +921,7 @@ export default function GeoGebraWidget({
         if (typeof api.setRepaintingActive === 'function') api.setRepaintingActive(true);
       }
       rememberApplied(comparable);
+      checkSize(api, sizeBefore);
       if (appName !== '3d' && !graphicsVisible(api)) {
         try { api.setPerspective('AG'); } catch { /* чертёж рядом с алгеброй не открылся */ }
       }
@@ -1052,13 +1103,13 @@ export default function GeoGebraWidget({
       const resume = followRef.current;
       followRef.current = true;
       setFollow(true);
+      quietUntilRef.current = performance.now() + 300;
+      appliedXmlRef.current = '';
+      try { onApplyConstruction(apiRef.current); } catch { /* чужое построение догонит следующим сообщением */ }
       if (resume && appName === '3d' && lastCamRef.current) {
         camSeenRef.current = 0;
         onTakeGeoCam(lastCamRef.current);
       }
-      quietUntilRef.current = performance.now() + 300;
-      appliedXmlRef.current = '';
-      try { onApplyConstruction(apiRef.current); } catch { /* чужое построение догонит следующим сообщением */ }
     }
   }, [interactive, status, appName]);
 
@@ -1312,19 +1363,6 @@ export default function GeoGebraWidget({
       fitTimerRef.current += 1;
     };
   }, [status]);
-
-  useEffect(() => {
-    if (status !== 'ready') return undefined;
-    window.clearTimeout(zoomTimerRef.current);
-    zoomTimerRef.current = window.setTimeout(() => {
-      const box = frameBox();
-      const need = onSharpRatio(box);
-      const have = sharpRef.current?.scale || 1;
-      if (Math.abs(need - have) > 1e-3) onFitToFrame(apiRef.current);
-    }, 150);
-    return () => window.clearTimeout(zoomTimerRef.current);
-    // Пока доску зумят, её CSS просто растягивает холст. Резкость догоняется после жеста.
-  }, [zoom, status, appName]);
 
   useEffect(() => {
     if (status !== 'ready') return undefined;

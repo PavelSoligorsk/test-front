@@ -18,22 +18,10 @@ export {
   writeUniformUnit,
 };
 
-// Потолок настоящего буфера холста (CSS-размер × масштаб × dpr²): дальше браузер,
-// особенно мобильный, начинает терять холсты.
-const MAX_BACKING_PIXELS = 4096 * 4096;
-const PIXEL_STEPS = [1, 1.5, 2, 3, 4];
-
-// Во сколько раз апплет больше своей рамки на доске. GeoGebra сама рисует холст
-// с плотностью экрана (canvas.width = clientWidth × devicePixelRatio), поэтому здесь
-// только зум доски, без dpr. Шаги вместо точного зума: мелкий зум не пересоздаёт холст.
-export function geoPixelScale(zoom = 1, box, cap = 0) {
-  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
-  let ratio = PIXEL_STEPS.find((step) => step >= (zoom || 1) - 1e-3) ?? PIXEL_STEPS[PIXEL_STEPS.length - 1];
-  if (cap > 0) ratio = Math.min(ratio, cap);
-  if (box && box.w > 0 && box.h > 0) {
-    ratio = Math.min(ratio, Math.sqrt(MAX_BACKING_PIXELS / (box.w * box.h * dpr * dpr)));
-  }
-  return Math.max(1, ratio);
+// Холст всегда как при 100% зума доски. Перезагрузка не смотрит на текущий масштаб:
+// его применяет CSS. GeoGebra сама домножает буфер на плотность экрана.
+export function geoPixelScale() {
+  return 1;
 }
 
 export function readGeoGebraPerspective(api) {
