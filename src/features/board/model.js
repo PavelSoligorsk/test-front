@@ -10,14 +10,39 @@ export function audienceKey(board) {
   return `s:${ids.join(',')}`;
 }
 
-// Страницы одной доски связывает seriesId с сервера. У ответа старого сервера его нет —
-// тогда серия собирается по аудитории, как раньше.
+// Страницы одной папки имеют общий seriesId. Если его нет, остаётся прежняя
+// группировка по аудитории.
 export function seriesKey(board) {
   return board?.seriesId ? `series:${board.seriesId}` : audienceKey(board);
 }
 
+function pageOrder(board) {
+  const number = Number(board?.pageNumber);
+  return Number.isFinite(number) && number > 0 ? number : Number.MAX_SAFE_INTEGER;
+}
+
 export function sameSeries(a, b) {
   return seriesKey(a) === seriesKey(b);
+}
+
+export function collectionCards(collections) {
+  return (collections || []).map((collection) => {
+    const pages = [...(collection.pages || [])].sort((a, b) => (Number(a.pageNumber) || 0) - (Number(b.pageNumber) || 0));
+    const first = pages[0] || {};
+    return {
+      id: first.id || collection.id,
+      seriesId: collection.id,
+      collectionTitle: collection.title || null,
+      kind: collection.kind || '',
+      groupId: collection.groupId ?? null,
+      studentIds: collection.studentIds || [],
+      title: collection.title || first.title || 'Доска',
+      updatedAt: collection.updatedAt || first.updatedAt || '',
+      pageCount: pages.length,
+      pageIds: pages.map((page) => page.id),
+      pages: pages.map((page) => ({ ...page, seriesId: collection.id })),
+    };
+  });
 }
 
 export function groupBoardSeries(boards) {
@@ -32,12 +57,15 @@ export function groupBoardSeries(boards) {
     groups.get(key).push(board);
   });
   return order.map((key) => {
-    const pages = groups.get(key).slice().sort((a, b) => {
-      const left = new Date(a.updatedAt || 0).getTime();
-      const right = new Date(b.updatedAt || 0).getTime();
-      return right - left;
-    });
-    return { ...pages[0], pageCount: pages.length, pageIds: pages.map((page) => page.id) };
+    const pages = groups.get(key).slice().sort((a, b) => (
+      pageOrder(a) - pageOrder(b) || String(a.id).localeCompare(String(b.id))
+    ));
+    return {
+      ...pages[0],
+      pageCount: pages.length,
+      pageIds: pages.map((page) => page.id),
+      pages,
+    };
   });
 }
 

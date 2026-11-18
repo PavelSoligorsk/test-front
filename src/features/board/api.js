@@ -19,7 +19,70 @@ export function boardErrorMessage(error, fallback) {
 function asBoardList(data) {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.boards)) return data.boards;
+  if (Array.isArray(data?.collections)) return data.collections;
   return [];
+}
+
+const collectionPages = { teacher: new Map(), student: new Map() };
+const collectionLists = { teacher: null, student: null };
+
+function rememberCollections(audience, collections) {
+  const map = collectionPages[audience];
+  map.clear();
+  collectionLists[audience] = collections || [];
+  (collections || []).forEach((collection) => {
+    const pages = [...(collection.pages || [])].sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
+    const stamped = pages.map((page) => ({ ...page, seriesId: collection.id }));
+    map.set(collection.id, stamped);
+    stamped.forEach((page) => map.set(page.id, stamped));
+  });
+}
+
+function pageStamp(board, seriesId) {
+  return {
+    id: board.id,
+    title: board.title,
+    pageNumber: board.pageNumber,
+    objectCount: board.objects?.length ?? board.objectCount ?? 0,
+    createdAt: board.createdAt,
+    updatedAt: board.updatedAt,
+    shareAccess: board.shareAccess ?? null,
+    seriesId,
+  };
+}
+
+export function rememberBoardPage(audience, board) {
+  const key = audience === 'teacher' ? 'teacher' : 'student';
+  const collections = collectionLists[key];
+  const seriesId = board?.seriesId;
+  if (!collections || !seriesId || !board?.id) return;
+  const collection = collections.find((item) => item.id === seriesId);
+  if (!collection) return;
+  const pages = collection.pages || [];
+  const next = pageStamp(board, seriesId);
+  collection.pages = pages.some((page) => page.id === board.id)
+    ? pages.map((page) => (page.id === board.id ? { ...page, ...next } : page))
+    : [...pages, next];
+  rememberCollections(key, collections);
+}
+
+export function forgetBoardPage(audience, pageId) {
+  const key = audience === 'teacher' ? 'teacher' : 'student';
+  const collections = collectionLists[key];
+  if (!collections || !pageId) return;
+  const next = collections
+    .map((collection) => ({
+      ...collection,
+      pages: (collection.pages || []).filter((page) => page.id !== pageId),
+    }))
+    .filter((collection) => collection.pages.length);
+  rememberCollections(key, next);
+}
+
+export function cachedCollectionPages(audience, board) {
+  const map = collectionPages[audience === 'teacher' ? 'teacher' : 'student'];
+  if (!map || !board) return null;
+  return map.get(board.seriesId) || map.get(board.id) || null;
 }
 
 export function listStudentBoards() {
@@ -38,6 +101,26 @@ export function uploadStudentBoardImage(file) {
 
 export function listTeacherBoards() {
   return apiClient.get(ENDPOINTS.TEACHER_BOARDS).then((response) => asBoardList(response.data));
+}
+
+function loadCollections(audience, fresh) {
+  if (!fresh && collectionLists[audience]) return Promise.resolve(collectionLists[audience]);
+  const path = audience === 'teacher'
+    ? ENDPOINTS.TEACHER_BOARD_COLLECTIONS
+    : ENDPOINTS.STUDENT_BOARD_COLLECTIONS;
+  return apiClient.get(path).then((response) => {
+    const collections = asBoardList(response.data);
+    rememberCollections(audience, collections);
+    return collections;
+  });
+}
+
+export function listTeacherCollections({ fresh = false } = {}) {
+  return loadCollections('teacher', fresh);
+}
+
+export function listStudentCollections({ fresh = false } = {}) {
+  return loadCollections('student', fresh);
 }
 
 export function createTeacherBoard(body) {

@@ -5,11 +5,11 @@ import {
   boardErrorMessage,
   createTeacherBoard,
   deleteTeacherBoard,
-  listTeacherBoards,
+  listTeacherCollections,
 } from '../../features/board/api';
 import { deleteBoard, saveBoard } from '../../features/board/storage';
 import BoardGallery from '../../features/board/BoardGallery';
-import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
+import { boardCountLabel, collectionCards } from '../../features/board/model';
 import { PageShell } from '../../shared/ui';
 import SearchField from '../../shared/ui/SearchField';
 import { useTeacherWorkspace } from './teacherWorkspaceContext';
@@ -17,6 +17,11 @@ import { useTeacherWorkspace } from './teacherWorkspaceContext';
 function personName(person) {
   const name = `${person.first_name || ''} ${person.last_name || ''}`.trim();
   return name || person.username || `ID ${person.id}`;
+}
+
+function folderTitle(board, students, groups) {
+  if (board.collectionTitle) return board.collectionTitle;
+  return audienceLabel(board, students, groups);
 }
 
 function audienceLabel(board, students, groups) {
@@ -39,7 +44,7 @@ export default function TeacherBoardListPage() {
   const navigate = useNavigate();
   const { students, groups } = useTeacherWorkspace();
   const [boards, setBoards] = useState(null);
-  const series = useMemo(() => groupBoardSeries(boards || []), [boards]);
+  const series = useMemo(() => collectionCards(boards || []), [boards]);
   const [creating, setCreating] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [error, setError] = useState('');
@@ -48,13 +53,16 @@ export default function TeacherBoardListPage() {
     const needle = query.trim().toLowerCase();
     if (!needle) return series;
     return series.filter((board) => {
-      const label = audienceLabel(board, students, groups);
-      return label.toLowerCase().includes(needle) || (board.title || '').toLowerCase().includes(needle);
+      const label = folderTitle(board, students, groups);
+      const pages = (board.pages || []).map((page) => page.title || '').join(' ');
+      return label.toLowerCase().includes(needle)
+        || pages.toLowerCase().includes(needle)
+        || (board.title || '').toLowerCase().includes(needle);
     });
   }, [series, query, students, groups]);
 
   useEffect(() => {
-    listTeacherBoards()
+    listTeacherCollections({ fresh: true })
       .then((rows) => setBoards(rows))
       .catch((err) => {
         setBoards([]);
@@ -66,15 +74,8 @@ export default function TeacherBoardListPage() {
     setError('');
     const board = await createTeacherBoard(body);
     await saveBoard(board);
-    setBoards((prev) => [{
-      id: board.id,
-      title: board.title,
-      teacherId: board.teacherId,
-      groupId: board.groupId,
-      studentIds: board.studentIds,
-      updatedAt: board.updatedAt,
-      objectCount: board.objects?.length ?? 0,
-    }, ...(prev || [])]);
+    const collections = await listTeacherCollections({ fresh: true }).catch(() => null);
+    if (collections) setBoards(collections);
     setCreating(false);
     navigate(`/teacher/board/${board.id}`);
   }
@@ -154,7 +155,7 @@ export default function TeacherBoardListPage() {
       ) : (
         <BoardGallery
           boards={visible}
-          titleOf={(board) => audienceLabel(board, students, groups)}
+          titleOf={(board) => folderTitle(board, students, groups)}
           onOpen={(board) => navigate(`/teacher/board/${board.id}`)}
           renderMenu={(board) => (
             confirmDeleteId === board.id ? (

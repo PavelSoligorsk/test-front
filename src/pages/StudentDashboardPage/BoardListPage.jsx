@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { boardErrorMessage, listStudentBoards } from '../../features/board/api';
+import { boardErrorMessage, listStudentCollections } from '../../features/board/api';
 import BoardGallery from '../../features/board/BoardGallery';
-import { boardCountLabel, groupBoardSeries } from '../../features/board/model';
+import { boardCountLabel, collectionCards } from '../../features/board/model';
 import { boardPath } from './studentPaths';
 import { PageShell } from '../../shared/ui/Sheet';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -14,15 +14,22 @@ export default function BoardListPage() {
   const [boards, setBoards] = useState(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const series = useMemo(() => groupBoardSeries(boards || []), [boards]);
+  const series = useMemo(() => collectionCards(boards || []), [boards]);
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return series;
-    return series.filter((board) => (board.title || 'Доска').toLowerCase().includes(needle));
+    return series.filter((board) => {
+      const text = [
+        board.collectionTitle,
+        board.title,
+        ...(board.pages || []).map((page) => page.title),
+      ].filter(Boolean).join(' ').toLowerCase();
+      return text.includes(needle);
+    });
   }, [series, query]);
 
   useEffect(() => {
-    listStudentBoards()
+    listStudentCollections({ fresh: true })
       .then((rows) => setBoards(rows))
       .catch((err) => {
         setBoards([]);

@@ -39,8 +39,11 @@ import {
   createTeacherBoard,
   updateTeacherBoardShare,
   deleteTeacherBoard,
-  listStudentBoards,
-  listTeacherBoards,
+  cachedCollectionPages,
+  forgetBoardPage,
+  listStudentCollections,
+  listTeacherCollections,
+  rememberBoardPage,
   uploadStudentBoardImage,
   uploadTeacherBoardImage,
   deleteTeacherBoardImage,
@@ -63,7 +66,6 @@ import {
   SHAPE_FILLS,
   STICKY_COLORS,
   createObject,
-  sameSeries,
   TASK_FONT,
   uid,
 } from './model';
@@ -317,7 +319,7 @@ export default function BoardEditor({
     onPaint: paintCameraOverlays,
   });
   const { camera, viewSize, cameraRef } = cam;
-  const [series, setSeries] = useState([]);
+  const [series, setSeries] = useState(() => cachedCollectionPages(audience, initialBoard) || []);
   const [editingPageId, setEditingPageId] = useState(null);
   const [editingPageTitle, setEditingPageTitle] = useState('');
   const pageClickRef = useRef(0);
@@ -327,6 +329,8 @@ export default function BoardEditor({
     groupId: initialBoard.groupId ?? null,
     studentIds: initialBoard.studentIds || [],
     seriesId: initialBoard.seriesId || null,
+    pageNumber: initialBoard.pageNumber ?? null,
+    collectionTitle: initialBoard.collectionTitle ?? null,
     createdAt: initialBoard.createdAt || '',
   });
 
@@ -441,7 +445,16 @@ export default function BoardEditor({
     pendingOps.forEach((op) => {
       next = applyOp(next, op);
     });
-    const remoteTitle = boardTitle(message.board?.title);
+    const remoteBoard = message.board || {};
+    boardMetaRef.current = {
+      ...boardMetaRef.current,
+      groupId: remoteBoard.groupId ?? boardMetaRef.current.groupId,
+      studentIds: remoteBoard.studentIds || boardMetaRef.current.studentIds,
+      seriesId: remoteBoard.seriesId || boardMetaRef.current.seriesId,
+      pageNumber: remoteBoard.pageNumber ?? boardMetaRef.current.pageNumber,
+      collectionTitle: remoteBoard.collectionTitle ?? boardMetaRef.current.collectionTitle,
+    };
+    const remoteTitle = boardTitle(remoteBoard.title);
     const pendingTitle = [...pendingOps].reverse().find((op) => op.type === 'title');
     sentRef.current = next;
     store.set(next);
@@ -816,15 +829,10 @@ export default function BoardEditor({
     if (audienceRef.current !== 'teacher') return;
     const meta = boardMetaRef.current;
     const title = freshPageTitle(series.length ? series : [meta]);
-    const students = (meta.studentIds || []).map((id) => Number(id));
-    const audience = meta.groupId != null
-      ? { groupId: Number(meta.groupId) }
-      : students.length
-        ? { studentIds: students }
-        : {};
-    const body = { title, ...audience, seriesId: meta.seriesId || meta.id };
+    const body = { title, seriesId: meta.seriesId || meta.id };
     try {
       const created = await createTeacherBoard(body);
+      rememberBoardPage('teacher', created);
       navigate(boardPath(created.id));
     } catch (error) {
       notify(boardErrorMessage(error, 'Не удалось создать страницу'));
@@ -856,12 +864,15 @@ export default function BoardEditor({
   }
 
   async function removePage(id) {
-    if (audienceRef.current !== 'teacher' || series.length < 2) return;
+    if (audienceRef.current !== 'teacher') return;
     try {
       await deleteTeacherBoard(id);
+      forgetBoardPage(audienceRef.current, id);
       const rest = series.filter((item) => item.id !== id);
       setSeries(rest);
-      if (id === boardMetaRef.current.id) navigate(boardPath(rest[0].id));
+      if (id !== boardMetaRef.current.id) return;
+      if (rest.length) navigate(boardPath(rest[0].id));
+      else navigate(backTo);
     } catch (error) {
       notify(boardErrorMessage(error, 'Не удалось удалить страницу'));
     }
@@ -2151,20 +2162,34 @@ export default function BoardEditor({
   }
 
   useEffect(() => {
+    const known = cachedCollectionPages(audience, boardMetaRef.current);
+    if (known?.length) return undefined;
     let cancelled = false;
-    const load = audience === 'teacher' ? listTeacherBoards : listStudentBoards;
+    const load = audience === 'teacher' ? listTeacherCollections : listStudentCollections;
     load()
-      .then((rows) => {
+      .then((collections) => {
         if (cancelled) return;
         const current = boardMetaRef.current;
-        const mine = (rows || []).filter((row) => sameSeries(row, current));
-        if (!mine.some((row) => row.id === current.id)) mine.unshift(current);
-        if (mine.every((row) => row.createdAt)) {
-          mine.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id)));
-        } else {
-          mine.reverse();
+        const collection = (collections || []).find((item) => (
+          item.id === current.seriesId || (item.pages || []).some((page) => page.id === current.id)
+        ));
+        const mine = [...(collection?.pages || [])]
+          .sort((a, b) => (Number(a.pageNumber) || 0) - (Number(b.pageNumber) || 0))
+          .map((page) => ({ ...page, seriesId: collection.id }));
+        if (!mine.some((page) => page.id === current.id)) {
+          mine.push({
+            id: current.id,
+            title: current.title,
+            pageNumber: current.pageNumber,
+            seriesId: current.seriesId,
+          });
+          mine.sort((a, b) => (Number(a.pageNumber) || 0) - (Number(b.pageNumber) || 0));
         }
-        setSeries(mine);
+        setSeries((prev) => {
+          const prevIds = prev.map((page) => `${page.id}:${page.pageNumber}:${page.title}`).join('|');
+          const nextIds = mine.map((page) => `${page.id}:${page.pageNumber}:${page.title}`).join('|');
+          return prevIds === nextIds ? prev : mine;
+        });
       })
       .catch(() => {});
     return () => {
@@ -2275,6 +2300,8 @@ export default function BoardEditor({
     studentIds: initialBoard.studentIds || [],
     groupId: initialBoard.groupId ?? null,
     seriesId: initialBoard.seriesId || null,
+    pageNumber: initialBoard.pageNumber ?? null,
+    collectionTitle: initialBoard.collectionTitle ?? null,
     createdAt: initialBoard.createdAt || '',
   }];
   const pageIndex = Math.max(0, pages.findIndex((page) => page.id === initialBoard.id));
@@ -2551,11 +2578,11 @@ export default function BoardEditor({
                     }}
                     className="min-w-0 flex-1 truncate text-left text-sm"
                   >
-                    <span className="mr-2 text-zinc-500">{index + 1}</span>
+                    <span className="mr-2 text-zinc-500">{page.pageNumber || index + 1}</span>
                     {page.id === initialBoard.id ? title : (page.title || 'Доска')}
                   </button>
                 )}
-                {audience === 'teacher' && pages.length > 1 && (
+                {audience === 'teacher' && (
                   <button type="button" aria-label="Удалить страницу" onClick={() => removePage(page.id)} className="text-zinc-400 hover:text-red-600">
                     <X size={14} />
                   </button>
