@@ -151,6 +151,7 @@ const INITIAL_STYLE = {
   fill: SHAPE_FILLS[0],
   arrow: PEN_COLORS[0],
   textSize: 22,
+  textColor: '#18181b',
   appName: 'geometry',
 };
 
@@ -666,6 +667,15 @@ export default function BoardEditor({
     window.setTimeout(() => {
       if (stackRef.current === stack) stackRef.current = null;
     }, 4000);
+  }
+
+  function showTaskSolution(id, show) {
+    const obj = store.getById(id);
+    const text = String(obj?.props?.teacherOnly?.solution || '').trim();
+    patchTask(id, {
+      showSolution: Boolean(show),
+      revealedSolution: show ? text : '',
+    });
   }
 
   function patchTask(id, propsPatch) {
@@ -1728,7 +1738,11 @@ export default function BoardEditor({
       y: point.y - 20,
       w: 320,
       h: Math.max(48, lines * 30 + 16),
-      props: { text, fontSize: 22 },
+      props: {
+        text,
+        fontSize: 22,
+        color: style.textColor || '#18181b',
+      },
     });
     if (addObjects([obj])) {
       selectIds([obj.id]);
@@ -1895,6 +1909,7 @@ export default function BoardEditor({
     onPracticeDraft: (...args) => actionsRef.current.draftPractice?.(...args),
     onGradePractice: (...args) => actionsRef.current.gradePractice?.(...args),
     onResetPractice: (...args) => actionsRef.current.resetPractice?.(...args),
+    onShowSolution: (...args) => actionsRef.current.showTaskSolution?.(...args),
     onMeasure: (id, height) => liveRef.current.measureObject?.(id, height),
   }), []);
   function toggleSidePane(pane) {
@@ -2195,6 +2210,7 @@ export default function BoardEditor({
       draftPractice,
       gradePractice,
       resetPractice,
+      showTaskSolution,
       changeText,
       toggleGeo,
       changeGeoControls,

@@ -1,3 +1,48 @@
+function dedentBlock(value) {
+  const text = String(value || '').replace(/^\n/, '').replace(/\s+$/, '');
+  const lines = text.split('\n');
+  const indents = lines.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)[0].length);
+  const min = indents.length ? Math.min(...indents) : 0;
+  if (!min) return text;
+  return lines.map((line) => (line.trim() ? line.slice(min) : line)).join('\n');
+}
+
+function isTableRow(line) {
+  const trimmed = line.trim();
+  return trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.split('|').length >= 3;
+}
+
+function isTableSeparator(line) {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line.trim());
+}
+
+// Строки таблицы в JSX часто стоят с отступом и становятся блоком кода.
+function unindentMarkdownTables(markdown) {
+  const lines = String(markdown || '').split('\n');
+  const out = [];
+  let index = 0;
+  while (index < lines.length) {
+    const header = lines[index];
+    const separator = lines[index + 1];
+    if (isTableRow(header) && separator != null && isTableSeparator(separator)) {
+      const start = index;
+      index += 2;
+      while (index < lines.length && isTableRow(lines[index])) index += 1;
+      const block = lines.slice(start, index);
+      const pad = Math.min(...block.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)[0].length));
+      block.forEach((line) => out.push(pad ? line.slice(pad) : line));
+      continue;
+    }
+    out.push(lines[index]);
+    index += 1;
+  }
+  return out.join('\n');
+}
+
+export function prepareTheoryMarkdown(markdown) {
+  return continueOrderedListNumbers(normalizeDisplayMath(unindentMarkdownTables(dedentBlock(markdown))));
+}
+
 /** Turn same-line `$$formula$$` into a display-math fence. Multiline fences stay as they are. */
 export function normalizeDisplayMath(markdown) {
   if (!markdown || !markdown.includes('$$')) return markdown;

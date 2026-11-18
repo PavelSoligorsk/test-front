@@ -14,21 +14,13 @@ import TestProgressBar from './TestProgressBar';
 import TestQuestionCard from './TestQuestionCard';
 import TestResultReport from './TestResultReport';
 import TestTheoryPanel from './TestTheoryPanel';
+import { sortExamTasks } from '../../shared/lib/examOrder';
 
 function formatTime(seconds) {
   if (seconds == null || seconds <= 0) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-// Сначала тестовые задания, потом открытые; внутри — по id и сложности.
-function sortTasks(tasks) {
-  return [...(tasks || [])].sort((a, b) => {
-    if (a.is_open_answer !== b.is_open_answer) return a.is_open_answer ? 1 : -1;
-    if (a.id !== b.id) return a.id - b.id;
-    return (a.difficulty || 0) - (b.difficulty || 0);
-  });
 }
 
 /** Попытка из ответа старта (пересдача приносит его в state навигации, иначе — POST start-test). */
@@ -53,7 +45,7 @@ function readAttempt(d, test) {
     answers: prevAnswers.length > 0 ? answers : null,
     test: {
       title: d.test_title,
-      tasks: sortTasks(d.tasks),
+      tasks: sortExamTasks(d.tasks),
       time_limit_minutes: limit,
       max_attempts: d.max_attempts ?? null,
       allow_interruptions: interruptions,

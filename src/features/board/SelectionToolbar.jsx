@@ -252,16 +252,30 @@ export default function SelectionToolbar({
       </>
     );
   } else if (only === 'text') {
-    specific = TEXT_SIZES.map((item) => (
-      <ToolButton
-        key={item.id}
-        label={`Размер ${item.label}`}
-        active={(first.props.fontSize || 22) === item.size}
-        onClick={() => onPatch('text', { fontSize: item.size })}
-      >
-        {item.label}
-      </ToolButton>
-    ));
+    specific = (
+      <>
+        {TEXT_SIZES.map((item) => (
+          <ToolButton
+            key={item.id}
+            label={`Размер ${item.label}`}
+            active={(first.props.fontSize || 22) === item.size}
+            onClick={() => onPatch('text', { fontSize: item.size })}
+          >
+            {item.label}
+          </ToolButton>
+        ))}
+        <Divider />
+        {SHAPE_FILLS.map((fill) => (
+          <Swatch
+            key={fill.id}
+            color={fill.fill}
+            label={fill.label}
+            active={fill.fill === 'none' ? !first.props.color || first.props.color === '#18181b' : first.props.color === fill.fill}
+            onClick={() => onPatch('text', { color: fill.fill === 'none' ? '#18181b' : fill.fill })}
+          />
+        ))}
+      </>
+    );
   } else if (only === 'task') {
     specific = TASK_SIZES.map((item) => (
       <ToolButton

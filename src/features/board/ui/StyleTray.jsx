@@ -37,6 +37,17 @@ export default function StyleTray({ context, style, onStyle }) {
             </button>
           ))}
         </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {SHAPE_FILLS.map((fill) => (
+            <ColorDot
+              key={fill.id}
+              color={fill.fill}
+              label={fill.label}
+              active={fill.fill === 'none' ? !style.textColor || style.textColor === '#18181b' : style.textColor === fill.fill}
+              onClick={() => onStyle((prev) => ({ ...prev, textColor: fill.fill === 'none' ? '#18181b' : fill.fill }))}
+            />
+          ))}
+        </div>
       </SwatchCard>
     );
   }

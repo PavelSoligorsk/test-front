@@ -83,7 +83,8 @@ function TextBody({ obj, editing, onChange, onBlur }) {
   const centered = kind !== 'text';
   const fontSize = obj.props.fontSize || DEFAULT_FONT[kind];
   const text = obj.props.text || '';
-  const tone = kind === 'text' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-900';
+  const ink = kind === 'text' ? (obj.props.color || '#18181b') : '';
+  const tone = ink ? '' : 'text-zinc-900';
   const placeholder = kind === 'sticky' ? 'Стикер' : kind === 'text' ? 'Текст' : '';
 
   useLayoutEffect(() => {
@@ -117,7 +118,7 @@ function TextBody({ obj, editing, onChange, onBlur }) {
         onPointerDown={(event) => event.stopPropagation()}
         placeholder={placeholder}
         className={`resize-none overflow-hidden bg-transparent leading-snug outline-none placeholder:text-zinc-500/70 ${tone} ${centered ? 'w-full p-0 text-center' : 'h-full w-full p-2'}`}
-        style={{ fontSize }}
+        style={{ fontSize, ...(ink ? { color: ink } : {}) }}
       />
     );
     if (!centered) return textarea;
@@ -133,7 +134,7 @@ function TextBody({ obj, editing, onChange, onBlur }) {
     return (
       <div
         className={`absolute inset-0 flex items-center justify-center overflow-hidden whitespace-pre-wrap break-words text-center leading-snug ${tone} ${text ? '' : 'text-zinc-500/70'}`}
-        style={{ fontSize, padding: CENTER_PAD }}
+        style={{ fontSize, padding: CENTER_PAD, ...(ink ? { color: ink } : {}) }}
       >
         {text || placeholder}
       </div>
@@ -142,7 +143,7 @@ function TextBody({ obj, editing, onChange, onBlur }) {
   return (
     <div
       className={`h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2 leading-snug ${tone} ${text ? '' : 'text-zinc-500/70'}`}
-      style={{ fontSize }}
+      style={{ fontSize, ...(ink ? { color: ink } : {}) }}
     >
       {text || placeholder}
     </div>
@@ -188,7 +189,7 @@ function LetterMark({ name, x, y }) {
   const place = labelPlace(name);
   return (
     <span
-      className="pointer-events-none absolute z-40 whitespace-nowrap font-semibold leading-none text-zinc-950 dark:text-zinc-50"
+      className="pointer-events-none absolute z-40 whitespace-nowrap font-semibold leading-none text-zinc-950"
       style={{
         left: x,
         top: y,
@@ -265,6 +266,7 @@ function BoardObject({
   onPracticeDraft,
   onGradePractice,
   onResetPractice,
+  onShowSolution,
   teacher,
   selfId,
   incoming,
@@ -313,6 +315,7 @@ function BoardObject({
           onPracticeDraft={onPracticeDraft}
           onGradePractice={onGradePractice}
           onResetPractice={onResetPractice}
+          onShowSolution={onShowSolution}
           onMeasure={(height) => onMeasure?.(obj.id, height)}
         />
       )}

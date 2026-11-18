@@ -1,7 +1,9 @@
 import { X } from 'lucide-react';
+import useTheme from '../../../shared/hooks/useTheme';
 import { SURFACE_COLORS } from '../meta';
 
 export default function SurfacePanel({ surface, onChange, onClose }) {
+  const { dark, toggle } = useTheme();
   const grids = [
     { id: 'empty', label: 'Пустой' },
     { id: 'cell', label: 'Клетка' },
@@ -13,6 +15,23 @@ export default function SurfacePanel({ surface, onChange, onClose }) {
         <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Фон и сетка</p>
         <button type="button" aria-label="Закрыть" onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900">
           <X size={16} />
+        </button>
+      </div>
+      <p className="mb-2 text-sm text-zinc-500">Тема</p>
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => { if (dark) toggle(); }}
+          className={`rounded-xl border px-2 py-2 text-xs font-medium ${dark ? 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300' : 'border-sky-500 bg-sky-50 text-sky-900'}`}
+        >
+          Светлая
+        </button>
+        <button
+          type="button"
+          onClick={() => { if (!dark) toggle(); }}
+          className={`rounded-xl border px-2 py-2 text-xs font-medium ${dark ? 'border-sky-500 bg-sky-50 text-sky-900 dark:border-sky-400 dark:bg-sky-950/40 dark:text-sky-100' : 'border-zinc-200 text-zinc-600'}`}
+        >
+          Тёмная
         </button>
       </div>
       <p className="mb-2 text-sm text-zinc-500">Цвет фона</p>

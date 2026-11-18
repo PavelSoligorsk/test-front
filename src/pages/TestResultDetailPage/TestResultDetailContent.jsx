@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import apiClient from '../../shared/api';
 import { QuestionMap, ThemeToggle } from '../../shared/ui';
 import { rememberedStudentPath } from '../StudentDashboardPage/studentPaths';
+import { sortExamTasks } from '../../shared/lib/examOrder';
 import DifficultyStats from './DifficultyStats';
 import ResultTaskCard from './ResultTaskCard';
 
@@ -85,13 +86,7 @@ export default function TestResultDetailContent() {
 
   const sortedDetails = useMemo(() => {
     if (!data?.details) return [];
-    return [...data.details].sort((a, b) => {
-      if (a.task_id !== b.task_id) return a.task_id - b.task_id;
-      const aHasOptions = a.options ? 0 : 1;
-      const bHasOptions = b.options ? 0 : 1;
-      if (aHasOptions !== bHasOptions) return aHasOptions - bHasOptions;
-      return (a.difficulty || 0) - (b.difficulty || 0);
-    });
+    return sortExamTasks(data.details);
   }, [data]);
 
   if (loading) return (

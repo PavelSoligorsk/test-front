@@ -4,6 +4,7 @@ import { ArrowLeft, BarChart3 } from 'lucide-react';
 import apiClient from '../../shared/api';
 import { DifficultyBadge, QuestionMap } from '../../shared/ui';
 import { ResultTask } from '../../shared/ui/TaskView';
+import { sortExamTasks } from '../../shared/lib/examOrder';
 
 export default function TeacherResultViewContent() {
   const { resultId } = useParams();
@@ -26,15 +27,7 @@ export default function TeacherResultViewContent() {
 
   const sortedDetails = useMemo(() => {
     if (!data?.details) return [];
-    return [...data.details].sort((a, b) => {
-      const aType = a.max_task_points > 1 ? 1 : 0;
-      const bType = b.max_task_points > 1 ? 1 : 0;
-      if (aType !== bType) return aType - bType;
-      const aDiff = parseInt(a.difficulty) || 0;
-      const bDiff = parseInt(b.difficulty) || 0;
-      if (aDiff !== bDiff) return aDiff - bDiff;
-      return (a.task_id || 0) - (b.task_id || 0);
-    });
+    return sortExamTasks(data.details);
   }, [data]);
 
   if (loading) {

@@ -715,7 +715,11 @@ export function createPointerInput({ refs, store, cam, board }) {
           y: world.y - 20,
           w: 280,
           h: Math.max(40, Math.round(styleRef.current.textSize * 1.4 + 16)),
-          props: { text: '', fontSize: styleRef.current.textSize },
+          props: {
+            text: '',
+            fontSize: styleRef.current.textSize,
+            color: styleRef.current.textColor || '#18181b',
+          },
         });
       if (addObjects([obj])) beginEdit(obj.id);
       return;
@@ -802,7 +806,11 @@ export function createPointerInput({ refs, store, cam, board }) {
       y: world.y - 20,
       w: 280,
       h: Math.max(40, Math.round(styleRef.current.textSize * 1.4 + 16)),
-      props: { text: '', fontSize: styleRef.current.textSize },
+      props: {
+        text: '',
+        fontSize: styleRef.current.textSize,
+        color: styleRef.current.textColor || '#18181b',
+      },
     });
     if (addObjects([obj])) beginEdit(obj.id);
   }

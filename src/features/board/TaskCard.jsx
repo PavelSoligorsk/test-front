@@ -5,11 +5,13 @@ import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { continueOrderedListNumbers, normalizeDisplayMath } from '../../components/theoryMath';
+import { prepareTheoryMarkdown } from '../../components/theoryMath';
 import { playPracticeSalute } from './practiceSalute';
 import { practiceEntries } from './practiceAnswers';
+import { markdownTableComponents } from '../../shared/ui/markdownTables.jsx';
 
 const markdownParts = {
+  ...markdownTableComponents,
   img: ({ src, alt }) => (
     <img src={src} alt={alt || 'Изображение'} draggable={false} className="my-2 block max-h-[420px] max-w-full rounded-md object-contain" />
   ),
@@ -17,8 +19,8 @@ const markdownParts = {
 
 function Markdown({ children }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownParts}>
-      {continueOrderedListNumbers(normalizeDisplayMath(String(children || '')))}
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownParts}>
+      {prepareTheoryMarkdown(String(children || ''))}
     </ReactMarkdown>
   );
 }
@@ -28,17 +30,17 @@ function answerLabel(answer, options) {
   if (!raw || !options.length) return raw;
   const picks = raw.split(/[;,\s]+/).filter(Boolean);
   if (!picks.every((item) => /^\d+$/.test(item) && Number(item) >= 1 && Number(item) <= options.length)) return raw;
-  return picks.join(', ');
+  return picks.map((item) => String(options[Number(item) - 1] ?? item)).join(', ');
 }
 
 const MARK = {
   right: { label: 'Верно', className: 'text-emerald-700 dark:text-emerald-300' },
   wrong: { label: 'Ошибка', className: 'text-rose-700 dark:text-rose-300' },
+  empty: { label: 'Нет ответа', className: 'text-zinc-500' },
 };
 
-export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeDraft, onGradePractice, onResetPractice, onMeasure }) {
+export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeDraft, onGradePractice, onResetPractice, onShowSolution, onMeasure }) {
   const cardRef = useMeasuredHeight(onMeasure);
-  const [solutionOpen, setSolutionOpen] = useState(false);
   const [picks, setPicks] = useState(() => new Set());
   const [typed, setTyped] = useState('');
   const [flash, setFlash] = useState('');
@@ -91,7 +93,11 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
   const ownVerdict = storedVerdict || (!stale && (ownFlash === 'right' || ownFlash === 'wrong') ? ownFlash : '');
   const ownMark = !teacher ? MARK[ownVerdict] : null;
   const answer = (teacher || shown) && secret ? answerLabel(secret.answer, options) : '';
-  const solution = teacher && secret ? String(secret.solution || '').trim() : '';
+  const privateSolution = secret ? String(secret.solution || '').trim() : '';
+  const revealedSolution = String(props.revealedSolution || '').trim();
+  const solution = privateSolution || revealedSolution;
+  const solutionShown = Boolean(props.showSolution) && Boolean(solution);
+  const copiedAnswers = teacher && Array.isArray(secret?.studentAnswers) ? secret.studentAnswers : [];
   const fontSize = props.fontSize || 20;
   const stop = (event) => event.stopPropagation();
 
@@ -243,26 +249,32 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
           </div>
         )}
 
-        {teacher && answer && (
+        {teacher && (answer || solution) && (
           <div className="mt-[0.8em] rounded-[0.9em] border border-emerald-200 bg-emerald-50 px-[0.9em] py-[0.6em] text-[0.75em] text-emerald-950 dark:border-emerald-900/70 dark:bg-emerald-950/50 dark:text-emerald-100">
-            <span className="block text-[0.85em] font-medium text-emerald-700 dark:text-emerald-300">Правильный ответ · видите только вы</span>
-            <span className="font-semibold [&_p]:my-0"><Markdown>{answer}</Markdown></span>
+            {answer && (
+              <>
+                <span className="block text-[0.85em] font-medium text-emerald-700 dark:text-emerald-300">Правильный ответ · видите только вы</span>
+                <span className="font-semibold [&_p]:my-0"><Markdown>{answer}</Markdown></span>
+              </>
+            )}
             {solution && (
               <button
                 type="button"
                 data-chrome="true"
                 onPointerDown={stop}
-                onClick={() => setSolutionOpen((open) => !open)}
+                onClick={() => onShowSolution?.(obj.id, !solutionShown)}
                 className="mt-[0.5em] rounded-[0.6em] bg-emerald-700 px-[0.8em] py-[0.35em] text-[0.85em] font-semibold text-white"
               >
-                {solutionOpen ? 'Скрыть решение' : 'Решение'}
+                {solutionShown ? 'Скрыть решение' : 'Показать решение'}
               </button>
             )}
-            {solutionOpen && solution && (
-              <div className="theory-html mt-[0.6em] border-t border-emerald-200 pt-[0.6em] text-zinc-800 dark:border-emerald-900 dark:text-zinc-200 [&_p]:my-[0.3em]">
-                <Markdown>{solution}</Markdown>
-              </div>
-            )}
+          </div>
+        )}
+
+        {solutionShown && solution && (
+          <div className="theory-html mt-[0.8em] rounded-[0.9em] border border-zinc-200 bg-zinc-50 px-[0.9em] py-[0.6em] text-[0.75em] text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-200 [&_p]:my-[0.3em]">
+            <span className="mb-[0.3em] block text-[0.85em] font-medium text-zinc-500">Решение</span>
+            <Markdown>{solution}</Markdown>
           </div>
         )}
 
@@ -271,6 +283,22 @@ export default function TaskCard({ obj, teacher, selfId, onPractice, onPracticeD
             <span className="block text-[0.85em] font-medium text-emerald-700 dark:text-emerald-300">Правильный ответ</span>
             <span className="font-semibold [&_p]:my-0"><Markdown>{answer}</Markdown></span>
           </div>
+        )}
+
+        {copiedAnswers.length > 0 && (
+          <ul className="m-0 mt-[0.8em] list-none space-y-[0.3em] p-0 text-[0.75em]">
+            {copiedAnswers.map((item, index) => {
+              const mark = MARK[item.correct] || MARK.empty;
+              const text = item.answer && item.answer !== 'Нет ответа' ? answerLabel(item.answer, options) : 'Нет ответа';
+              return (
+                <li key={`${item.name}-${index}`} className="flex items-baseline gap-[0.5em]">
+                  <span className={`shrink-0 font-semibold ${mark.className}`}>{mark.label}</span>
+                  <span className="min-w-0 truncate text-zinc-500">{item.name || 'Ученик'}</span>
+                  <span className="min-w-0 font-semibold [&_p]:my-0"><Markdown>{text}</Markdown></span>
+                </li>
+              );
+            })}
+          </ul>
         )}
 
         {teacher && practiceAnswers.length > 0 && (

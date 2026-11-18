@@ -21,9 +21,10 @@ import {
   Html,
   MathText,
 } from '../../../components/TheoryBlocks';
-import { continueOrderedListNumbers, normalizeDisplayMath } from '../../../components/theoryMath';
+import { prepareTheoryMarkdown } from '../../../components/theoryMath';
 import { useMeasuredHeight } from '../../hooks/useMeasuredHeight';
 import { parseBlocks, parseTheorySections, theoryCopyPayload } from '../../lib/theoryMarkup';
+import { markdownTableComponents } from '../markdownTables.jsx';
 
 // ========== ЭЛЕМЕНТЫ MARKDOWN ==========
 
@@ -35,26 +36,7 @@ const markdownComponents = {
       className="max-w-full lg:w-1/2 h-auto my-6 block rounded-lg border border-zinc-200 dark:border-zinc-800 mx-auto shadow-sm" 
     />
   ),
-  table: ({ children }) => (
-    <div className="overflow-x-auto my-6 rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <table className="min-w-full text-left text-sm">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => (
-    <thead className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800">
-      {children}
-    </thead>
-  ),
-  th: ({ children }) => (
-    <th className="py-2.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
-      {children}
-    </th>
-  ),
-  td: ({ children }) => (
-    <td className="border-b border-zinc-100 dark:border-zinc-800/50 py-2.5 px-4 text-zinc-600 dark:text-zinc-300 align-top">
-      {children}
-    </td>
-  ),
+  ...markdownTableComponents,
   code: ({ children }) => (
     <code className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 rounded text-xs font-mono break-words">
       {children}
@@ -101,8 +83,8 @@ function boardBlockNode(block, key) {
   if (!block || block.type === 'geogebra') return null;
   if (block.type === 'text') {
     return (
-      <ReactMarkdown key={key} remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-        {continueOrderedListNumbers(normalizeDisplayMath(block.content))}
+      <ReactMarkdown key={key} remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+        {prepareTheoryMarkdown(block.content)}
       </ReactMarkdown>
     );
   }
@@ -172,11 +154,11 @@ const renderPlainBlock = (block, idx, onCopy) => {
       return (
         <ReactMarkdown 
           key={idx}
-          remarkPlugins={[remarkMath, remarkGfm]} 
+          remarkPlugins={[remarkGfm, remarkMath]} 
           rehypePlugins={[rehypeKatex]} 
           components={markdownComponents}
         >
-          {continueOrderedListNumbers(normalizeDisplayMath(block.content))}
+          {prepareTheoryMarkdown(block.content)}
         </ReactMarkdown>
       );
     }
@@ -502,8 +484,8 @@ export const TheoryViewer = React.memo(({ content, isFullWidth = false, embedded
           ))} 
           {components.length === 0 && (
             <div className="dynamic-markdown">
-              <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-                {continueOrderedListNumbers(normalizeDisplayMath(content))}
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                {prepareTheoryMarkdown(content)}
               </ReactMarkdown>
             </div>
           )}
