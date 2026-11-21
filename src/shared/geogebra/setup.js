@@ -43,14 +43,17 @@ export function theoryAppKind(setup) {
 const NAMED_APPS = new Set(['geometry', 'graphing', '3d']);
 
 /**
- * Явное имя приложения важнее текста. Пустой setup без имени не угадываем:
- * это материал geogebra.org, и вид у него свой.
+ * Явное имя приложения важнее текста. Без имени плоский чертёж остаётся
+ * в классике: отдельные geometry и graphing меняют вид. В 3D переключаемся
+ * сами, иначе enable3d остаётся выключенным и холста нет.
+ * Пустой setup без имени не угадываем: это материал geogebra.org.
  */
 export function appletAppName({ appName = '', setup = '', commands = '' } = {}) {
   const explicit = String(appName || '').trim().toLowerCase();
   if (NAMED_APPS.has(explicit)) return explicit;
   const source = [setup, commands].map((part) => String(part || '').trim()).filter(Boolean).join('\n');
-  return source ? theoryAppKind(source) : '';
+  if (!source) return '';
+  return theoryAppKind(source) === '3d' ? '3d' : '';
 }
 
 function hexToRgb(hex) {

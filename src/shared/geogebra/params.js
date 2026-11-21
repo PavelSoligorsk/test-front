@@ -42,9 +42,9 @@ export function appletParams({
     enableRightClick: false,
     enableFileFeatures: false,
     errorDialogsActive: false,
-    // false выключает стереометрию целиком: 3D-вид в XML есть, а холста нет.
-    // Пустое имя — материал или классика, там 3D нельзя запрещать заранее.
-    enable3d: enable3d ?? (appName !== 'geometry' && appName !== 'graphing'),
+    // false выключает стереометрию: 3D-вид в XML есть, а холста нет.
+    // Для классики, планиметрии и графиков флаг остаётся выключенным.
+    enable3d: enable3d ?? appName === '3d',
     useBrowserForJS: true,
     disableJavaScript: true,
     borderColor: '#ffffff',

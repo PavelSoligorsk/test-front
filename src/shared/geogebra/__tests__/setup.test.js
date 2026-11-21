@@ -79,6 +79,8 @@ describe('setup GeoGebra', () => {
     expect(theoryAppKind('f(x) = x^2')).toBe('graphing');
     expect(theoryAppKind('A = (1, 2)')).toBe('geometry');
     expect(appletAppName({ setup: 'Cylinder((0,0,0),(0,0,1),2)' })).toBe('3d');
+    expect(appletAppName({ setup: 'A = (1, 2)' })).toBe('');
+    expect(appletAppName({ setup: 'f(x) = x^2' })).toBe('');
     expect(appletAppName({ appName: 'graphing', setup: 'Cube((0,0,0),(1,0,0))' })).toBe('graphing');
     expect(appletAppName({})).toBe('');
   });
