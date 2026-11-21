@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseSetup, runSetup, theoryAppKind, theoryPerspectiveCode } from '../setup';
+import { appletAppName, parseSetup, runSetup, theoryAppKind, theoryPerspectiveCode } from '../setup';
 
 function fakeApi() {
   const calls = [];
@@ -78,5 +78,8 @@ describe('setup GeoGebra', () => {
     expect(theoryAppKind('Cube((0,0,0),(1,0,0))')).toBe('3d');
     expect(theoryAppKind('f(x) = x^2')).toBe('graphing');
     expect(theoryAppKind('A = (1, 2)')).toBe('geometry');
+    expect(appletAppName({ setup: 'Cylinder((0,0,0),(0,0,1),2)' })).toBe('3d');
+    expect(appletAppName({ appName: 'graphing', setup: 'Cube((0,0,0),(1,0,0))' })).toBe('graphing');
+    expect(appletAppName({})).toBe('');
   });
 });

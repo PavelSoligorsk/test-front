@@ -40,6 +40,19 @@ export function theoryAppKind(setup) {
   return 'geometry';
 }
 
+const NAMED_APPS = new Set(['geometry', 'graphing', '3d']);
+
+/**
+ * Явное имя приложения важнее текста. Пустой setup без имени не угадываем:
+ * это материал geogebra.org, и вид у него свой.
+ */
+export function appletAppName({ appName = '', setup = '', commands = '' } = {}) {
+  const explicit = String(appName || '').trim().toLowerCase();
+  if (NAMED_APPS.has(explicit)) return explicit;
+  const source = [setup, commands].map((part) => String(part || '').trim()).filter(Boolean).join('\n');
+  return source ? theoryAppKind(source) : '';
+}
+
 function hexToRgb(hex) {
   const raw = String(hex || '').replace('#', '');
   const full = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw;

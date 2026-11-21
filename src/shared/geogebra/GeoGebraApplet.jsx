@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { loadGeoGebra } from './loader';
 import { appletParams, nextAppletId, removeApplet } from './params';
-import { runCommands, runSetup } from './setup';
+import { appletAppName, runCommands, runSetup } from './setup';
 import { fitUniformGeoGebraView, isGeoGebraView, readGeoGebraView } from './view';
 
 /**
@@ -34,8 +34,9 @@ export default function GeoGebraApplet({
   const frameHeight = Math.max(120, Math.round(frame.height));
   const frameWidth = Math.max(1, Math.round(frame.width || width));
   const commandKey = Array.isArray(commands) ? commands.join('\n') : '';
+  const resolvedApp = appletAppName({ appName, setup, commands: commandKey });
   const ready = visible && width > 0;
-  const contentKey = [attempt, appName, materialId, setup, commandKey, toolbar].join('\u0001');
+  const contentKey = [attempt, resolvedApp, materialId, setup, commandKey, toolbar].join('\u0001');
   const status = loaded.key !== contentKey ? 'loading' : loaded.failed ? 'error' : 'ready';
 
   useLayoutEffect(() => {
@@ -82,7 +83,7 @@ export default function GeoGebraApplet({
           id,
           width: size.w,
           height: size.h,
-          appName,
+          appName: resolvedApp,
           materialId,
           toolbar,
           appletOnLoad(api) {
@@ -106,19 +107,19 @@ export default function GeoGebraApplet({
       apiRef.current = null;
       removeApplet(applet, id, host);
     };
-  }, [ready, appName, materialId, setup, commandKey, toolbar, attempt, contentKey]);
+  }, [ready, resolvedApp, materialId, setup, commandKey, toolbar, attempt, contentKey]);
 
   useEffect(() => {
     const api = apiRef.current;
     if (!api || status !== 'ready' || typeof api.setSize !== 'function') return;
-    const view = readGeoGebraView(api);
+    const view = resolvedApp === '3d' ? null : readGeoGebraView(api);
     try {
       api.setSize(frameWidth, frameHeight);
       if (isGeoGebraView(view)) fitUniformGeoGebraView(api, view);
     } catch {
       /* апплет ещё меняет размер */
     }
-  }, [frameWidth, frameHeight, status]);
+  }, [frameWidth, frameHeight, resolvedApp, status]);
 
   return (
     <div ref={boxRef} className={`relative w-full overflow-hidden ${className}`} style={{ height: frameHeight }}>

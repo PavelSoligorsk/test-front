@@ -16,7 +16,7 @@ function GeoGebraFigureApplet({ figure }) {
   return (
     <div className="my-3 w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
       <GeoGebraApplet
-        appName={toGeoGebraAppName(figure.app)}
+        appName={figure.app ? toGeoGebraAppName(figure.app) : ''}
         commands={commands}
         height={Number(figure.height) || 400}
         toolbar
