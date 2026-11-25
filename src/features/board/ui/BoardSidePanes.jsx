@@ -2,7 +2,6 @@ import { memo } from 'react';
 import BoardTheoryPane from '../BoardTheoryPane';
 import BoardTasksPane from '../BoardTasksPane';
 import BoardStudentsPane from '../BoardStudentsPane';
-
 const EMPTY_STUDENTS = [];
 
 const BoardSidePanes = memo(function BoardSidePanes({ pane, kept, groupId, studentIds, onTheory, onTasks }) {

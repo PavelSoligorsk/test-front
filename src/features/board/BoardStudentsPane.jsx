@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, Users } from 'lucide-react';
+import { ArrowLeft, Users } from 'lucide-react';
 import { useAsyncData } from '../../shared/hooks';
-import { MarkdownRenderer } from '../../shared/ui';
+import { AttemptHistory, MarkdownRenderer } from '../../shared/ui';
 import {
   NO_ANSWER,
   answerText,
@@ -83,50 +83,14 @@ function Row({ title, note, right, onClick }) {
   );
 }
 
-function sortByDate(list) {
-  return [...list].sort((a, b) => String(b.result?.completed_at || '').localeCompare(String(a.result?.completed_at || '')));
-}
-
-function Attempts({ items, onOpen }) {
-  const [open, setOpen] = useState(false);
-  if (!items.length) return null;
-  return (
-    <div className="pb-1 pl-3">
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex items-center gap-1 px-3 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">
-        <ChevronDown size={12} className={open ? 'rotate-180' : ''} />
-        Ещё попытки: {items.length}
-      </button>
-      {open && items.map((item) => (
-        <Row
-          key={item.result.id}
-          title={item.result.completed_at ? formatDate(item.result.completed_at) : 'Не завершена'}
-          right={<span className="shrink-0 text-xs tabular-nums text-zinc-500">{item.result.total_points ?? 0} б.</span>}
-          onClick={() => onOpen(item.result.id, item.test_title)}
-        />
-      ))}
-    </div>
-  );
-}
-
 function StudentView({ student, onOpenResult }) {
   const { loading, data, error } = useRemote('student', [student.id]);
   const assignments = useMemo(() => data?.assignments || [], [data]);
   const history = useMemo(() => data?.history || [], [data]);
-  // Решённые без назначения — самостоятельные попытки, по тесту.
-  const selfGroups = useMemo(() => {
-    const assignedTitles = new Set(assignments.map((item) => item.test_title));
-    const groups = new Map();
-    history.filter((item) => item.result && !assignedTitles.has(item.test_title)).forEach((item) => {
-      if (!groups.has(item.test_title)) groups.set(item.test_title, []);
-      groups.get(item.test_title).push(item);
-    });
-    return [...groups.entries()].map(([title, items]) => ({ title, items: sortByDate(items) }));
-  }, [assignments, history]);
-
-  const status = <Status loading={loading} error={error} empty={!loading && !error && !assignments.length && !selfGroups.length ? 'Тестов пока нет' : ''} />;
-  if (loading || error || (!assignments.length && !selfGroups.length)) return status;
   const pending = assignments.filter((item) => !item.is_completed || !item.result_id);
-  const done = assignments.filter((item) => item.is_completed && item.result_id);
+
+  const status = <Status loading={loading} error={error} empty={!loading && !error && !pending.length && !history.length ? 'Тестов пока нет' : ''} />;
+  if (loading || error || (!pending.length && !history.length)) return status;
 
   return (
     <div>
@@ -139,33 +103,16 @@ function StudentView({ student, onOpenResult }) {
           right={<span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-500 dark:bg-zinc-900">не решён</span>}
         />
       ))}
-      {done.length > 0 && <SectionTitle>Решены</SectionTitle>}
-      {done.map((item) => {
-        const others = sortByDate(history.filter((entry) => entry.test_title === item.test_title && entry.result && entry.result.id !== item.result_id));
-        return (
-          <div key={item.id}>
-            <Row
-              title={item.test_title}
-              note={`${item.total_points ?? 0} из ${item.max_points ?? '?'} · ${formatDate(item.completed_at)}`}
-              right={<Score percent={Number.isFinite(item.percentage) ? Math.round(item.percentage) : percentOf(item.total_points, item.max_points)} />}
-              onClick={() => onOpenResult(item.result_id, item.test_title)}
-            />
-            <Attempts items={others} onOpen={onOpenResult} />
-          </div>
-        );
-      })}
-      {selfGroups.length > 0 && <SectionTitle>Решал сам</SectionTitle>}
-      {selfGroups.map(({ title, items }) => (
-        <div key={title}>
-          <Row
-            title={title}
-            note={items[0].result.completed_at ? formatDate(items[0].result.completed_at) : 'Не завершён'}
-            right={<span className="shrink-0 text-xs tabular-nums text-zinc-500">{items[0].result.total_points ?? 0} б.</span>}
-            onClick={() => onOpenResult(items[0].result.id, title)}
+      {history.length > 0 && (
+        <div className="mt-3">
+          <AttemptHistory
+            tone="section"
+            items={history}
+            showSpent
+            onOpen={(row) => onOpenResult(row.id, row.title)}
           />
-          <Attempts items={items.slice(1)} onOpen={onOpenResult} />
         </div>
-      ))}
+      )}
     </div>
   );
 }
