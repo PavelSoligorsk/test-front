@@ -11,8 +11,7 @@ export default function AnswerOptions({ task, userAnswers, onToggleAnswer, onTex
     return (
       <input
         key={task.id}
-        autoFocus
-        className="w-full p-5 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/80 rounded-3xl text-lg font-semibold text-zinc-900 dark:text-zinc-100 outline-none focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50 focus:border-zinc-300 dark:focus:border-zinc-700 shadow-sm placeholder:text-zinc-400"
+        className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 text-base font-medium text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-300 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800/80 dark:bg-[#09090b] dark:text-zinc-100 dark:focus:border-zinc-700 dark:focus:ring-white/10"
         placeholder="Введите значение..."
         value={userAnswers[task.id] || ''}
         onChange={(e) => onTextChange(e.target.value)}
@@ -21,7 +20,7 @@ export default function AnswerOptions({ task, userAnswers, onToggleAnswer, onTex
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {task.options?.map((opt, i) => {
         const currentVal = String(i + 1);
         const isSelected = Array.isArray(userAnswers[task.id])
@@ -33,13 +32,13 @@ export default function AnswerOptions({ task, userAnswers, onToggleAnswer, onTex
             key={i}
             type="button"
             onClick={() => onToggleAnswer(i)}
-            className={`p-5 text-left rounded-3xl border transition-colors flex justify-between items-center group ${
+            className={`group flex items-center justify-between rounded-2xl border p-4 text-left transition-colors ${
               isSelected
                 ? 'border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm'
                 : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] hover:bg-zinc-50 dark:hover:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300'
             }`}
           >
-            <div className="flex gap-4 items-center z-10">
+            <div className="z-10 flex items-center gap-3">
               <span className={`text-sm font-medium tabular-nums ${isSelected ? 'text-white/60 dark:text-zinc-500' : 'text-zinc-400'}`}>
                 {currentVal}.
               </span>
@@ -49,7 +48,7 @@ export default function AnswerOptions({ task, userAnswers, onToggleAnswer, onTex
                 </ReactMarkdown>
               </div>
             </div>
-            <div className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 z-10 ${
+            <div className={`z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border ${
               isSelected
                 ? 'bg-white dark:bg-zinc-950 border-white dark:border-zinc-950'
                 : 'border-zinc-200 dark:border-zinc-700 group-hover:border-zinc-400'

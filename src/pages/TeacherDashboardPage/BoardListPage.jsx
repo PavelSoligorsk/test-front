@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, Inbox, SearchX } from 'lucide-react';
 import {
   boardErrorMessage,
   createTeacherBoard,
@@ -10,8 +10,9 @@ import {
 import { deleteBoard, saveBoard } from '../../features/board/storage';
 import BoardGallery from '../../features/board/BoardGallery';
 import { boardCountLabel, collectionCards } from '../../features/board/model';
-import { PageShell } from '../../shared/ui';
+import { PageShell, primaryBtnClass } from '../../shared/ui';
 import SearchField from '../../shared/ui/SearchField';
+import EmptyState from '../../shared/ui/EmptyState';
 import { useTeacherWorkspace } from './teacherWorkspaceContext';
 
 function personName(person) {
@@ -98,22 +99,33 @@ export default function TeacherBoardListPage() {
 
   return (
     <PageShell>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Мои доски</h1>
+          <h1 className="text-xl font-semibold tracking-[-0.02em] text-zinc-900 dark:text-zinc-100 md:text-2xl">Мои доски</h1>
           <p className="mt-1 text-sm text-zinc-500">{boards ? boardCountLabel(visible.length) : 'Загрузка'}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setError('');
-            setCreating(true);
-          }}
-          className="inline-flex h-11 items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Plus size={16} />
-          Новая доска
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          {boards && boards.length > 0 ? (
+            <SearchField
+              className="w-full sm:w-72"
+              value={query}
+              onChange={setQuery}
+              onClear={() => setQuery('')}
+              placeholder="Поиск по слову..."
+            />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              setCreating(true);
+            }}
+            className={primaryBtnClass}
+          >
+            <Plus size={16} />
+            Новая доска
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -122,36 +134,24 @@ export default function TeacherBoardListPage() {
         </p>
       )}
 
-      {boards && boards.length > 0 && (
-        <div className="mb-5">
-          <SearchField
-            className="w-full sm:max-w-xs"
-            value={query}
-            onChange={setQuery}
-            onClear={() => setQuery('')}
-            placeholder="Поиск по слову..."
-          />
-        </div>
-      )}
-
       {boards == null ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-5">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
           {[0, 1, 2, 3].map((key) => (
-            <div key={key} className="h-28 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
+            <div key={key} className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
           ))}
         </div>
       ) : boards.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
-          <p className="text-base font-medium text-zinc-900 dark:text-zinc-100">Пока нет досок</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">
-            Новая доска может быть только вашей, для учеников или для одной группы.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Inbox size={24} strokeWidth={1.5} />}
+          title="Пока нет досок"
+          hint="Новая доска может быть только вашей, для учеников или для одной группы."
+        />
       ) : visible.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-zinc-300 px-6 py-16 text-center dark:border-zinc-700">
-          <p className="text-base font-medium text-zinc-900 dark:text-zinc-100">Ничего не найдено</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">Попробуйте другое слово</p>
-        </div>
+        <EmptyState
+          icon={<SearchX size={24} strokeWidth={1.5} />}
+          title="Ничего не найдено"
+          hint="Попробуйте другое слово"
+        />
       ) : (
         <BoardGallery
           boards={visible}
@@ -251,7 +251,7 @@ function CreateBoardDialog({ students, groups, onClose, onCreate }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <form
         onSubmit={submit}
-        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-[#09090b]"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-[#09090b]"
       >
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
           <div>

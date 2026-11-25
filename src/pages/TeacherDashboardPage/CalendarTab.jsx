@@ -192,9 +192,9 @@ export default function CalendarTab({ students, groups, onRefresh }) {
   ];
 
   return (
-    <div className="bg-white dark:bg-[#09090b] rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden">
+    <div className="bg-white dark:bg-[#09090b] rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 overflow-hidden">
       {/* Header */}
-      <div className="p-4 md:p-8 bg-zinc-50/50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-800/60">
+      <div className="border-b border-zinc-100 p-5 dark:border-zinc-800/60 sm:p-6 md:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm">

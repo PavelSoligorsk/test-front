@@ -79,6 +79,16 @@ export const retakeTest = async (resultId) => {
   return res.data;
 };
 
+export const fetchMistakes = async (resultId) => {
+  const res = await apiClient.post(`/student/results/${resultId}/mistakes`, {});
+  return res.data;
+};
+
+export const submitMistakes = async (resultId, answers) => {
+  const res = await apiClient.post(`/student/results/${resultId}/mistakes/submit`, answers);
+  return res.data;
+};
+
 // Result (timer sync)
 export const fetchTestResult = async (resultId) => {
   const res = await apiClient.get(`/student/results/${resultId}`);

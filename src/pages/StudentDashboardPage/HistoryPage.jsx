@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchStudentHistory, retakeTest } from './api';
-import HistoryTab from './HistoryTab';
+import { AttemptHistory } from '../../shared/ui';
 import StudentPageLoading from './StudentPageLoading';
 import { PageShell } from '../../shared/ui/Sheet';
 import { useNotify } from '../../shared/ui';
@@ -10,7 +10,6 @@ export default function HistoryPage() {
   const notify = useNotify();
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,13 +27,17 @@ export default function HistoryPage() {
     }
   };
 
-  const filteredHistory = history.filter(item => item.test_title?.toLowerCase().includes(searchTerm.toLowerCase()));
-
   if (loading) return <StudentPageLoading variant="history" />;
 
   return (
     <PageShell>
-      <HistoryTab filteredHistory={filteredHistory} searchTerm={searchTerm} setSearchTerm={setSearchTerm} onRetake={handleRetake} />
+      <AttemptHistory
+        items={history}
+        onOpen={(row) => navigate(`/result/${row.id}`)}
+        onContinue={(row) => navigate(`/test/${row.testId}`)}
+        onRetake={(row) => handleRetake(row.id, row.testId)}
+        onMistakes={(row) => navigate(`/result/${row.id}/mistakes`)}
+      />
     </PageShell>
   );
 }

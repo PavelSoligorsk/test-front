@@ -2,15 +2,18 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import apiClient from '../../shared/api';
-import { QuestionMap, ThemeToggle } from '../../shared/ui';
+import { QuestionMap, ThemeToggle, useNotify } from '../../shared/ui';
 import { rememberedStudentPath } from '../StudentDashboardPage/studentPaths';
+import { retakeTest } from '../StudentDashboardPage/api';
 import { sortExamTasks } from '../../shared/lib/examOrder';
+import { formatAttemptTime } from '../../shared/lib/attemptTime';
 import DifficultyStats from './DifficultyStats';
 import ResultTaskCard from './ResultTaskCard';
 
 export default function TestResultDetailContent() {
   const { resultId } = useParams();
   const navigate = useNavigate();
+  const notify = useNotify();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -95,6 +98,8 @@ export default function TestResultDetailContent() {
       <div className="w-8 h-8 border-[3px] border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
     </div>
   );
+  const finished = Boolean(data?.completed_at) || Boolean(data?.is_completed);
+
   if (!data) return (
     <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center p-6 text-center">
       <div className="absolute top-4 right-4"><ThemeToggle /></div>
@@ -116,7 +121,43 @@ export default function TestResultDetailContent() {
           <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-5 py-5 dark:border-zinc-800/60 sm:px-6">
             <div className="min-w-0">
               <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{data.test_title}</h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Результат прохождения</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                {finished ? 'Результат прохождения' : 'Попытка ещё не сдана'}
+                {data.started_at ? ` · ${formatAttemptTime(data.started_at)}` : ''}
+              </p>
+              {finished ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/result/${resultId}/mistakes`)}
+                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    Работа над ошибками
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const retakeData = await retakeTest(resultId);
+                        navigate(`/test/${retakeData.test_id || data.test_id}?retake=1`, { state: { startData: retakeData } });
+                      } catch (err) {
+                        notify(err.response?.data?.detail || 'Не удалось начать пересдачу.');
+                      }
+                    }}
+                    className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-zinc-950"
+                  >
+                    Пересдать
+                  </button>
+                </div>
+              ) : data?.test_id ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/test/${data.test_id}`)}
+                  className="mt-3 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-zinc-950"
+                >
+                  Доделать
+                </button>
+              ) : null}
             </div>
             <div className="shrink-0 text-right">
               <p className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">

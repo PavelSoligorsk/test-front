@@ -13,12 +13,14 @@ const REHYPE = [rehypeKatex];
 const STYLES = {
   page: {
     panel: 'flex flex-col gap-3 border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40',
-    row: 'flex min-w-0 flex-col gap-2',
-    head: 'flex items-center justify-between gap-3',
+    side: 'flex flex-col justify-center gap-2 border-t border-zinc-200 bg-zinc-50/80 px-3 py-2.5 lg:border-t-0 lg:border-l dark:border-zinc-800 dark:bg-zinc-950/40',
+    row: 'flex min-w-0 flex-col gap-1.5',
+    head: 'flex items-center justify-between gap-2',
     label: 'min-w-0 text-sm text-zinc-700 dark:text-zinc-300',
-    number: 'w-24 shrink-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-600',
+    number: 'w-16 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-600',
     slider: 'h-2 w-full accent-zinc-900 dark:accent-zinc-100',
     text: 'dynamic-markdown text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 [&_p]:mb-2 [&_p:last-child]:mb-0',
+    notes: 'dynamic-markdown col-span-full border-t border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm leading-relaxed text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-300 [&_p]:mb-2 [&_p:last-child]:mb-0',
   },
   board: {
     panel: 'flex shrink-0 flex-col gap-2 border-t border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950',
@@ -181,9 +183,7 @@ export default function GeoGebraControls({ controls = [], texts = [], apiRef, ap
   if (!controls.length && !texts.length) return null;
   const stop = board ? (event) => event.stopPropagation() : undefined;
 
-  return (
-    <div data-chrome={board ? 'true' : undefined} className={look.panel}>
-      {controls.map((control, index) => {
+  const controlRows = controls.map((control, index) => {
         const label = String(control.label || control.name).replace(/\$/g, '');
         const slider = control.kind === 'slider' && (
           <input
@@ -239,14 +239,33 @@ export default function GeoGebraControls({ controls = [], texts = [], apiRef, ap
             {!board && slider}
           </div>
         );
-      })}
-      {markdowns.map((markdown, index) => (
-        <ControlMarkdown
-          key={`text-${index}`}
-          markdown={markdown}
-          className={`${look.text} ${!board && controls.length > 0 ? 'border-t border-zinc-200 pt-3 dark:border-zinc-800' : ''}`}
-        />
-      ))}
-    </div>
+  });
+
+  const notes = markdowns.map((markdown, index) => (
+    <ControlMarkdown
+      key={`text-${index}`}
+      markdown={markdown}
+      className={board ? look.text : (index > 0 ? 'mt-2' : '')}
+    />
+  ));
+
+  if (board) {
+    return (
+      <div data-chrome="true" className={look.panel}>
+        {controlRows}
+        {notes}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {controls.length > 0 && (
+        <div className={controls.some((control) => control.kind === 'slider') ? look.side : look.panel}>
+          {controlRows}
+        </div>
+      )}
+      {notes.length > 0 && <div className={look.notes}>{notes}</div>}
+    </>
   );
 }

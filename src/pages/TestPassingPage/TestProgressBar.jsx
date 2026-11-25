@@ -7,15 +7,15 @@ export default function TestProgressBar({ test, currentIdx, userAnswers, onNavig
   const navigate = useNavigate();
 
   return (
-    <header className="flex justify-between items-center bg-white dark:bg-[#09090b] p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm">
-      <div className="flex items-center gap-6">
-        <div className="flex flex-col">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">Вопрос</span>
-          <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums tracking-tight">
+    <header className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white px-5 py-4 shadow-sm dark:border-zinc-800/60 dark:bg-[#09090b]">
+      <div className="flex min-w-0 items-center gap-5">
+        <div className="shrink-0">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Вопрос</p>
+          <p className="text-lg font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-100">
             {currentIdx + 1}
-            <span className="text-zinc-300 dark:text-zinc-600 font-medium mx-1">/</span>
+            <span className="mx-1 font-medium text-zinc-300 dark:text-zinc-600">/</span>
             {test?.tasks?.length}
-          </span>
+          </p>
         </div>
         <QuestionMap
           mode="test"

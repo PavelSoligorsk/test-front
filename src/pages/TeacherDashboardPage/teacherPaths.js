@@ -37,6 +37,7 @@ export const TEACHER_TABS = [
 ];
 
 export function teacherTabFromPath(pathname) {
+  if (pathname.startsWith('/teacher/results')) return null;
   if (pathname.startsWith('/teacher/calendar')) return 'calendar';
   if (pathname.startsWith('/teacher/bank')) return 'bank';
   if (pathname.startsWith('/teacher/topics')) return 'topics';

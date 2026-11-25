@@ -5,6 +5,7 @@ import { fetchAdminResult } from '../AdminDashboardPage/api';
 import { DifficultyBadge, QuestionMap } from '../../shared/ui';
 import ResultTaskCard from './ResultTaskCard';
 import { sortExamTasks } from '../../shared/lib/examOrder';
+import { formatAttemptTime } from '../../shared/lib/attemptTime';
 
 export default function AdminResultViewContent() {
   const { resultId } = useParams();
@@ -53,7 +54,11 @@ export default function AdminResultViewContent() {
               {data.test_title.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim()}
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-              {data.user.first_name} {data.user.last_name} · Просмотр (Админ)
+              {data.user.first_name} {data.user.last_name}
+              {' · '}
+              {data.completed_at || data.is_completed ? 'Сдано' : 'Не сдано'}
+              {data.started_at ? ` · ${formatAttemptTime(data.started_at)}` : ''}
+              {Number.isFinite(Number(data.time_spent_seconds)) ? ` · ${Math.floor(Number(data.time_spent_seconds) / 60)} мин` : ''}
             </p>
           </div>
           <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 px-6 py-4 rounded-2xl text-center">

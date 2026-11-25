@@ -174,7 +174,7 @@ export default function SchedulesListModal({ students, groups, onClose, onUpdate
   return (
     <>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-sm max-w-2xl w-full max-h-[90vh] flex flex-col">
+        <div className="bg-white rounded-xl shadow-sm max-w-2xl w-full max-h-[90vh] flex flex-col">
           {/* Header */}
           <div className="p-6 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-t-[2rem]">
             <div className="flex justify-between items-start">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import apiClient from '../../shared/api';
 import { XCircle, Send, Database, BookOpen, Sparkles, Trash2 } from 'lucide-react';
+import { primaryBtnClass, secondaryBtnClass } from '../../shared/ui';
 import { MarkdownPreview } from './MarkdownPreview';
 
 const getDifficultyColor = (lvl) => {
@@ -106,7 +107,7 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-white dark:bg-[#09090b] p-6 md:p-8 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 h-fit">
+        <div className="lg:col-span-1 bg-white dark:bg-[#09090b] p-6 md:p-8 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800/60 h-fit">
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight mb-6">{testForm.id ? 'Редактировать тест' : 'Новый тест'}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -206,12 +207,12 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
               </div>
             </div>
             {/* --- /Настройки прохождения --- */}
-            <button className="w-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 py-5 rounded-3xl font-semibold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-lg flex items-center justify-center gap-2">
-              <Send size={18} /> {testForm.id ? 'ОБНОВИТЬ ТЕСТ' : 'СОЗДАТЬ ТЕСТ'}
+            <button className={`${primaryBtnClass} w-full`}>
+              <Send size={16} /> {testForm.id ? 'Обновить тест' : 'Создать тест'}
             </button>
             {testForm.id && (
               <button type="button" onClick={() => { setTestForm(EMPTY_FORM); if (onClearEditing) onClearEditing(); if (onClearTasks) onClearTasks(); }}
-                className="w-full bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 py-3 rounded-3xl font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all text-xs">
+                className={`${secondaryBtnClass} w-full`}>
                 Новый тест
               </button>
             )}
@@ -219,7 +220,7 @@ export default function TestConstructor({ selectedTasks, onTaskToggle, openSolut
         </div>
 
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white dark:bg-[#09090b] p-6 rounded-3xl shadow-sm border border-zinc-200 dark:border-zinc-800/60">
+          <div className="bg-white dark:bg-[#09090b] p-6 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800/60">
             {/* ── Заголовок теста markdown-превью ── */}
             {testForm.title && (
               <div className="mb-5 pb-5 border-b border-zinc-100 dark:border-zinc-800/60">

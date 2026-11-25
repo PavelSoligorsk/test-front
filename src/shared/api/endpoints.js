@@ -23,6 +23,8 @@ export const ENDPOINTS = {
   STUDENT_GENERATE_TEST: '/student/generate-test',
   STUDENT_SAVE_PROGRESS: (testId) => `/student/tests/${testId}/save-progress`,
   STUDENT_RETAKE: (resultId) => `/student/retake/${resultId}`,
+  STUDENT_MISTAKES: (resultId) => `/student/results/${resultId}/mistakes`,
+  STUDENT_MISTAKES_SUBMIT: (resultId) => `/student/results/${resultId}/mistakes/submit`,
   STUDENT_RESULT: (resultId) => `/student/results/${resultId}`,
   STUDENT_THEORY_META: '/student/theory/meta',
   STUDENT_THEORY_BY_TOPIC_SECTION: (topic, section) => `/student/theory/by-topic/${topic}/section/${section}`,

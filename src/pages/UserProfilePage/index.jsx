@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../shared/api';
-import { ChevronLeft, Phone, MessageSquare, History, ArrowRight, Trophy, Target, Calendar, Search, BarChart3, Shield } from 'lucide-react';
+import { AttemptHistory } from '../../shared/ui';
+import { ChevronLeft, Phone, MessageSquare, Trophy, Target, BarChart3, Shield } from 'lucide-react';
 
 export default function UserProfile() {
   const { userId } = useParams();
@@ -10,7 +11,6 @@ export default function UserProfile() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,14 +38,6 @@ export default function UserProfile() {
     };
     fetchData();
   }, [userId]);
-
-  const filteredHistory = useMemo(() => {
-    if (!searchTerm) return history;
-    const q = searchTerm.toLowerCase();
-    return history.filter(item =>
-      (item.test_title || '').toLowerCase().includes(q)
-    );
-  }, [history, searchTerm]);
 
   if (loading) {
     return (
@@ -168,99 +160,12 @@ export default function UserProfile() {
 
           {/* Main: History */}
           <div className="md:col-span-2">
-            <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm overflow-hidden h-full flex flex-col">
-              <div className="p-8 border-b border-zinc-100 dark:border-zinc-800/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex items-center gap-4">
-                  <h2 className="text-lg font-semibold tracking-tight flex items-center gap-3 text-zinc-900 dark:text-zinc-100">
-                    <History size={20} /> История решений
-                  </h2>
-                  <div className="px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 rounded-full text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    {filteredHistory.length} сессий
-                  </div>
-                </div>
-                <div className="relative w-full sm:w-64">
-                  <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    placeholder="Поиск..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:ring-4 focus:ring-zinc-100 dark:focus:ring-zinc-800/50 focus:border-zinc-300 dark:focus:border-zinc-700 placeholder:text-zinc-400"
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-x-auto">
-                {filteredHistory.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <History size={40} className="text-zinc-200 dark:text-zinc-700 mb-4" />
-                    <p className="text-sm font-medium text-zinc-400">
-                      {searchTerm ? 'Ничего не найдено' : 'История тестов пуста'}
-                    </p>
-                  </div>
-                ) : (
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-zinc-50/80 dark:bg-zinc-900/40">
-                        <th className="px-8 py-5 text-xs font-medium text-zinc-500 dark:text-zinc-400">Тест</th>
-                        <th className="px-8 py-5 text-xs font-medium text-zinc-500 dark:text-zinc-400 text-center">Балл</th>
-                        <th className="px-8 py-5 text-xs font-medium text-zinc-500 dark:text-zinc-400">Дата</th>
-                        <th className="px-8 py-5 text-right"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                      {filteredHistory.map((item) => {
-                        const result = item.result || item;
-                        const score = result.total_points || item.score || 0;
-                        return (
-                          <tr
-                            key={result.id || item.id}
-                            onClick={() => {
-                              const rid = result.id || item.result_id;
-                              if (rid) navigate(`/admin/results/${rid}`);
-                            }}
-                            className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40 cursor-pointer transition-all group"
-                          >
-                            <td className="px-8 py-6">
-                              <div className="font-medium text-zinc-800 dark:text-zinc-200 text-sm group-hover:text-zinc-950 dark:group-hover:text-white transition-colors">
-                                {item.test_title?.replace(/Тест:\s*|Класс,?\s*|Тема\s*/gi, '').trim() || 'Без названия'}
-                              </div>
-                              <div className="text-xs font-medium text-zinc-400 mt-1 tabular-nums">
-                                ID {result.id || item.id}
-                              </div>
-                            </td>
-                            <td className="px-8 py-6 text-center">
-                              <span className={`text-lg font-semibold tabular-nums ${
-                                score >= 80 ? 'text-green-600 dark:text-green-400'
-                                  : score >= 50 ? 'text-zinc-700 dark:text-zinc-300'
-                                    : 'text-red-600 dark:text-red-400'
-                              }`}>
-                                {result.total_points ?? item.score ?? '—'}
-                              </span>
-                            </td>
-                            <td className="px-8 py-6">
-                              <div className="flex items-center gap-2 text-zinc-400">
-                                <Calendar size={12} />
-                                <span className="text-xs font-medium">
-                                  {result.completed_at || item.completed_at
-                                    ? new Date(result.completed_at || item.completed_at).toLocaleDateString('ru-RU')
-                                    : '—'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-400 group-hover:bg-zinc-900 dark:group-hover:bg-white group-hover:text-white dark:group-hover:text-zinc-950 transition-all shadow-sm">
-                                <ArrowRight size={16} />
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
+            <AttemptHistory
+              tone="section"
+              items={history}
+              onOpen={(row) => navigate(`/admin/results/${row.id}`)}
+              showSpent
+            />
           </div>
         </div>
       </div>

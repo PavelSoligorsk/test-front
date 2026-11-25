@@ -1,126 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { BookOpen, CheckCircle2, Send, Trophy, Users, XCircle } from 'lucide-react';
 import apiClient from '../../shared/api';
 import {
-  ArrowRight, BookOpen, CheckCircle2, ChevronLeft, Clock,
-  FileText, LayoutDashboard, Send, Trash2, Trophy, Users, XCircle,
-} from 'lucide-react';
-import { InlineNotice, ThemeToggle, formatApiDetail, useConfirm } from '../../shared/ui';
+  EmptyState, InlineNotice, PageLoading, PageShell, SectionCard, Segmented,
+  StatFigure, StatFigures, SummaryCard, formatApiDetail, useConfirm,
+} from '../../shared/ui';
 import AssignTestToGroupModal from '../TeacherDashboardPage/AssignTestToGroupModal';
 import GroupStudentsModal from '../TeacherDashboardPage/GroupStudentsModal';
+import GroupTestCard from './GroupTestCard';
 
-function formatDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
-}
-
-function studentName(row) {
-  if (row.student_name) return row.student_name;
-  const n = [row.first_name, row.last_name].filter(Boolean).join(' ');
-  return n || `ID ${row.user_id || row.id}`;
-}
-
-function GroupTestCard({ test, groupId, navigate, onUnassign, solversOnly = false }) {
-  const students = test.students || [];
-  const done = students.filter((s) => s.is_completed).length;
-  const total = students.length;
-  const solved = done > 0;
-  const rows = solversOnly ? students.filter((s) => s.is_completed) : students;
-
-  return (
-    <li className="px-6 md:px-8 py-5 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{test.test_title}</p>
-            {solved ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-950">
-                <CheckCircle2 size={11} /> Решённый
-              </span>
-            ) : null}
-          </div>
-          <p className="text-xs text-zinc-500 mt-1 tabular-nums">
-            {done}/{total} · {formatDate(test.assigned_at)}
-            {test.due_date ? ` · до ${formatDate(test.due_date)}` : ''}
-          </p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {solved ? (
-            <button
-              type="button"
-              onClick={() => navigate(`/teacher/groups/${groupId}/tests/${test.test_id}`)}
-              className="px-3 py-1.5 text-xs font-medium rounded-xl bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 flex items-center gap-1"
-            >
-              <FileText size={12} /> Разбор группой
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => onUnassign(test.test_id)}
-            className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-            title="Снять со всей группы"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-      <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-zinc-900 dark:bg-white rounded-full"
-          style={{ width: `${total ? (done / total) * 100 : 0}%` }}
-        />
-      </div>
-      <div className="space-y-1">
-        {rows.map((s) => (
-          <div key={s.user_id} className="flex items-center justify-between gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => navigate(`/teacher/students/${s.user_id}`)}
-              className="font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 truncate"
-            >
-              {studentName(s)}
-            </button>
-            {s.is_completed ? (
-              <button
-                type="button"
-                onClick={() => s.result_id && navigate(`/teacher/results/${s.result_id}`)}
-                className="tabular-nums text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center gap-1"
-              >
-                {s.total_points ?? 0}/{test.max_points ?? 0}
-                <ArrowRight size={12} />
-              </button>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-zinc-400">
-                <Clock size={12} /> Ждёт
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </li>
-  );
-}
-
-// Группа, её назначения, тесты и ученики учителя; null — такой группы нет.
 async function fetchGroupPage(groupId) {
   const [groupsRes, assignRes, testsRes, studentsRes] = await Promise.all([
-    apiClient.get(`/teacher/groups/`),
+    apiClient.get('/teacher/groups/'),
     apiClient.get(`/teacher/groups/${groupId}/assignments`),
-    apiClient.get(`/teacher/tests`),
-    apiClient.get(`/teacher/students`),
+    apiClient.get('/teacher/tests'),
+    apiClient.get('/teacher/students'),
   ]);
   const list = Array.isArray(groupsRes.data) ? groupsRes.data : [];
-  const found = list.find((g) => String(g.id) === String(groupId));
+  const found = list.find((group) => String(group.id) === String(groupId));
   if (!found) return null;
-  const assignData = assignRes.data;
   return {
-    group: { ...found, name: found.name || assignData?.group_name },
-    assignments: assignData,
+    group: { ...found, name: found.name || assignRes.data?.group_name },
+    assignments: assignRes.data,
     tests: testsRes.data || [],
     students: studentsRes.data || [],
   };
+}
+
+function actionClass() {
+  return 'inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 dark:focus-visible:ring-white';
 }
 
 export default function TeacherGroupPageContent() {
@@ -138,7 +47,6 @@ export default function TeacherGroupPageContent() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [studentsModal, setStudentsModal] = useState(false);
 
-  // Спиннер на всю страницу — только при первом заходе; после действий данные обновляются на месте.
   const load = useCallback(() => fetchGroupPage(groupId)
     .then((page) => {
       if (!page) {
@@ -161,17 +69,13 @@ export default function TeacherGroupPageContent() {
     })
     .finally(() => setLoading(false)), [groupId, navigate]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const testsList = useMemo(() => assignments?.tests || [], [assignments]);
-  const assignedCount = testsList.length;
   const solvedTests = useMemo(
-    () => testsList.filter((t) => (t.students || []).some((s) => s.is_completed)),
+    () => testsList.filter((test) => (test.students || []).some((row) => row.is_completed)),
     [testsList]
   );
-  const completedCount = solvedTests.length;
 
   const handleRemoveStudent = async (gid, studentId) => {
     try {
@@ -206,228 +110,118 @@ export default function TeacherGroupPageContent() {
   };
 
   const handleAssign = async (testId, gid) => {
-    await apiClient.post(`/teacher/assign-test-to-group`, { test_id: testId, group_id: gid });
+    await apiClient.post('/teacher/assign-test-to-group', { test_id: testId, group_id: gid });
     await load();
     setNotice({ tone: 'success', text: 'Тест назначен группе' });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center">
-        <div className="w-8 h-8 border-[3px] border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   if (error || !group) {
     return (
-      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center flex-col gap-6">
-        <LayoutDashboard size={48} className="text-zinc-300 dark:text-zinc-700" />
-        <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{error || 'Ошибка загрузки'}</div>
-        <button
-          type="button"
-          onClick={() => navigate('/teacher/groups')}
-          className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-2xl text-sm font-medium text-zinc-600 dark:text-zinc-300"
-        >
-          <ChevronLeft size={14} /> Назад к группам
-        </button>
-      </div>
+      <PageShell>
+        <EmptyState title={error || 'Ошибка загрузки'} hint="Вернитесь к списку групп">
+          <button type="button" onClick={() => navigate('/teacher/groups')} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">К группам</button>
+        </EmptyState>
+      </PageShell>
     );
   }
 
   const members = group.students || [];
+  const visibleTests = tab === 'solved' ? solvedTests : testsList;
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
-      <div className="absolute top-4 right-4 z-10"><ThemeToggle /></div>
-      <div className="max-w-6xl mx-auto p-6 md:p-10 space-y-10">
-        <button
-          type="button"
-          onClick={() => navigate('/teacher/groups')}
-          className="group flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-sm font-medium transition-all"
-        >
-          <div className="p-2 bg-white dark:bg-[#09090b] rounded-lg border border-zinc-200 dark:border-zinc-800 group-hover:border-zinc-300 dark:group-hover:border-zinc-700 shadow-sm">
-            <ChevronLeft size={14} />
-          </div>
-          Назад к группам
-        </button>
+    <PageShell className="space-y-6">
+      <SummaryCard
+        onBack={() => navigate('/teacher/groups')}
+        backLabel="К группам"
+        title={group.name}
+        hint={group.description || 'Назначения и состав'}
+        extra={(
+          <button type="button" onClick={() => setAssignOpen(true)} className={actionClass()}>
+            <Send size={14} /> Назначить тест
+          </button>
+        )}
+      >
+        <StatFigures columns={3}>
+          <StatFigure value={testsList.length} caption="назначено" />
+          <StatFigure value={solvedTests.length} caption="решено" />
+          <StatFigure value={members.length} caption="учеников" />
+        </StatFigures>
+      </SummaryCard>
 
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
-          <div className="space-y-3">
-            <span className="text-xs font-medium bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 px-3 py-1.5 rounded-full">
-              Группа
-            </span>
-            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 leading-tight">
-              {group.name}
-            </h1>
-            {group.description ? (
-              <p className="text-zinc-500 dark:text-zinc-400 font-medium text-lg max-w-xl">{group.description}</p>
-            ) : null}
-            <p className="text-sm text-zinc-500 tabular-nums">{members.length} учеников</p>
-          </div>
+      {notice ? <InlineNotice tone={notice.tone}>{notice.text}</InlineNotice> : null}
 
-          <div className="flex flex-col sm:flex-row gap-4 bg-white dark:bg-[#09090b] p-6 md:p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm">
-            <div className="text-right">
-              <div className="text-xs font-medium text-zinc-400 mb-1">Назначено</div>
-              <div className="text-4xl font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums tracking-tight">{assignedCount}</div>
-            </div>
-            <div className="hidden sm:block w-px bg-zinc-200 dark:bg-zinc-800 h-12 self-center" />
-            <div className="text-right">
-              <div className="text-xs font-medium text-zinc-400 mb-1">Решённые</div>
-              <div className="text-4xl font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums tracking-tight">{completedCount}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAssignOpen(true)}
-              className="px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl font-medium text-xs hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all flex items-center gap-2 self-center"
-            >
-              <Send size={14} /> Назначить тест
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <SectionCard
+          title="Ученики"
+          hint={members.length ? 'Состав группы' : 'Пока пусто'}
+          extra={(
+            <button type="button" onClick={() => setStudentsModal(true)} className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+              Состав
             </button>
-          </div>
-        </header>
-
-        {notice ? <InlineNotice tone={notice.tone}>{notice.text}</InlineNotice> : null}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm overflow-hidden">
-              <div className="p-6 md:p-8 pb-4 flex items-center justify-between gap-3">
-                <h3 className="font-medium text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
-                  <Users size={14} className="text-zinc-700 dark:text-zinc-300" /> Ученики
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setStudentsModal(true)}
-                  className="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
-                >
-                  Состав
-                </button>
-              </div>
-              {members.length === 0 ? (
-                <div className="px-6 md:px-8 pb-10 flex flex-col items-center text-center gap-2">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-                    <Users size={20} />
-                  </div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Нет учеников</p>
-                  <p className="text-sm text-zinc-500">Добавьте состав через кнопку выше</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                  {members.map((student) => (
-                    <li key={student.id} className="px-6 md:px-8 py-4 flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/teacher/students/${student.id}`)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                          {student.first_name} {student.last_name}
-                        </p>
-                        <p className="text-xs text-zinc-400">@{student.username}</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/stats/${student.id}`)}
-                        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        title="Статистика"
-                      >
-                        <Trophy size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveStudent(group.id, student.id)}
-                        className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                        title="Убрать из группы"
-                      >
-                        <XCircle size={14} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          <div className="md:col-span-2">
-            <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm overflow-hidden min-h-[28rem] flex flex-col">
-              <div className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800/60">
-                <div className="flex gap-1 p-1 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 w-fit">
-                  <button
-                    type="button"
-                    onClick={() => setTab('assigned')}
-                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-                      tab === 'assigned'
-                        ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                        : 'text-zinc-500'
-                    }`}
-                  >
-                    Назначенные
+          )}
+        >
+          {members.length === 0 ? (
+            <EmptyState framed={false} className="py-12" icon={<Users size={20} />} title="Нет учеников" hint="Добавьте состав" />
+          ) : (
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+              {members.map((student) => (
+                <li key={student.id} className="flex items-center gap-3 px-6 py-4 md:px-8">
+                  <button type="button" onClick={() => navigate(`/teacher/students/${student.id}`)} className="min-w-0 flex-1 text-left">
+                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{student.first_name} {student.last_name}</p>
+                    <p className="text-xs text-zinc-500">@{student.username}</p>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setTab('solved')}
-                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-                      tab === 'solved'
-                        ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                        : 'text-zinc-500'
-                    }`}
-                  >
-                    Решённые
+                  <button type="button" onClick={() => navigate(`/stats/${student.id}`)} className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100" title="Статистика">
+                    <Trophy size={14} />
                   </button>
-                </div>
-              </div>
+                  <button type="button" onClick={() => handleRemoveStudent(group.id, student.id)} className="rounded-xl p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="Убрать из группы">
+                    <XCircle size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
 
-              {tab === 'assigned' && (
-                testsList.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-16 text-center gap-2 px-6">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-                      <BookOpen size={20} />
-                    </div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Нет назначенных тестов</p>
-                    <p className="text-sm text-zinc-500">Назначьте тест группе справа в шапке</p>
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                    {testsList.map((test) => (
-                      <GroupTestCard
-                        key={test.test_id}
-                        test={test}
-                        groupId={groupId}
-                        navigate={navigate}
-                        onUnassign={handleUnassign}
-                      />
-                    ))}
-                  </ul>
-                )
-              )}
-
-              {tab === 'solved' && (
-                solvedTests.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-16 text-center gap-2 px-6">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400">
-                      <CheckCircle2 size={20} />
-                    </div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Пока никто не сдал</p>
-                    <p className="text-sm text-zinc-500">Тест появится здесь, как только его сдаст хотя бы один ученик</p>
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                    {solvedTests.map((test) => (
-                      <GroupTestCard
-                        key={test.test_id}
-                        test={test}
-                        groupId={groupId}
-                        navigate={navigate}
-                        onUnassign={handleUnassign}
-                        solversOnly
-                      />
-                    ))}
-                  </ul>
-                )
-              )}
-            </div>
-          </div>
-        </div>
+        <SectionCard
+          title="Тесты"
+          hint={tab === 'solved' ? 'Сдал хотя бы один ученик' : 'Назначены группе'}
+          extra={(
+            <Segmented
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: 'assigned', label: 'Назначенные' },
+                { value: 'solved', label: 'Решённые' },
+              ]}
+            />
+          )}
+        >
+          {visibleTests.length === 0 ? (
+            <EmptyState
+              framed={false}
+              className="py-16"
+              icon={tab === 'solved' ? <CheckCircle2 size={20} /> : <BookOpen size={20} />}
+              title={tab === 'solved' ? 'Пока никто не сдал' : 'Нет назначенных тестов'}
+              hint={tab === 'solved' ? 'Тест появится здесь, как только его сдаст хотя бы один ученик' : 'Назначьте тест группе'}
+            />
+          ) : (
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+              {visibleTests.map((test) => (
+                <li key={test.test_id} className="px-6 py-4 md:px-8">
+                  <GroupTestCard
+                    test={test}
+                    groupId={groupId}
+                    navigate={navigate}
+                    onUnassign={handleUnassign}
+                    solversOnly={tab === 'solved'}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
 
       {assignOpen ? (
@@ -439,7 +233,6 @@ export default function TeacherGroupPageContent() {
           navigate={navigate}
         />
       ) : null}
-
       {studentsModal ? (
         <GroupStudentsModal
           group={group}
@@ -450,6 +243,6 @@ export default function TeacherGroupPageContent() {
           navigate={navigate}
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }

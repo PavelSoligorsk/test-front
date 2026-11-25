@@ -1,7 +1,7 @@
 import apiClient from '../../shared/api';
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronRight, GraduationCap } from 'lucide-react';
-import { NavTile, SearchField } from '../../shared/ui';
+import { NavTile, PageHeading, SearchField } from '../../shared/ui';
 import PickerTaskCard from '../../features/tasks/PickerTaskCard';
 import { fetchTeacherTasksByClass } from '../../features/tasks/api';
 
@@ -161,22 +161,15 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      <div className="bg-white dark:bg-[#09090b] rounded-3xl p-5 md:p-6 shadow-sm border border-zinc-200 dark:border-zinc-800/60">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-zinc-900 dark:bg-white rounded-xl flex items-center justify-center">
-              <GraduationCap size={20} className="text-white dark:text-zinc-950" />
-            </div>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-semibold text-zinc-900 dark:text-white tracking-tight">Банк заданий</h2>
-              <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 tracking-tight mt-1">
-                {selectedClass
-                  ? `${selectedClass} раздел${selectedTopic ? ` → ${selectedTopic}` : ' → выберите подраздел'}`
-                  : `${classes.length} разделов доступно`}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
+      <PageHeading
+        icon={<GraduationCap size={18} strokeWidth={2} />}
+        title="Банк заданий"
+        titleAs="h2"
+        hint={selectedClass
+          ? `${selectedClass} раздел${selectedTopic ? ` → ${selectedTopic}` : ' → выберите подраздел'}`
+          : `${classes.length} разделов доступно`}
+        extra={(
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setExamFilter(!examFilter)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${ examFilter ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-lg" : "bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-500/50" }`}
@@ -194,8 +187,8 @@ export default function TestBank({ onTaskToggle, selectedTasks, openSolutions, o
               </button>
             )}
           </div>
-        </div>
-      </div>
+        )}
+      />
 
       {!selectedClass && (
         <div className="space-y-4">

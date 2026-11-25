@@ -203,7 +203,7 @@ export default function LessonModal({ lesson: initialLesson, students, groups, o
   return (
     <>
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className={`bg-white rounded-3xl shadow-sm max-w-xl w-full max-h-[90vh] flex flex-col border-2 ${getBorderColor()}`}>
+      <div className={`bg-white rounded-xl shadow-sm max-w-xl w-full max-h-[90vh] flex flex-col border-2 ${getBorderColor()}`}>
         {/* Header */}
         <div className={`p-6 rounded-t-[2rem] ${statusInfo.color} bg-opacity-20`}>
           <div className="flex justify-between items-start">

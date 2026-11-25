@@ -44,6 +44,7 @@ const AdminAccessPage = React.lazy(() => import('../../pages/AdminDashboardPage/
 
 const TestPassing = React.lazy(() => import('../../pages/TestPassingPage'));
 const TestResultDetail = React.lazy(() => import('../../pages/TestResultDetailPage'));
+const MistakesPage = React.lazy(() => import('../../pages/TestResultDetailPage/MistakesContent'));
 const AdminResultView = React.lazy(() => import('../../pages/AdminResultViewPage'));
 const TeacherResultView = React.lazy(() => import('../../pages/TeacherResultViewPage'));
 const TeacherStudentProfile = React.lazy(() => import('../../pages/TeacherStudentProfilePage'));
@@ -125,19 +126,18 @@ export default function AppRoutes() {
                 <Route path="bank" element={<TeacherBankPage />} />
                 <Route path="topics" element={<TeacherTopicsPage />} />
                 <Route path="constructor" element={<TeacherConstructorPage />} />
+                <Route path="students/:userId" element={<TeacherStudentProfile />} />
                 <Route path="students" element={<TeacherStudentsPage />} />
                 <Route path="tests" element={<TeacherTestsPage />} />
+                <Route path="groups/:groupId/tests/:testId" element={<TeacherGroupTestReviewPage />} />
+                <Route path="groups/:groupId" element={<TeacherGroupPage />} />
                 <Route path="groups" element={<TeacherGroupsPage />} />
+                <Route path="results/:resultId" element={<TeacherResultView />} />
                 <Route path="board/:boardId" element={<TeacherBoardCanvasPage />} />
                 <Route path="board" element={<TeacherBoardPage />} />
                 <Route path="theory" element={<Navigate to="/teacher/board" replace />} />
                 <Route path="profile" element={<TeacherProfilePage />} />
               </Route>
-              <Route path="/teacher/students/:userId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherStudentProfile /></PrivateRoute>} />
-              <Route path="/teacher/groups/:groupId/tests/:testId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherGroupTestReviewPage /></PrivateRoute>} />
-              <Route path="/teacher/groups/:groupId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherGroupPage /></PrivateRoute>} />
-              <Route path="/teacher/results/:resultId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><TeacherResultView /></PrivateRoute>} />
-
               <Route path="/admin" element={<PrivateRoute allowedRoles={['admin']}><AdminLayout /></PrivateRoute>}>
                 <Route index element={<AdminIndexRedirect />} />
                 <Route path="create" element={<AdminCreatePage />} />
@@ -153,6 +153,7 @@ export default function AppRoutes() {
               <Route path="/admin/users/:userId" element={<PrivateRoute allowedRoles={['admin', 'teacher']}><UserProfile /></PrivateRoute>} />
 
               <Route path="/test/:testId" element={<PrivateRoute><TestPassing /></PrivateRoute>} />
+              <Route path="/result/:resultId/mistakes" element={<PrivateRoute><MistakesPage /></PrivateRoute>} />
               <Route path="/result/:resultId" element={<PrivateRoute><TestResultDetail /></PrivateRoute>} />
               <Route path="/stats" element={<PrivateRoute><StatsPage /></PrivateRoute>} />
               <Route path="/stats/:userId" element={<PrivateRoute allowedRoles={['teacher', 'admin']}><StatsPage /></PrivateRoute>} />

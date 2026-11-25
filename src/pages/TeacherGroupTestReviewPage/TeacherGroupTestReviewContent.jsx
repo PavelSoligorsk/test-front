@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../../shared/api';
-import { ChevronLeft, FileText, Users } from 'lucide-react';
-import { InlineNotice, MarkdownRenderer, QuestionMap, ThemeToggle, formatApiDetail } from '../../shared/ui';
+import { EmptyState, MarkdownRenderer, PageLoading, PageShell, QuestionMap, SectionCard, SummaryCard, formatApiDetail, secondaryBtnClass } from '../../shared/ui';
 import { TaskOptions } from '../../shared/ui/TaskView';
 
 function displayName(row) {
@@ -97,7 +96,7 @@ function TaskBlock({ index, total, task, clusters, navigate }) {
   return (
     <article
       data-task-id={id}
-      className="rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] overflow-hidden"
+      className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]"
     >
       <div className="px-6 md:px-8 py-4 border-b border-zinc-100 dark:border-zinc-800/60">
         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 tabular-nums">
@@ -239,64 +238,33 @@ export default function TeacherGroupTestReviewContent() {
   );
   const notSubmitted = data?.not_submitted || [];
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center">
-        <div className="w-8 h-8 border-[3px] border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] flex items-center justify-center flex-col gap-6 p-6">
-        <FileText size={48} className="text-zinc-300 dark:text-zinc-700" />
-        <InlineNotice tone="error">{error || 'Разбор недоступен'}</InlineNotice>
-        <button
-          type="button"
-          onClick={() => navigate(`/teacher/groups/${groupId}`)}
-          className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-2xl text-sm font-medium"
-        >
-          <ChevronLeft size={14} /> К группе
-        </button>
-      </div>
+      <PageShell>
+        <EmptyState title={error || 'Разбор недоступен'}>
+          <button type="button" onClick={() => navigate(`/teacher/groups/${groupId}`)} className={secondaryBtnClass}>
+            К группе
+          </button>
+        </EmptyState>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-20">
-      <div className="absolute top-4 right-4 z-10"><ThemeToggle /></div>
-      <div className="max-w-4xl mx-auto p-6 md:p-10 space-y-8">
-        <button
-          type="button"
-          onClick={() => navigate(`/teacher/groups/${groupId}`)}
-          className="group flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-sm font-medium"
-        >
-          <div className="p-2 bg-white dark:bg-[#09090b] rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
-            <ChevronLeft size={14} />
-          </div>
-          Назад к группе
-        </button>
-
-        <header className="space-y-2">
-          <span className="text-xs font-medium bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 px-3 py-1.5 rounded-full">
-            Разбор группой
-          </span>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            {data.test_title || data.title || 'Тест'}
-          </h1>
-          <p className="text-sm text-zinc-500">
-            {data.group_name ? `${data.group_name} · ` : ''}
-            {tasks.length} заданий
-          </p>
-        </header>
+    <>
+      <PageShell className="!max-w-4xl space-y-6">
+        <SummaryCard
+          onBack={() => navigate(`/teacher/groups/${groupId}`)}
+          backLabel="К группе"
+          title={data.test_title || data.title || 'Тест'}
+          hint={`${data.group_name ? `${data.group_name} · ` : ''}${tasks.length} заданий`}
+        />
 
         {notSubmitted.length > 0 ? (
-          <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] p-6">
-            <h2 className="text-xs font-medium text-zinc-500 flex items-center gap-2 mb-3">
-              <Users size={14} /> Не сдали ({notSubmitted.length})
-            </h2>
-            <div className="flex flex-wrap gap-2">
+          <SectionCard title="Не сдали" hint={`${notSubmitted.length} ещё не открывали результат`}>
+            <div className="flex flex-wrap gap-2 px-6 pb-8 md:px-8">
               {notSubmitted.map((s) => (
                 <span
                   key={s.student_id || s.user_id}
@@ -306,7 +274,7 @@ export default function TeacherGroupTestReviewContent() {
                 </span>
               ))}
             </div>
-          </div>
+          </SectionCard>
         ) : null}
 
         {tasks.length === 0 ? (
@@ -325,7 +293,7 @@ export default function TeacherGroupTestReviewContent() {
             ))}
           </div>
         )}
-      </div>
+      </PageShell>
       {tasks.length > 0 ? (
         <QuestionMap
           mode="group"
@@ -336,6 +304,6 @@ export default function TeacherGroupTestReviewContent() {
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }

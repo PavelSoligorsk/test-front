@@ -86,7 +86,7 @@ export default function TestManageModal({ test, students, groups, onClose, onAss
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-sm max-w-2xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-sm max-w-2xl w-full max-h-[90vh] flex flex-col">
         <div className="p-6 border-b border-zinc-100">
           <div className="flex justify-between items-start">
             <div className="flex-1 min-w-0">

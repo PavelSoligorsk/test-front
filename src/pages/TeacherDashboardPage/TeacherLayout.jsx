@@ -20,13 +20,15 @@ function TeacherChrome() {
   const ws = useTeacherWorkspace();
   const isBoard = location.pathname.startsWith('/teacher/board');
   const isBoardCanvas = /^\/teacher\/board\/[^/]+/.test(location.pathname);
+  const isResult = location.pathname.startsWith('/teacher/results');
+  const isReview = /\/teacher\/groups\/[^/]+\/tests\//.test(location.pathname);
 
   return (
     <div className={`${isBoardCanvas ? 'h-dvh overflow-hidden' : `min-h-screen ${isBoard ? '' : 'pb-24'}`} bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800`}>
       {!isBoardCanvas && (
         <RoleNav
           tabs={TEACHER_TABS}
-          activeKey={activeKey === 'profile' ? null : activeKey}
+          activeKey={activeKey && activeKey !== 'profile' ? activeKey : null}
           onSelect={(key) => navigate(TEACHER_PATHS[key] || TEACHER_PATHS.bank)}
           displayName={displayName || 'Учитель'}
           subtitle="Учитель"
@@ -105,7 +107,7 @@ function TeacherChrome() {
         />
       )}
 
-      {ws.selectedTasks.length > 0 && activeKey !== 'constructor' && !isBoard && (
+      {ws.selectedTasks.length > 0 && activeKey !== 'constructor' && !isBoard && !isResult && !isReview && (
         <div className="fixed bottom-6 right-6 z-40">
           <button
             type="button"

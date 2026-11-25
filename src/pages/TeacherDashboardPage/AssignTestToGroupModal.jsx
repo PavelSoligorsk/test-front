@@ -65,7 +65,7 @@ export default function AssignTestToGroupModal({ group, tests, onClose, onAssign
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm max-w-2xl w-full max-h-[85vh] flex flex-col">
+      <div className="bg-white dark:bg-[#09090b] rounded-xl border border-zinc-200 dark:border-zinc-800/60 shadow-sm max-w-2xl w-full max-h-[85vh] flex flex-col">
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800/60">
           <div className="flex justify-between items-start gap-4">
             <div>

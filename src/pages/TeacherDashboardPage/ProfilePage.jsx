@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { User as UserIcon } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { teacherApi } from '../../features/teacher/api';
 import { restoreSession, saveSession } from '../../shared/lib/session';
 import {
-  PageShell, Sheet, IconWell, InlineNotice, formatApiDetail,
-  fieldClass, labelClass, primaryBtnClass,
+  PageShell, Sheet, InlineNotice, formatApiDetail, fieldClass, primaryBtnClass,
 } from '../../shared/ui';
 
 export default function ProfilePage() {
@@ -17,6 +16,9 @@ export default function ProfilePage() {
   });
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [savedName, setSavedName] = useState(
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'Профиль'
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,6 +28,7 @@ export default function ProfilePage() {
       const res = await teacherApi.updateProfile(form);
       const session = restoreSession();
       if (session) saveSession({ ...session, ...res.data });
+      setSavedName([form.first_name, form.last_name].filter(Boolean).join(' ') || user?.username || 'Профиль');
       setNotice({ tone: 'success', text: 'Профиль обновлён' });
     } catch (err) {
       setNotice({ tone: 'error', text: formatApiDetail(err.response?.data?.detail, 'Ошибка при сохранении') });
@@ -34,48 +37,49 @@ export default function ProfilePage() {
     }
   };
 
+  const set = (key) => (e) => setForm((current) => ({ ...current, [key]: e.target.value }));
+
   return (
     <PageShell>
-      <Sheet className="max-w-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800/60 flex items-center gap-4">
-          <IconWell><UserIcon size={18} strokeWidth={2} /></IconWell>
-          <div>
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">Профиль</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Контакты и имя</p>
+      <div className="mx-auto max-w-3xl animate-in fade-in duration-500">
+        <Sheet className="overflow-hidden">
+          <div className="border-b border-zinc-100 px-5 py-5 dark:border-zinc-800/60 sm:px-6 sm:py-6 md:px-8">
+            <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{savedName}</h1>
+            <p className="mt-1 text-sm text-zinc-500">Контакты и имя</p>
           </div>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-4">
-          {notice ? <InlineNotice tone={notice.tone}>{notice.text}</InlineNotice> : null}
-          <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="t-first">Имя</label>
-            <input id="t-first" className={fieldClass} value={form.first_name}
-              onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="t-last">Фамилия</label>
-            <input id="t-last" className={fieldClass} value={form.last_name}
-              onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="t-phone">Телефон</label>
-            <input id="t-phone" type="tel" className={fieldClass} value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="t-tg">Telegram</label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">@</span>
-              <input id="t-tg" className={`${fieldClass} pl-8`} value={form.tg_username}
-                onChange={(e) => setForm((f) => ({ ...f, tg_username: e.target.value }))} />
+          <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
+            {notice ? <InlineNotice tone={notice.tone}>{notice.text}</InlineNotice> : null}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Имя</span>
+                <input className={fieldClass} value={form.first_name} onChange={set('first_name')} />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Фамилия</span>
+                <input className={fieldClass} value={form.last_name} onChange={set('last_name')} />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Телефон</span>
+                <input type="tel" className={fieldClass} value={form.phone} onChange={set('phone')} />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Telegram</span>
+                <input className={fieldClass} value={form.tg_username} onChange={set('tg_username')} placeholder="username" />
+              </label>
             </div>
-          </div>
-          <div className="pt-2 flex gap-2">
-            <button type="submit" disabled={saving} className={`${primaryBtnClass} flex-1`}>
-              {saving ? 'Сохраняем…' : 'Сохранить'}
+            <button type="submit" disabled={saving} className={`${primaryBtnClass} w-full sm:w-auto`}>
+              {saving ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-zinc-950/30 dark:border-t-zinc-950" />
+              ) : (
+                <>
+                  <Check size={16} />
+                  Сохранить
+                </>
+              )}
             </button>
-          </div>
-        </form>
-      </Sheet>
+          </form>
+        </Sheet>
+      </div>
     </PageShell>
   );
 }

@@ -22,6 +22,16 @@ export function PageShell({ children, className = '' }) {
   );
 }
 
+export function PageLoading({ label = 'Загрузка' }) {
+  return (
+    <PageShell>
+      <div className="flex justify-center py-24" role="status" aria-label={label}>
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-zinc-200 border-t-zinc-900 dark:border-zinc-800 dark:border-t-zinc-100" />
+      </div>
+    </PageShell>
+  );
+}
+
 export const fieldClass =
   'w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-white/10 focus:border-zinc-300 dark:focus:border-zinc-700 transition-all';
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon, LogOut, BookOpen, ClipboardList } from 'lucide-react';
+import { Loader2, Clock, AlertTriangle, XCircle, RotateCcw, Calendar as CalendarIcon } from 'lucide-react';
 import { ThemeToggle, useConfirm, useNotify } from '../../shared/ui';
 import AttemptGate from './AttemptGate';
 import apiClient from '../../shared/api';
@@ -10,17 +10,14 @@ import { retakeTest } from '../StudentDashboardPage/api';
 import { ENDPOINTS } from '../../shared/api/endpoints';
 import { rememberedStudentPath } from '../StudentDashboardPage/studentPaths';
 import DrawingPad from '../../components/DrawingPad';
-import TestProgressBar from './TestProgressBar';
-import TestQuestionCard from './TestQuestionCard';
 import TestResultReport from './TestResultReport';
-import TestTheoryPanel from './TestTheoryPanel';
+import TestSession from './TestSession';
 import { sortExamTasks } from '../../shared/lib/examOrder';
 
-function formatTime(seconds) {
-  if (seconds == null || seconds <= 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+function wireAnswer(value) {
+  if (!Array.isArray(value)) return value;
+  const items = [...value].sort((a, b) => String(a).localeCompare(String(b), 'ru', { numeric: true }));
+  return items.length <= 1 ? (items[0] ?? '') : items;
 }
 
 /** Попытка из ответа старта (пересдача приносит его в state навигации, иначе — POST start-test). */
@@ -124,9 +121,7 @@ export default function TestPassingContent() {
   const buildAnswersPayload = useCallback((answers) =>
     Object.keys(answers).map(id => ({
       task_id: parseInt(id),
-      user_answer: Array.isArray(answers[id])
-        ? answers[id].sort((a, b) => a - b).join(',')
-        : String(answers[id]),
+      user_answer: wireAnswer(answers[id]),
     }))
   , []);
 
@@ -434,21 +429,6 @@ export default function TestPassingContent() {
     doSubmit(userAnswers);
   };
 
-  const [isExiting, setIsExiting] = useState(false);
-  const handleExitClick = async () => {
-    saveCurrentDrawing();
-    setIsExiting(true);
-    try {
-      await saveProgressToServer();
-      localStorage.removeItem(`test_progress_${testId}`);
-      localStorage.removeItem(`test_restored_${testId}`);
-      navigate(rememberedStudentPath());
-    } catch {
-      setIsExiting(false);
-      notify('Не удалось сохранить прогресс. Проверьте интернет-соединение.');
-    }
-  };
-
   const handleRetakeInReport = async () => {
     if (!resultId) return;
     try {
@@ -547,156 +527,39 @@ export default function TestPassingContent() {
     );
   }
 
-  const hasTimer = timeLimitMinutes != null;
-  const attemptsLeft = maxAttempts != null ? maxAttempts - attemptsUsed : null;
-
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-[#09090b] pb-24">
-      <div className={`${theoryOpen ? 'max-w-7xl' : 'max-w-2xl'} mx-auto p-4 md:p-8 space-y-6`}>
-        {hasTimer && (
-          <div className={`flex items-center justify-between px-5 py-3 rounded-2xl border shadow-sm ${
-            timerWarning
-              ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
-              : 'bg-white dark:bg-[#09090b] border-zinc-200 dark:border-zinc-800/60'
-          }`}>
-            <div className="flex items-center gap-3">
-              <Clock size={18} className={timerWarning ? 'text-red-500' : 'text-zinc-400'} />
-              <span className={`text-sm font-medium ${timerWarning ? 'text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-300'}`}>
-                Осталось времени
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-xl font-semibold tabular-nums tracking-tight ${timerWarning ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
-                {formatTime(timeRemaining)}
-              </span>
-              {theoryOpen && <ThemeToggle />}
-            </div>
-          </div>
-        )}
-
-        {!hasTimer && theoryOpen && (
-          <div className="flex justify-end">
-            <ThemeToggle />
-          </div>
-        )}
-
-        {!theoryOpen && attemptsLeft != null && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/60 rounded-2xl text-xs font-medium text-zinc-500 dark:text-zinc-400 shadow-sm">
-            <RotateCcw size={12} />
-            Попытка {attemptsUsed + 1} из {maxAttempts}{' '}
-            {attemptsLeft <= 1 && (
-              <span className="text-zinc-700 dark:text-zinc-200 ml-1">(последняя)</span>
-            )}
-          </div>
-        )}
-
-        {!theoryOpen && examStart && examEnd && !blockError && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
-            <CalendarIcon size={12} />
-            Экзамен:{' '}
-            {new Date(examStart).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            {' — '}
-            {new Date(examEnd).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          </div>
-        )}
-
-        {!theoryOpen && !hasTimer && allowInterruptions && (
-          <div className="flex items-center justify-between gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={12} />
-              Прогресс сохраняется на сервере — можно выйти и продолжить позже
-            </div>
-            <button
-              onClick={handleExitClick}
-              disabled={isExiting}
-              className="flex items-center gap-1 px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-xl text-xs font-medium transition disabled:opacity-50"
-            >
-              <LogOut size={12} />
-              {isExiting ? 'Сохранение...' : 'Выйти'}
-            </button>
-          </div>
-        )}
-        {!theoryOpen && hasTimer && !allowInterruptions && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800 rounded-2xl text-xs font-medium text-zinc-600 dark:text-zinc-300">
-            <AlertTriangle size={12} />
-            Тест нужно пройти за один присест. При выходе попытка будет потеряна.
-          </div>
-        )}
-
-        {theoryOpen ? (
-          <TestTheoryPanel />
-        ) : (
-          <>
-            <TestProgressBar
-              test={test}
-              currentIdx={currentIdx}
-              userAnswers={userAnswers}
-              onNavigate={(idx) => setCurrentIdx(idx)}
-            />
-
-            <TestQuestionCard
-              currentTask={currentTask}
-              currentIdx={currentIdx}
-              userAnswers={userAnswers}
-              onToggleAnswer={(index) => handleToggleAnswer(currentTask?.id, index)}
-              onTextChange={(val) => handleTextChange(currentTask?.id, val)}
-              hintUsed={hintUsed}
-              hintLoading={hintLoading}
-              hintData={hintData}
-              onFetchHint={fetchHint}
-              showDrawing={showDrawing}
-              onToggleDrawing={toggleDrawing}
-              canvasRef={canvasRef}
-              drawings={drawings}
-              onDrawingSave={handleDrawingSave}
-              onDrawingDataChange={handleDrawingDataChange}
-              DrawingPadComponent={DrawingPad}
-            />
-
-            <footer className="flex justify-between items-center pt-8">
-              <button
-                disabled={currentIdx === 0}
-                onClick={() => setCurrentIdx(v => v - 1)}
-                className="flex items-center gap-2 text-zinc-400 text-sm font-medium disabled:opacity-0 p-3 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-              >
-                <ChevronLeft size={18} /> Назад
-              </button>
-
-              {currentIdx === test.tasks.length - 1 ? (
-                <button
-                  onClick={handleSubmitClick}
-                  disabled={isSubmitting}
-                  className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all disabled:opacity-40"
-                >
-                  {isSubmitting ? 'Отправка...' : 'Завершить работу'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setCurrentIdx(v => v + 1)}
-                  className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-xl text-sm font-medium active:scale-95 transition-all"
-                >
-                  Следующий шаг <ChevronRight size={18} />
-                </button>
-              )}
-            </footer>
-          </>
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={theoryOpen ? closeTheory : openTheory}
-        className={`fixed left-6 bottom-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium shadow-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-white dark:focus-visible:ring-offset-[#09090b] ${
-          theoryOpen
-            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200'
-            : 'bg-white dark:bg-[#09090b] text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800'
-        }`}
-        title={theoryOpen ? 'Вернуться к тесту' : 'Открыть теорию'}
-        aria-label={theoryOpen ? 'К тесту' : 'Теория'}
-      >
-        {theoryOpen ? <ClipboardList size={14} /> : <BookOpen size={14} />}
-        {theoryOpen ? 'К тесту' : 'Теория'}
-      </button>
-    </div>
+    <TestSession
+      theoryOpen={theoryOpen}
+      closeTheory={closeTheory}
+      openTheory={openTheory}
+      test={test}
+      currentIdx={currentIdx}
+      setCurrentIdx={setCurrentIdx}
+      userAnswers={userAnswers}
+      timeRemaining={timeRemaining}
+      timerWarning={timerWarning}
+      timeLimitMinutes={timeLimitMinutes}
+      attemptsUsed={attemptsUsed}
+      maxAttempts={maxAttempts}
+      examStart={examStart}
+      examEnd={examEnd}
+      allowInterruptions={allowInterruptions}
+      currentTask={currentTask}
+      onToggleAnswer={(index) => handleToggleAnswer(currentTask?.id, index)}
+      onTextChange={(val) => handleTextChange(currentTask?.id, val)}
+      hintUsed={hintUsed}
+      hintLoading={hintLoading}
+      hintData={hintData}
+      onFetchHint={fetchHint}
+      showDrawing={showDrawing}
+      onToggleDrawing={toggleDrawing}
+      canvasRef={canvasRef}
+      drawings={drawings}
+      onDrawingSave={handleDrawingSave}
+      onDrawingDataChange={handleDrawingDataChange}
+      DrawingPadComponent={DrawingPad}
+      isSubmitting={isSubmitting}
+      onSubmit={handleSubmitClick}
+    />
   );
 }

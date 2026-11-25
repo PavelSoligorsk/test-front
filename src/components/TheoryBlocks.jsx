@@ -248,9 +248,13 @@ export const GeoGebra = ({ id, setup, height = '400', controls = [], texts = [] 
     setApiReady(Boolean(api));
   }, []);
 
+  const hasSliders = controls.some((control) => control.kind === 'slider');
+
   return (
-    <div className="theory-geogebra my-6 w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60">
-      <GeoGebraApplet materialId={id ? String(id) : ''} setup={setup || ''} sizeFor={sizeFor} onReady={onReady} />
+    <div className={`theory-geogebra my-6 grid w-full grid-cols-1 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800/60 ${hasSliders ? 'lg:grid-cols-[minmax(0,1fr)_13rem]' : ''}`}>
+      <div className="min-w-0 flex-1">
+        <GeoGebraApplet materialId={id ? String(id) : ''} setup={setup || ''} sizeFor={sizeFor} onReady={onReady} />
+      </div>
       <GeoGebraControls controls={controls} texts={texts} apiRef={apiRef} apiReady={apiReady} variant="page" />
     </div>
   );
